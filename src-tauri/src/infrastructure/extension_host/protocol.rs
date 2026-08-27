@@ -304,6 +304,36 @@ pub struct ExtensionManifest {
     pub commands: Vec<ExtensionCommandManifest>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferences: Option<Vec<ExtensionPreference>>,
+    /// Opts this extension into Import/Export. Present here (rather than
+    /// being discovered by running the extension) so the Settings pane can
+    /// list a checkbox for it without starting anything — the
+    /// `exportData`/`importData` hooks themselves are only called once the
+    /// user actually exports or imports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export: Option<ExportDeclaration>,
+}
+
+/// An extension's Import/Export declaration. `title`/`description` label
+/// its row in the Settings pane; `entry` names the source module carrying
+/// the hooks, defaulting to `"export"` (i.e. `src/export.ts`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportDeclaration {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
+}
+
+impl ExportDeclaration {
+    pub const DEFAULT_ENTRY: &'static str = "export";
+
+    /// The module name to build and require — the declared `entry`, or
+    /// [`Self::DEFAULT_ENTRY`].
+    pub fn entry_name(&self) -> &str {
+        self.entry.as_deref().unwrap_or(Self::DEFAULT_ENTRY)
+    }
 }
 
 #[cfg(test)]

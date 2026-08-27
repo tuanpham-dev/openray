@@ -17,12 +17,24 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@openray/ai-core':
+        specifier: workspace:*
+        version: link:../../packages/ai-core
+      '@openray/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@openray/translate-core':
+        specifier: workspace:*
+        version: link:../../packages/translate-core
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
       '@tauri-apps/plugin-clipboard-manager':
         specifier: ^2.3.2
         version: 2.3.2
+      '@tauri-apps/plugin-dialog':
+        specifier: ^2.7.2
+        version: 2.7.2
       '@tiptap/core':
         specifier: ^3.30.1
         version: 3.30.1(@tiptap/pm@3.30.1)
@@ -47,15 +59,6 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3.30.1
         version: 3.30.1(@floating-ui/dom@1.8.0)(@tiptap/core@3.30.1(@tiptap/pm@3.30.1))(@tiptap/pm@3.30.1)
-      '@openray/ai-core':
-        specifier: workspace:*
-        version: link:../../packages/ai-core
-      '@openray/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@openray/translate-core':
-        specifier: workspace:*
-        version: link:../../packages/translate-core
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -180,6 +183,9 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(react@19.2.8)
     devDependencies:
+      '@openray/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
@@ -189,9 +195,6 @@ importers:
       '@types/react-reconciler':
         specifier: ^0.33.0
         version: 0.33.0(@types/react@19.2.18)
-      '@openray/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       esbuild:
         specifier: ^0.27.1
         version: 0.27.7
@@ -1088,6 +1091,9 @@ packages:
 
   '@tauri-apps/plugin-clipboard-manager@2.3.2':
     resolution: {integrity: sha512-CUlb5Hqi2oZbcZf4VUyUH53XWPPdtpw43EUpCza5HWZJwxEoDowFzNUDt1tRUXA8Uq+XPn17Ysfptip33sG4eQ==}
+
+  '@tauri-apps/plugin-dialog@2.7.2':
+    resolution: {integrity: sha512-pX0IGm1I3I6wc+zeKYcq1GSqogK6okCNX5fOdaNU5ab1AjGS6l1E5wFNjEb7meg7ZFSp0JUs+0jQGQNyOvLrsg==}
 
   '@tiptap/core@3.30.1':
     resolution: {integrity: sha512-HWEO6Qi8fI8Zt8X4atVV6GxthJx7Vrjr6L5YFq4OkjYJ7HG2/bFw6IKsDA3jOYgY4DM9lv8IadaiWUQ2JJRIBA==}
@@ -2617,6 +2623,10 @@ snapshots:
       '@tauri-apps/cli-win32-x64-msvc': 2.11.4
 
   '@tauri-apps/plugin-clipboard-manager@2.3.2':
+    dependencies:
+      '@tauri-apps/api': 2.11.1
+
+  '@tauri-apps/plugin-dialog@2.7.2':
     dependencies:
       '@tauri-apps/api': 2.11.1
 

@@ -37,7 +37,7 @@ function ProviderKeyForm({ providerId, label, needsKey, onSaved }: { providerId:
     >
       {needsKey && <Form.PasswordField id="apiKey" title="API Key" value={apiKey} onChange={setApiKey} />}
       {providerId === 'ollama' && <Form.TextField id="baseUrl" title="Base URL" value={baseUrl} onChange={setBaseUrl} placeholder="http://localhost:11434/v1" />}
-      <Form.Description text="Keys are stored on this device and used directly to call the provider — no proxy, plaintext (same as other extension credentials in this app), and never included in Cloud Sync." />
+      <Form.Description text="Keys are stored on this device and used directly to call the provider — no proxy, plaintext (same as other extension credentials in this app), and never included in exports." />
     </Form>
   )
 }

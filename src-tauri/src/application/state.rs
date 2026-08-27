@@ -10,9 +10,8 @@ use crate::application::navigation::NavigationProvider;
 use crate::application::registry::CommandRegistry;
 use crate::application::root_commands::RootCommandProvider;
 use crate::application::screenshots::ScreenshotsProvider;
-use crate::application::sync::SyncProvider;
 use crate::infrastructure::clipboard_watcher::ClipboardWatcher;
-use crate::infrastructure::db::UsageRepository;
+use crate::infrastructure::db::{SharedConnection, UsageRepository};
 use crate::infrastructure::extension_host::process::ExtensionHost;
 use crate::infrastructure::settings::SettingsStore;
 use crate::infrastructure::window::ExtensionWindows;
@@ -55,7 +54,11 @@ pub struct AppState {
     pub navigation: Arc<NavigationProvider>,
     pub screenshots: Arc<ScreenshotsProvider>,
     pub file_search: Arc<FileSearchProvider>,
-    pub sync: SyncProvider,
+    /// The shared SQLite handle, for commands that need raw connection
+    /// access rather than one of the typed repositories above —
+    /// `api::transfer`'s import/export, which reads and writes across
+    /// every synced table at once, is the only such caller today.
+    pub db: SharedConnection,
     pub confirm_alerts: crate::application::extension_bridge::ConfirmAlertRegistry,
     /// Computed once at startup (see `lib.rs`'s `build_app_state`), not
     /// per-launch — `platform_info::snapshot()` isn't safe to call from

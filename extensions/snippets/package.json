@@ -2,6 +2,10 @@
   "name": "snippets",
   "title": "Snippets",
   "description": "Save and paste reusable text with placeholders for arguments, clipboard, selection, and more.",
+  "export": {
+    "title": "Snippets",
+    "description": "Your saved snippets and their keywords"
+  },
   "icon": "scissors",
   "commands": [
     {
@@ -15,14 +19,22 @@
       "title": "Search Snippets",
       "description": "Browse, edit, and delete your snippets.",
       "mode": "view",
-      "keywords": ["snippet", "search", "text"]
+      "keywords": [
+        "snippet",
+        "search",
+        "text"
+      ]
     },
     {
       "name": "create-snippet",
       "title": "Create Snippet",
       "description": "Create a new snippet.",
       "mode": "view",
-      "keywords": ["snippet", "text", "template"]
+      "keywords": [
+        "snippet",
+        "text",
+        "template"
+      ]
     }
   ],
   "dependencies": {

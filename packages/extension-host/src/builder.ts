@@ -74,7 +74,44 @@ export async function readManifest(extensionDir: string): Promise<ExtensionManif
   if (typeof pkg.author === 'string') manifest.author = pkg.author
   if (Array.isArray(pkg.categories)) manifest.categories = pkg.categories as string[]
   if (Array.isArray(pkg.preferences)) manifest.preferences = pkg.preferences as NonNullable<ExtensionManifest['preferences']>
+  if (pkg.export && typeof pkg.export === 'object') {
+    const declared = pkg.export as Record<string, unknown>
+    if (typeof declared.title === 'string') {
+      manifest.export = { title: declared.title }
+      if (typeof declared.description === 'string') manifest.export.description = declared.description
+      if (typeof declared.entry === 'string') manifest.export.entry = declared.entry
+    }
+  }
   return manifest
+}
+
+/** The module an `export` declaration's hooks live in, defaulting to
+ *  `src/export.ts`. Mirrors `ExportDeclaration::entry_name` on the Rust
+ *  side — both must agree or the host would require a file the builder
+ *  never emitted. */
+export const DEFAULT_EXPORT_ENTRY = 'export'
+
+export function exportEntryName(manifest: ExtensionManifest): string | null {
+  if (!manifest.export) return null
+  return manifest.export.entry ?? DEFAULT_EXPORT_ENTRY
+}
+
+/**
+ * Bundles an extension's Import/Export hooks, if it declares any. The
+ * entry is an ordinary module as far as esbuild is concerned — same
+ * options, same output directory as a command — it just isn't a command,
+ * so it's built from the manifest's `export` block rather than the
+ * command list. Returns an error string (never throws), same convention
+ * as {@link buildCommand}; unlike a command, a declared-but-missing entry
+ * is worth failing the build over, since the extension would appear in
+ * the Import/Export pane and then fail every time it was used.
+ */
+export async function buildExportEntry(extensionDir: string, manifest: ExtensionManifest): Promise<string | null> {
+  const entry = exportEntryName(manifest)
+  if (!entry) return null
+  const error = await buildCommand(extensionDir, entry)
+  if (!error) return null
+  return `declares "export" but ${error.replace(`no source file found for command "${entry}"`, `has no src/${entry}.{ts,tsx,js,jsx}`)}`
 }
 
 async function npmInstall(extensionDir: string): Promise<void> {
@@ -182,6 +219,8 @@ async function installFromDirectory(sourceDir: string, extensionsRoot: string): 
     const error = await buildCommand(destDir, command.name)
     if (error) buildErrors.push(`${command.name}: ${error}`)
   }
+  const exportError = await buildExportEntry(destDir, manifest)
+  if (exportError) buildErrors.push(exportError)
 
   return { id: manifest.name, manifest, dir: destDir, buildErrors }
 }

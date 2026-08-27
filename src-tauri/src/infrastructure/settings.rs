@@ -111,33 +111,6 @@ pub struct Settings {
     /// `host.ai.getSettings`, same as the other `ai_*` fields above).
     #[serde(default)]
     pub ai_custom_clis: Vec<AiCustomCli>,
-    /// Whether Cloud Sync is turned on at all.
-    #[serde(default = "default_sync_enabled")]
-    pub sync_enabled: bool,
-    /// Path to the sync folder (Dropbox/Drive/Syncthing/a network share)
-    /// Cloud Sync reads and writes its encrypted snapshot into. `~/` is
-    /// expanded at use time, same convention as `script_directories`.
-    #[serde(default = "default_sync_folder")]
-    pub sync_folder: String,
-    /// Notes, snippets, quicklinks, window-management presets, translate
-    /// commands, command aliases/hotkeys, and the portable subset of
-    /// settings itself.
-    #[serde(default = "default_sync_core")]
-    pub sync_core: bool,
-    /// Extension preference values and extension LocalStorage. Preference
-    /// values can hold API keys/tokens, which is why sync payloads are
-    /// always passphrase-encrypted.
-    #[serde(default = "default_sync_extensions")]
-    pub sync_extensions: bool,
-    /// Clipboard history (including image blobs) and translate history.
-    /// Off by default — clipboard content is the most privacy-sensitive
-    /// and highest-churn category.
-    #[serde(default = "default_sync_clipboard")]
-    pub sync_clipboard: bool,
-    /// Command usage/frecency counts, merged across machines by taking the
-    /// max of each side rather than last-writer-wins.
-    #[serde(default = "default_sync_usage")]
-    pub sync_usage: bool,
     /// How long after the palette is hidden its query/view/selection reset
     /// back to root search on next show — `"never"`, `"immediately"`, or a
     /// delay in seconds as a string (`"10"`..`"180"`). Clamped to one of
@@ -280,30 +253,6 @@ fn default_ai_model() -> String {
 
 fn default_ai_skill_dirs() -> Vec<String> {
     vec!["~/.claude/skills".into(), "~/.config/openray/skills".into()]
-}
-
-fn default_sync_enabled() -> bool {
-    false
-}
-
-fn default_sync_folder() -> String {
-    String::new()
-}
-
-fn default_sync_core() -> bool {
-    true
-}
-
-fn default_sync_extensions() -> bool {
-    true
-}
-
-fn default_sync_clipboard() -> bool {
-    false
-}
-
-fn default_sync_usage() -> bool {
-    true
 }
 
 fn default_pop_to_root_delay() -> String {
@@ -494,12 +443,6 @@ impl Default for Settings {
             ai_profile: String::new(),
             ai_skill_dirs: default_ai_skill_dirs(),
             ai_custom_clis: Vec::new(),
-            sync_enabled: default_sync_enabled(),
-            sync_folder: default_sync_folder(),
-            sync_core: default_sync_core(),
-            sync_extensions: default_sync_extensions(),
-            sync_clipboard: default_sync_clipboard(),
-            sync_usage: default_sync_usage(),
             pop_to_root_delay: default_pop_to_root_delay(),
             search_sensitivity: default_search_sensitivity(),
             text_size: default_text_size(),
@@ -522,9 +465,9 @@ pub struct SettingsStore {
 
 /// Clamps every out-of-range field in place. Applied inside
 /// [`SettingsStore::update`] so *every* writer is covered — notably
-/// `application::sync::apply_portable_settings`, which applies a remote
-/// device's settings directly and previously bypassed the clamps that
-/// only lived in the `update_settings` Tauri command.
+/// `application::transfer::apply_portable_settings`, which applies an
+/// imported file's settings directly and would otherwise bypass the
+/// clamps that only lived in the `update_settings` Tauri command.
 fn clamp_settings(settings: &mut Settings) {
     settings.opacity = clamp_opacity(settings.opacity);
     settings.window_gap = clamp_window_gap(settings.window_gap);
@@ -543,9 +486,9 @@ fn clamp_settings(settings: &mut Settings) {
 
 /// Reads `settings.json` at `path`, tolerating both a missing file (fresh
 /// install) and an unparseable one. A parse failure would otherwise
-/// silently reset every setting to default — and since settings are now
-/// sync-propagated, that reset could spread to every other device on the
-/// next cycle. So the unreadable file is preserved alongside it as
+/// silently reset every setting to default — and an export taken
+/// afterwards would then carry that reset onward to another machine. So
+/// the unreadable file is preserved alongside it as
 /// `settings.json.bak` for recovery/debugging before falling back
 /// (best-effort: a failed backup write must not block startup).
 fn load_settings_from(path: &Path) -> Settings {
@@ -684,12 +627,6 @@ mod tests {
         assert_eq!(settings.translate_primary_action, "copy");
         assert!(settings.translate_history_enabled);
         assert!(!settings.notes_always_on_top);
-        assert!(!settings.sync_enabled);
-        assert_eq!(settings.sync_folder, "");
-        assert!(settings.sync_core);
-        assert!(settings.sync_extensions);
-        assert!(!settings.sync_clipboard);
-        assert!(settings.sync_usage);
         assert_eq!(settings.pop_to_root_delay, default_pop_to_root_delay());
         assert_eq!(settings.search_sensitivity, default_search_sensitivity());
         assert_eq!(settings.text_size, default_text_size());

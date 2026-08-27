@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { AdvancedIcon, AppWindowIcon, CloudIcon, GearIcon, PlusIcon, PuzzleIcon, SearchIcon } from '../../components/icons'
+import { AdvancedIcon, AppWindowIcon, TransferIcon, GearIcon, PlusIcon, PuzzleIcon, SearchIcon } from '../../components/icons'
 import { THEME_ICONS, ThemeIcon } from './extensionIcons'
 import { IconGlyph } from '../../components/IconGlyph'
 import type { ExtensionEntry } from '../../ipc/extensions'
 
 export type SettingsSelection =
   | { kind: 'general' }
-  | { kind: 'sync' }
+  | { kind: 'transfer' }
   | { kind: 'advanced' }
   | { kind: 'applications' }
   | { kind: 'install' }
@@ -45,8 +45,13 @@ export function SettingsSidebar({ extensions, selection, onChange }: SettingsSid
           {matches('General') && (
             <SidebarEntry icon={<GearIcon size={16} />} title="General" active={activeKey === 'general'} onClick={() => onChange({ kind: 'general' })} />
           )}
-          {matches('Cloud Sync') && (
-            <SidebarEntry icon={<CloudIcon size={16} />} title="Cloud Sync" active={activeKey === 'sync'} onClick={() => onChange({ kind: 'sync' })} />
+          {matches('Import / Export') && (
+            <SidebarEntry
+              icon={<TransferIcon size={16} />}
+              title="Import / Export"
+              active={activeKey === 'transfer'}
+              onClick={() => onChange({ kind: 'transfer' })}
+            />
           )}
           {matches('Advanced') && (
             <SidebarEntry

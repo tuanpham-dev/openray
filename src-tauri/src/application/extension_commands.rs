@@ -206,6 +206,75 @@ pub async fn launch_root_provider_listing<R: Runtime>(app: &AppHandle<R>, extens
     Ok(state.extension_host.notify("extension.runRootProviderList", Some(params)).await?)
 }
 
+/// Builds the RPC params both Import/Export hooks share: which extension,
+/// which bundle, and the same context every other launch variant passes.
+///
+/// The "command" here is the manifest's `export.entry` module, not a real
+/// command — so preferences are resolved at extension scope (no command
+/// name to narrow by), and a missing required preference is deliberately
+/// *not* fatal: refusing to export someone's data because an unrelated
+/// setting is blank would be worse than exporting it.
+fn export_hook_params<R: Runtime>(app: &AppHandle<R>, extension_id: &str) -> Result<serde_json::Value, Error> {
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+
+    let entry = state
+        .extensions
+        .list()
+        .into_iter()
+        .find(|e| e.id == extension_id)
+        .ok_or_else(|| Error::msg(format!("extension '{extension_id}' not found")))?;
+    let declaration = entry
+        .export
+        .as_ref()
+        .ok_or_else(|| Error::msg(format!("extension '{extension_id}' does not declare import/export")))?;
+    let entry_name = declaration.entry_name().to_string();
+    let path = entry.path.clone().ok_or_else(|| Error::msg(format!("extension '{extension_id}' has no install path")))?;
+    let command_path = format!("{path}/.openray/build/{entry_name}.js");
+
+    let preferences = state.extensions.resolve_preferences(extension_id, &entry_name).unwrap_or_default();
+    let (environment, platform) = environment_and_platform_json(&state, &path);
+
+    Ok(json!({
+        "extensionId": extension_id,
+        "commandName": entry_name,
+        "commandPath": command_path,
+        "preferences": preferences,
+        "environment": environment,
+        "platform": platform,
+    }))
+}
+
+/// Asks an extension for its exportable data, returning `{ version, data }`
+/// exactly as its hook produced it — the host stores the value verbatim and
+/// never interprets it.
+///
+/// Goes through `call_checked`, not `call`: one extension with a lot of data
+/// must not be able to kill the shared host process and take every other
+/// extension's export down with it.
+pub async fn call_extension_export<R: Runtime>(app: &AppHandle<R>, extension_id: &str) -> Result<serde_json::Value, Error> {
+    let params = export_hook_params(app, extension_id)?;
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    Ok(state.extension_host.call_checked("extension.exportData", Some(params)).await?)
+}
+
+/// Hands a previously exported payload back to the extension that produced
+/// it. The extension owns the write; the host does not touch its data.
+pub async fn call_extension_import<R: Runtime>(
+    app: &AppHandle<R>,
+    extension_id: &str,
+    version: serde_json::Value,
+    data: serde_json::Value,
+) -> Result<(), Error> {
+    let mut params = export_hook_params(app, extension_id)?;
+    if let Some(object) = params.as_object_mut() {
+        object.insert("version".to_string(), version);
+        object.insert("data".to_string(), data);
+    }
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    state.extension_host.call_checked("extension.importData", Some(params)).await?;
+    Ok(())
+}
+
 /// Surfaces installed extension commands in search. Queries the registry
 /// live on every call (rather than caching a snapshot) so a command
 /// installed after startup appears immediately.
@@ -325,7 +394,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT);
+                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
              CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
                 subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
                 PRIMARY KEY (extension_id, name));
@@ -360,6 +429,7 @@ mod tests {
                         arguments: None,
                     }],
                     preferences: None,
+                    export: None,
                 },
                 "/tmp/demo",
                 "installed",
@@ -374,7 +444,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT);
+                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
              CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
                 subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
                 PRIMARY KEY (extension_id, name));
@@ -415,6 +485,7 @@ mod tests {
                         }]),
                     }],
                     preferences: None,
+                    export: None,
                 },
                 "/tmp/demo",
                 "installed",
@@ -427,7 +498,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT);
+                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
              CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
                 subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
                 PRIMARY KEY (extension_id, name));
@@ -462,6 +533,7 @@ mod tests {
                         arguments: None,
                     }],
                     preferences: None,
+                    export: None,
                 },
                 "/tmp/quicklinks",
                 "installed",
@@ -474,7 +546,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT);
+                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
              CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
                 subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
                 PRIMARY KEY (extension_id, name));
@@ -509,6 +581,7 @@ mod tests {
                         arguments: None,
                     }],
                     preferences: None,
+                    export: None,
                 },
                 "/tmp/demo",
                 "installed",

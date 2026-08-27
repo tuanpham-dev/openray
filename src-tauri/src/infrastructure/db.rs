@@ -118,6 +118,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0030_file_search",
         include_str!("../../migrations/0030_file_search.sql"),
     ),
+    (
+        "0031_extension_export",
+        include_str!("../../migrations/0031_extension_export.sql"),
+    ),
 ];
 
 pub fn open(app: &AppHandle) -> Result<SharedConnection, Box<dyn std::error::Error>> {

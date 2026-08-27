@@ -86,6 +86,26 @@ interface RunRootProviderListParams {
  * `extension.onQuery` *request* (Rust awaits the reply directly, unlike
  * `runRootProviderList`'s two-notification shape, since a per-keystroke
  * round trip has no listing to separately push back). */
+/** Import/Export hooks are not commands — `commandPath` here points at the
+ *  bundle built from the manifest's `export.entry` (default `src/export.ts`),
+ *  and `commandName` carries that entry name only so the shared
+ *  `buildCommandContext` has something to report. */
+interface RunExportDataParams {
+  extensionId: string
+  commandName: string
+  commandPath: string
+  preferences?: Record<string, unknown>
+  environment: RunCommandParams['environment']
+  platform: RunCommandParams['platform']
+}
+
+interface RunImportDataParams extends RunExportDataParams {
+  /** Handed back exactly as `exportData` returned it, so an extension can
+   *  migrate its own shape across versions. */
+  version?: JsonValue
+  data: JsonValue
+}
+
 interface RunOnQueryParams {
   extensionId: string
   commandName: string
@@ -195,10 +215,10 @@ function buildCommandContext(params: {
 /** Fresh `require`, discarding any cached module — every launch variant
  * needs this so a long-lived sidecar process never lets one run's
  * top-level module state (or a crash mid-evaluation) leak into the next. */
-function requireFreshCommandModule(commandPath: string): { default?: unknown; execute?: unknown; view?: unknown; onQuery?: unknown } {
+function requireFreshCommandModule(commandPath: string): { default?: unknown; execute?: unknown; view?: unknown; onQuery?: unknown; exportData?: unknown; exportVersion?: unknown; importData?: unknown } {
   const resolved = requireCommand.resolve(commandPath)
   delete requireCommand.cache[resolved]
-  return requireCommand(commandPath) as { default?: unknown; execute?: unknown; view?: unknown; onQuery?: unknown }
+  return requireCommand(commandPath) as { default?: unknown; execute?: unknown; view?: unknown; onQuery?: unknown; exportData?: unknown; exportVersion?: unknown; importData?: unknown }
 }
 
 /**
@@ -346,6 +366,49 @@ async function runOnQuery(params: RunOnQueryParams): Promise<JsonValue> {
 
   const row = await (onQuery as (query: string, context: RunOnQueryParams['context']) => Promise<unknown>)(params.query, params.context)
   return (row ?? null) as JsonValue
+}
+
+/**
+ * Asks an extension for its exportable data. Modeled on `runOnQuery`:
+ * require the module fresh, look up a named export, call it, hand the
+ * value back — the module instance is thrown away right after, so the
+ * hook must not rely on state surviving between calls.
+ *
+ * The returned value is stored verbatim in the export file under this
+ * extension's id, alongside whatever `version` the extension reports, and
+ * is handed back to `importData` unchanged. The host never interprets it.
+ */
+async function runExportData(params: RunExportDataParams): Promise<JsonValue> {
+  setCommandContext(buildCommandContext(params))
+  setCacheRootDirectory(params.environment.supportPath)
+
+  const mod = requireFreshCommandModule(params.commandPath)
+  const exportData = mod.exportData
+  if (typeof exportData !== 'function') {
+    throw new Error(`${params.commandPath} has no named "exportData" export (required by this extension's manifest "export" declaration)`)
+  }
+
+  const data = await (exportData as () => Promise<unknown>)()
+  // `version` is optional and the extension's own; a hook that reports
+  // none simply gets `null` back on import.
+  const version = (typeof mod.exportVersion === 'function' ? await (mod.exportVersion as () => Promise<unknown>)() : mod.exportVersion) ?? null
+  return { version, data: (data ?? null) as JsonValue } as unknown as JsonValue
+}
+
+/** Hands a previously exported payload back to the extension that produced
+ *  it. The extension owns the write — the host has already applied its own
+ *  merge by this point and does not touch the extension's data itself. */
+async function runImportData(params: RunImportDataParams): Promise<JsonValue> {
+  setCommandContext(buildCommandContext(params))
+  setCacheRootDirectory(params.environment.supportPath)
+
+  const importData = requireFreshCommandModule(params.commandPath).importData
+  if (typeof importData !== 'function') {
+    throw new Error(`${params.commandPath} has no named "importData" export (required by this extension's manifest "export" declaration)`)
+  }
+
+  await (importData as (data: JsonValue, version: JsonValue | undefined) => Promise<void>)(params.data, params.version)
+  return null
 }
 
 /**
@@ -574,6 +637,14 @@ export function registerRunnerMethods(dispatcher: RpcDispatcher): void {
   dispatcher.register('extension.runRootCommandView', (params) => {
     runRootCommandView(dispatcher, asRecord(params) as unknown as RunRootCommandParams)
     return null
+  })
+
+  dispatcher.register('extension.exportData', async (params) => {
+    return await runExportData(asRecord(params) as unknown as RunExportDataParams)
+  })
+
+  dispatcher.register('extension.importData', async (params) => {
+    return await runImportData(asRecord(params) as unknown as RunImportDataParams)
   })
 
   dispatcher.register('extension.onQuery', async (params) => {

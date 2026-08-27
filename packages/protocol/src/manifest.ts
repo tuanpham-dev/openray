@@ -30,6 +30,17 @@ export interface ExtensionPreference {
   data?: PreferenceOption[]
 }
 
+/**
+ * An extension's Import/Export declaration. `title`/`description` label its
+ * row in the Settings pane; `entry` names the source module carrying the
+ * `exportData`/`importData` hooks, defaulting to `"export"` (src/export.ts).
+ */
+export interface ExportDeclaration {
+  title: string
+  description?: string
+  entry?: string
+}
+
 export interface ExtensionManifest {
   name: string
   title: string
@@ -39,4 +50,6 @@ export interface ExtensionManifest {
   categories?: string[]
   commands: ExtensionCommandManifest[]
   preferences?: ExtensionPreference[]
+  /** Opts this extension into Import/Export — see {@link ExportDeclaration}. */
+  export?: ExportDeclaration
 }

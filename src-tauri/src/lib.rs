@@ -22,7 +22,6 @@ use crate::application::root_commands::RootCommandProvider;
 use crate::application::file_search::FileSearchProvider;
 use crate::application::screenshots::ScreenshotsProvider;
 use crate::application::settings_provider::SettingsCommandProvider;
-use crate::application::sync::SyncProvider;
 use crate::application::state::AppState;
 use crate::domain::ports::CommandProvider;
 use crate::infrastructure::clipboard_watcher::ClipboardWatcher;
@@ -44,6 +43,7 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
     .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
       // api::window
       api::window::hide_palette,
@@ -84,10 +84,12 @@ pub fn run() {
       api::extension_host::notify_extension_window_ready,
       // api::screenshots
       api::screenshots::screenshot_ocr_status,
-      // api::sync
-      api::sync::get_sync_status,
-      api::sync::sync_now,
-      api::sync::sync_set_passphrase,
+      // api::transfer
+      api::transfer::inspect_export_file,
+      api::transfer::list_export_categories,
+      api::transfer::inspect_export_sensitivity,
+      api::transfer::export_data,
+      api::transfer::import_data,
     ])
     .setup(|app| {
       setup_window_chrome(app)?;
@@ -101,6 +103,7 @@ pub fn run() {
         }
       }
       app.manage(state);
+      application::transfer::cleanup_legacy_sync_files(&app.handle().clone());
       spawn_background_workers(app.handle());
 
       app.state::<AppState>().sync_hotkey_bindings(&app.handle().clone());
@@ -235,7 +238,7 @@ fn build_app_state(app: &tauri::App) -> Result<AppState, Box<dyn std::error::Err
     navigation,
     screenshots,
     file_search,
-    sync: SyncProvider::start(app.handle().clone(), db_connection),
+    db: db_connection,
     confirm_alerts: Default::default(),
     // A plain OS thread, not a tokio task: guarantees this one-time zbus
     // (blocking API) call never nests inside whatever async context

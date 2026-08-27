@@ -1,17 +1,19 @@
-//! Export/merge/apply for Cloud Sync: turns local DB rows into a
-//! device-portable [`Snapshot`], merges snapshots from multiple devices by
-//! last-writer-wins, and applies a merged result back into the local DB.
+//! Export/merge/apply: turns local DB rows into a machine-portable
+//! [`Snapshot`], merges an imported snapshot against the local one by
+//! last-writer-wins, and applies the result back into the local DB.
 //!
 //! Records are read from and written through `sync_meta` directly via SQL,
 //! not through any feature's own application-layer API — this module is
-//! Cloud Sync's own data-access layer over the same tables (native ones
+//! Import/Export's own data-access layer over the same tables (native ones
 //! still owned here, like `clipboard_history`/`command_settings`/`usage`,
 //! and `extension_storage`/`extension_preference_values` on behalf of
 //! every extension-owned feature), kept as free functions over
 //! `&rusqlite::Connection` so it's unit-testable without a live
 //! `AppHandle`.
-
-use std::path::PathBuf;
+//!
+//! The `sync_meta` table name, and the "device" vocabulary throughout,
+//! predate Import/Export — they're the retired Cloud Sync feature's, kept
+//! because renaming a live table earns nothing.
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -28,10 +30,9 @@ use sha2::{Digest, Sha256};
 /// confirmed this in practice and left the constant alone. This only
 /// matters for a wave that actually changes what a shared `kind` string
 /// means to both old and new readers at once (T35's own motivating
-/// scenario). [`partition_by_version`] is what makes that window safe
-/// when it does happen: a device that hasn't updated yet still
-/// exports/expects the previous version's shape, and this device's
-/// merge only trusts a remote within one version of its own.
+/// scenario). Recorded in every export file's header for diagnostics;
+/// import never gates on it (see `file::read_export`) — cross-version
+/// tolerance comes from `apply_record`'s unknown-kind fallback instead.
 ///
 /// T31 bumps this 1 → 2: the wave that finally drops the six
 /// `notes`/`snippets`/`quicklinks`/`window_commands`/`translate_commands`/
@@ -49,17 +50,48 @@ use sha2::{Digest, Sha256};
 /// — its now-unrecognized records are silently (and correctly) ignored,
 /// not lost data. The bump exists to document the wire-format change
 /// honestly, not because this particular removal is unsafe within the
-/// existing one-version compatibility window.
+/// existing compatibility expectations.
 pub const SNAPSHOT_VERSION: u32 = 2;
 
-/// Which categories to include — mirrors the `sync_core`/`sync_extensions`/
-/// `sync_clipboard`/`sync_usage` settings toggles.
-#[derive(Debug, Clone, Copy)]
-pub struct SyncToggles {
+/// Which categories to include — mirrors the Import/Export pane's
+/// checkboxes, which the user picks per export rather than persisting.
+#[derive(Debug, Clone)]
+pub struct ExportToggles {
     pub core: bool,
-    pub extensions: bool,
+    /// Which extensions' *host-owned* rows to include. An extension's own
+    /// data doesn't travel through here at all — that comes from its
+    /// `exportData` hook (see `transfer::export_to_file`); this governs
+    /// the preference values the host stores on its behalf.
+    pub extensions: ExtensionScope,
     pub clipboard: bool,
     pub usage: bool,
+}
+
+/// Which extensions an export covers.
+///
+/// `All` is kept as its own variant rather than being materialized into a
+/// list of ids: it means "whatever is installed", so it stays correct if
+/// the set changes, and it preserves the difference between the user
+/// checking the parent box and the user happening to check every child.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExtensionScope {
+    All,
+    Only(std::collections::BTreeSet<String>),
+}
+
+impl ExtensionScope {
+    pub fn includes(&self, extension_id: &str) -> bool {
+        match self {
+            ExtensionScope::All => true,
+            ExtensionScope::Only(ids) => ids.contains(extension_id),
+        }
+    }
+
+    /// True when the scope can't match anything, so the caller can skip
+    /// the queries entirely.
+    pub fn is_empty(&self) -> bool {
+        matches!(self, ExtensionScope::Only(ids) if ids.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,28 +134,11 @@ pub struct SettingsRecord {
 /// actually matters, not this alias.
 type ClipboardHistoryRow = (String, String, Option<String>, i64, Option<String>, Option<i64>, Option<i64>);
 
-/// A clipboard image this device's snapshot references, for the folder
-/// layer (`application::sync::folder`) to seal into `blobs/<hash>.bin`.
-pub struct BlobRef {
-    pub hash: String,
-    pub path: PathBuf,
-}
-
-/// Settings fields that never sync: machine-local paths (`script_directories`,
-/// `screenshot_search_scopes`), a per-machine OS integration
-/// (`launch_at_login`), and the sync configuration itself (would otherwise
-/// let one device silently flip sync on/off on every other device).
-const EXCLUDED_SETTINGS_FIELDS: &[&str] = &[
-    "scriptDirectories",
-    "screenshotSearchScopes",
-    "launchAtLogin",
-    "syncEnabled",
-    "syncFolder",
-    "syncCore",
-    "syncExtensions",
-    "syncClipboard",
-    "syncUsage",
-];
+/// Settings fields that are never portable across machines: machine-local
+/// paths (`script_directories`, `screenshot_search_scopes`) and a
+/// per-machine OS integration (`launch_at_login`). Everything else travels
+/// with an export.
+const EXCLUDED_SETTINGS_FIELDS: &[&str] = &["scriptDirectories", "screenshotSearchScopes", "launchAtLogin"];
 
 /// Strips [`EXCLUDED_SETTINGS_FIELDS`] from a full `Settings` JSON object,
 /// leaving only what's portable across machines.
@@ -153,12 +168,11 @@ pub fn portable_settings_fields(settings_json: &Value) -> Value {
 pub fn export(
     conn: &Connection,
     device_id: &str,
-    toggles: SyncToggles,
+    toggles: ExportToggles,
     settings_json: &Value,
     settings_updated_at: Option<i64>,
-) -> rusqlite::Result<(Snapshot, Vec<BlobRef>)> {
+) -> rusqlite::Result<Snapshot> {
     let mut records = Vec::new();
-    let mut blobs = Vec::new();
 
     if toggles.core {
         records.extend(export_kind(conn, "command_settings", |c, id| {
@@ -170,7 +184,7 @@ pub fn export(
         })?);
     }
 
-    if toggles.extensions {
+    if !toggles.extensions.is_empty() {
         records.extend(export_kind(conn, "extension_preference_values", |c, id| {
             let (extension_id, name) = split_composite_id(id);
             c.query_row(
@@ -181,14 +195,18 @@ pub fn export(
             .map(Some)
             .or_else(ok_none_if_no_rows)
         })?);
-        records.extend(export_kind(conn, "extension_storage", |c, id| {
-            let (extension_id, key) = split_composite_id(id);
-            c.query_row("SELECT value FROM extension_storage WHERE extension_id = ?1 AND key = ?2", params![extension_id, key], |row| {
-                Ok(json!({"extensionId": extension_id, "key": key, "value": row.get::<_, String>(0)?}))
-            })
-            .map(Some)
-            .or_else(ok_none_if_no_rows)
-        })?);
+        // `extension_storage` is deliberately *not* exported here any
+        // more. An extension's own data now comes from its `exportData`
+        // hook (`transfer::export_to_file`), and only extensions that
+        // declare that hook are offered in the pane at all — so dumping
+        // their rows generically as well would put the same data in the
+        // file twice, under two owners that could disagree on restore.
+        // `apply_record` still *applies* this kind, so an export taken
+        // before this change keeps importing exactly as it did.
+        records.retain(|record| match record.kind.as_str() {
+            "extension_preference_values" => toggles.extensions.includes(split_composite_id(&record.id).0),
+            _ => true,
+        });
     }
 
     if toggles.clipboard {
@@ -204,6 +222,9 @@ pub fn export(
             let Some((content_hash, kind, text_content, created_at, image_path, image_width, image_height)) = row else {
                 return Ok(None);
             };
+            // Kept in the record purely so `transfer::export_to_file`
+            // can recognize an image-backed entry and drop it — export
+            // files carry no image bytes for it to refer to.
             let image_content_hash = match &image_path {
                 Some(path) => hash_file(path).ok(),
                 None => None,
@@ -213,19 +234,6 @@ pub fn export(
                 "imageContentHash": image_content_hash, "imageWidth": image_width, "imageHeight": image_height,
             })))
         })?);
-        // Second pass: collect blob refs alongside the records that carry
-        // an image, since the record itself only stores the hash.
-        for record in records.iter().filter(|r| r.kind == "clipboard_history" && !r.deleted) {
-            if let Some(hash) = record.fields.get("imageContentHash").and_then(Value::as_str) {
-                let path: Option<String> = conn
-                    .query_row("SELECT image_path FROM clipboard_history WHERE id = ?1", [&record.id], |row| row.get(0))
-                    .ok()
-                    .flatten();
-                if let Some(path) = path {
-                    blobs.push(BlobRef { hash: hash.to_string(), path: PathBuf::from(path) });
-                }
-            }
-        }
     }
 
     if toggles.usage {
@@ -244,29 +252,7 @@ pub fn export(
         None
     };
 
-    Ok((Snapshot { version: SNAPSHOT_VERSION, device_id: device_id.to_string(), records, portable_settings }, blobs))
-}
-
-/// Splits `remotes` into ones the local device should merge against (its
-/// own [`SNAPSHOT_VERSION`], or the version immediately before or after
-/// it) and ones too far apart to trust — either a remote lagging two or
-/// more waves behind, or this device itself being the one that's stale.
-/// The latter group's device ids come back separately so the caller can
-/// surface "device X needs an update" instead of silently dropping that
-/// device's data with no explanation. One version of slack in *either*
-/// direction (not just "remote is older") is what lets two devices
-/// upgrade one at a time regardless of which one happens to update first.
-pub fn partition_by_version(local_version: u32, remotes: Vec<Snapshot>) -> (Vec<Snapshot>, Vec<String>) {
-    let mut usable = Vec::new();
-    let mut outdated = Vec::new();
-    for remote in remotes {
-        if local_version.abs_diff(remote.version) <= 1 {
-            usable.push(remote);
-        } else {
-            outdated.push(remote.device_id.clone());
-        }
-    }
-    (usable, outdated)
+    Ok(Snapshot { version: SNAPSHOT_VERSION, device_id: device_id.to_string(), records, portable_settings })
 }
 
 fn ok_none_if_no_rows<T>(err: rusqlite::Error) -> rusqlite::Result<Option<T>> {
@@ -310,6 +296,56 @@ fn export_kind(
         records.push(Record { kind: kind.to_string(), id, updated_at, deleted, fields });
     }
     Ok(records)
+}
+
+/// One stored credential an export would carry: a saved value for a
+/// preference the extension declared as `password`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasswordPreference {
+    pub extension_id: String,
+    pub extension_title: String,
+    pub name: String,
+}
+
+/// Finds the saved password-type preference values an export with this
+/// scope would include.
+///
+/// Unlike `secret:`-prefixed extension storage — which the 0026 triggers
+/// keep out of `sync_meta` entirely, so it can never be exported — these
+/// are ordinary host-owned preference values that happen to hold
+/// credentials. Nothing stops them travelling, so the user is asked first
+/// (see the Import/Export pane's warning dialog). Pure query: no writes,
+/// no side effects.
+pub fn password_preferences_in_scope(conn: &Connection, scope: &ExtensionScope) -> rusqlite::Result<Vec<PasswordPreference>> {
+    if scope.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT d.extension_id, COALESCE(e.title, d.extension_id), d.name
+         FROM extension_preference_definitions d
+         JOIN extension_preference_values v ON v.extension_id = d.extension_id AND v.name = d.name
+         LEFT JOIN extensions e ON e.id = d.extension_id
+         WHERE d.preference_type = 'password' AND v.value <> ''
+         ORDER BY 2, 3",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(PasswordPreference { extension_id: row.get(0)?, extension_title: row.get(1)?, name: row.get(2)? })
+    })?;
+    Ok(rows.filter_map(Result::ok).filter(|p| scope.includes(&p.extension_id)).collect())
+}
+
+/// Strips the password-type preference values from `records` — what the
+/// warning dialog's "Exclude them" answer enforces. Done backend-side on
+/// purpose: the guarantee shouldn't rest on the frontend having omitted
+/// something from a request.
+pub fn strip_password_preferences(records: &mut Vec<Record>, passwords: &[PasswordPreference]) {
+    if passwords.is_empty() {
+        return;
+    }
+    let excluded: std::collections::BTreeSet<String> =
+        passwords.iter().map(|p| format!("{}:{}", p.extension_id, p.name)).collect();
+    records.retain(|record| record.kind != "extension_preference_values" || !excluded.contains(&record.id));
 }
 
 /// The result of merging this device's local snapshot against one or more
@@ -431,10 +467,11 @@ fn apply_record(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
             if record.deleted {
                 conn.execute("DELETE FROM clipboard_history WHERE id = ?1", [&record.id])?;
             } else {
-                // image_path is deliberately left NULL here — the folder
-                // layer (application::sync::folder) fills it in with a
-                // local path after decrypting the referenced blob, since
-                // this function has no knowledge of the sync folder.
+                // image_path is deliberately left NULL here: this
+                // function has no knowledge of where image files live,
+                // and Import/Export never carries image bytes anyway
+                // (see `transfer::export_to_file`), so an imported
+                // image-backed entry would have nothing to point at.
                 conn.execute(
                     "INSERT INTO clipboard_history (id, content_hash, kind, text_content, created_at, image_width, image_height) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                      ON CONFLICT(id) DO NOTHING",
@@ -482,7 +519,7 @@ fn apply_record(conn: &Connection, record: &Record) -> rusqlite::Result<()> {
             )?;
         }
         other => {
-            log::warn!("sync: apply_record got an unknown kind '{other}', skipping");
+            log::warn!("import: apply_record got an unknown kind '{other}', skipping");
         }
     }
     Ok(())
@@ -525,31 +562,36 @@ mod tests {
         conn
     }
 
-    fn all_toggles() -> SyncToggles {
-        SyncToggles { core: true, extensions: true, clipboard: true, usage: true }
+    fn all_toggles() -> ExportToggles {
+        ExportToggles { core: true, extensions: ExtensionScope::All, clipboard: true, usage: true }
     }
 
     #[test]
-    fn export_includes_an_extension_storage_value_and_a_command_setting() {
+    fn export_includes_a_command_setting_but_never_extension_storage() {
+        // Extension data is delegated: it comes from each extension's own
+        // `exportData` hook (`transfer::export_to_file`), not from this
+        // snapshot. `apply_record` still *applies* the kind, so a file
+        // written before that change keeps importing — but nothing writes
+        // it into a new one.
         let conn = migrated_conn();
         conn.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', 'quicklink.1', '\"best regards\"')", []).unwrap();
         conn.execute("INSERT INTO command_settings (command_id, alias, hotkey, enabled) VALUES ('cmd.a', NULL, NULL, 1)", []).unwrap();
 
-        let (snapshot, _) = export(&conn, "device-a", all_toggles(), &json!({}), None).unwrap();
+        let snapshot = export(&conn, "device-a", all_toggles(), &json!({}), None).unwrap();
 
-        assert!(snapshot.records.iter().any(|r| r.kind == "extension_storage" && r.id == "quicklinks:quicklink.1" && r.fields["value"] == "\"best regards\""));
         assert!(snapshot.records.iter().any(|r| r.kind == "command_settings" && r.id == "cmd.a"));
+        assert!(!snapshot.records.iter().any(|r| r.kind == "extension_storage"), "extension storage is the extension's to export, not the host's");
     }
 
     #[test]
-    fn export_marks_a_deleted_extension_storage_value_as_a_tombstone_with_null_fields() {
+    fn export_marks_a_deleted_row_as_a_tombstone_with_null_fields() {
         let conn = migrated_conn();
-        conn.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', 'quicklink.1', '\"body\"')", []).unwrap();
-        conn.execute("DELETE FROM extension_storage WHERE extension_id = 'quicklinks' AND key = 'quicklink.1'", []).unwrap();
+        conn.execute("INSERT INTO command_settings (command_id, alias, hotkey, enabled) VALUES ('cmd.a', 'x', NULL, 1)", []).unwrap();
+        conn.execute("DELETE FROM command_settings WHERE command_id = 'cmd.a'", []).unwrap();
 
-        let (snapshot, _) = export(&conn, "device-a", all_toggles(), &json!({}), None).unwrap();
+        let snapshot = export(&conn, "device-a", all_toggles(), &json!({}), None).unwrap();
 
-        let record = snapshot.records.iter().find(|r| r.kind == "extension_storage" && r.id == "quicklinks:quicklink.1").unwrap();
+        let record = snapshot.records.iter().find(|r| r.kind == "command_settings" && r.id == "cmd.a").unwrap();
         assert!(record.deleted);
         assert!(record.fields.is_null());
     }
@@ -698,12 +740,10 @@ mod tests {
     }
 
     #[test]
-    fn portable_settings_fields_strips_machine_local_and_sync_config_keys() {
+    fn portable_settings_fields_strips_machine_local_keys() {
         let full = json!({
             "hotkey": "Alt+Space", "theme": "dark", "scriptDirectories": ["/home/x"],
             "screenshotSearchScopes": ["~/Pictures"], "launchAtLogin": true,
-            "syncEnabled": true, "syncFolder": "/mnt/dropbox", "syncCore": true,
-            "syncExtensions": true, "syncClipboard": false, "syncUsage": true,
         });
 
         let portable = portable_settings_fields(&full);
@@ -716,8 +756,8 @@ mod tests {
     }
 
     /// End-to-end through export → merge → apply across two independent
-    /// DBs, standing in for two machines exchanging snapshots directly
-    /// (skipping the folder/encryption layer, which is T6/T7's job) — a
+    /// DBs, standing in for two machines exchanging data directly
+    /// (skipping the file/encryption layer, which `file.rs` tests) — a
     /// create on A must appear on B, and a delete on B must tombstone the
     /// row on A, in a single round of "each pulls the other's export".
     #[test]
@@ -725,101 +765,59 @@ mod tests {
         let mut conn_a = migrated_conn();
         let mut conn_b = migrated_conn();
 
-        conn_a.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', 's1', '\"from A\"')", []).unwrap();
-        conn_b.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', 's2', '\"from B\"')", []).unwrap();
+        conn_a.execute("INSERT INTO command_settings (command_id, alias, hotkey, enabled) VALUES ('cmd.s1', 'from-a', NULL, 1)", []).unwrap();
+        conn_b.execute("INSERT INTO command_settings (command_id, alias, hotkey, enabled) VALUES ('cmd.s2', 'from-b', NULL, 1)", []).unwrap();
 
-        let (snap_a, _) = export(&conn_a, "device-a", all_toggles(), &json!({}), None).unwrap();
-        let (snap_b, _) = export(&conn_b, "device-b", all_toggles(), &json!({}), None).unwrap();
+        let snap_a = export(&conn_a, "device-a", all_toggles(), &json!({}), None).unwrap();
+        let snap_b = export(&conn_b, "device-b", all_toggles(), &json!({}), None).unwrap();
 
         apply(&mut conn_a, &merge(&snap_a, std::slice::from_ref(&snap_b))).unwrap();
         apply(&mut conn_b, &merge(&snap_b, std::slice::from_ref(&snap_a))).unwrap();
 
-        let a_has_both: i64 = conn_a.query_row("SELECT COUNT(*) FROM extension_storage WHERE extension_id = 'quicklinks' AND key IN ('s1','s2')", [], |row| row.get(0)).unwrap();
-        let b_has_both: i64 = conn_b.query_row("SELECT COUNT(*) FROM extension_storage WHERE extension_id = 'quicklinks' AND key IN ('s1','s2')", [], |row| row.get(0)).unwrap();
+        let a_has_both: i64 = conn_a.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id IN ('cmd.s1','cmd.s2')", [], |row| row.get(0)).unwrap();
+        let b_has_both: i64 = conn_b.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id IN ('cmd.s1','cmd.s2')", [], |row| row.get(0)).unwrap();
         assert_eq!(a_has_both, 2, "A must pick up B's value");
         assert_eq!(b_has_both, 2, "B must pick up A's value");
 
         // Now delete on B and re-converge — the deletion must propagate to A.
-        conn_b.execute("DELETE FROM extension_storage WHERE extension_id = 'quicklinks' AND key = 's2'", []).unwrap();
-        let (snap_a2, _) = export(&conn_a, "device-a", all_toggles(), &json!({}), None).unwrap();
-        let (snap_b2, _) = export(&conn_b, "device-b", all_toggles(), &json!({}), None).unwrap();
+        conn_b.execute("DELETE FROM command_settings WHERE command_id = 'cmd.s2'", []).unwrap();
+        let snap_a2 = export(&conn_a, "device-a", all_toggles(), &json!({}), None).unwrap();
+        let snap_b2 = export(&conn_b, "device-b", all_toggles(), &json!({}), None).unwrap();
 
         apply(&mut conn_a, &merge(&snap_a2, std::slice::from_ref(&snap_b2))).unwrap();
         apply(&mut conn_b, &merge(&snap_b2, std::slice::from_ref(&snap_a2))).unwrap();
 
-        let a_has_s2: i64 = conn_a.query_row("SELECT COUNT(*) FROM extension_storage WHERE extension_id = 'quicklinks' AND key = 's2'", [], |row| row.get(0)).unwrap();
+        let a_has_s2: i64 = conn_a.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id = 'cmd.s2'", [], |row| row.get(0)).unwrap();
         assert_eq!(a_has_s2, 0, "B's delete of s2 must tombstone it on A");
-        let a_still_has_s1: i64 = conn_a.query_row("SELECT COUNT(*) FROM extension_storage WHERE extension_id = 'quicklinks' AND key = 's1'", [], |row| row.get(0)).unwrap();
+        let a_still_has_s1: i64 = conn_a.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id = 'cmd.s1'", [], |row| row.get(0)).unwrap();
         assert_eq!(a_still_has_s1, 1, "the delete must not take s1 down with it");
     }
 
-    fn snapshot_at_version(device_id: &str, version: u32) -> Snapshot {
-        Snapshot { version, device_id: device_id.to_string(), records: vec![], portable_settings: None }
-    }
-
+    /// Import is best-effort across app versions: a file written by a
+    /// different `SNAPSHOT_VERSION` is merged for whatever its records
+    /// mean here, never refused outright. (The old sync engine gated this
+    /// on a +/-1 version window; a one-shot file import has no reason to,
+    /// since `apply_record` already skips a kind it doesn't recognize.)
     #[test]
-    fn partition_by_version_keeps_the_same_version_and_one_step_either_side() {
-        let remotes = vec![snapshot_at_version("same", 5), snapshot_at_version("older", 4), snapshot_at_version("newer", 6)];
-
-        let (usable, outdated) = partition_by_version(5, remotes);
-
-        assert_eq!(usable.iter().map(|s| s.device_id.as_str()).collect::<Vec<_>>(), vec!["same", "older", "newer"]);
-        assert!(outdated.is_empty());
-    }
-
-    #[test]
-    fn partition_by_version_flags_two_versions_old_as_outdated() {
-        let remotes = vec![snapshot_at_version("ancient", 3), snapshot_at_version("current", 5)];
-
-        let (usable, outdated) = partition_by_version(5, remotes);
-
-        assert_eq!(usable.iter().map(|s| s.device_id.as_str()).collect::<Vec<_>>(), vec!["current"]);
-        assert_eq!(outdated, vec!["ancient".to_string()]);
-    }
-
-    #[test]
-    fn partition_by_version_flags_a_remote_two_versions_ahead_too() {
-        // Symmetric: if the remote is the one that's two waves ahead, this
-        // (older) device is the one out of date — same "don't trust it"
-        // outcome, from the other side of the gap.
-        let remotes = vec![snapshot_at_version("from-the-future", 7)];
-
-        let (usable, outdated) = partition_by_version(5, remotes);
-
-        assert!(usable.is_empty());
-        assert_eq!(outdated, vec!["from-the-future".to_string()]);
-    }
-
-    /// The scenario T35 exists for: device A has updated (writes/reads
-    /// version N), device B hasn't yet (still on N-1) — their data must
-    /// still converge both ways during that window, exactly like the
-    /// same-version `two_devices_converge_through_export_merge_apply`
-    /// test above, just with a version gap of one added to each snapshot.
-    #[test]
-    fn two_devices_on_adjacent_versions_still_converge_both_ways() {
+    fn snapshots_from_different_versions_still_merge_and_apply() {
         let mut conn_a = migrated_conn();
         let mut conn_b = migrated_conn();
 
-        conn_a.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', 's1', '\"from updated A\"')", []).unwrap();
-        conn_b.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', 's2', '\"from old B\"')", []).unwrap();
+        conn_a.execute("INSERT INTO command_settings (command_id, alias, hotkey, enabled) VALUES ('cmd.s1', 'newer-a', NULL, 1)", []).unwrap();
+        conn_b.execute("INSERT INTO command_settings (command_id, alias, hotkey, enabled) VALUES ('cmd.s2', 'older-b', NULL, 1)", []).unwrap();
 
-        let (mut snap_a, _) = export(&conn_a, "device-a", all_toggles(), &json!({}), None).unwrap();
-        let (mut snap_b, _) = export(&conn_b, "device-b", all_toggles(), &json!({}), None).unwrap();
-        snap_a.version = SNAPSHOT_VERSION + 1; // A already updated to the new wave
-        snap_b.version = SNAPSHOT_VERSION; // B hasn't updated yet
+        let mut snap_a = export(&conn_a, "device-a", all_toggles(), &json!({}), None).unwrap();
+        let mut snap_b = export(&conn_b, "device-b", all_toggles(), &json!({}), None).unwrap();
+        snap_a.version = SNAPSHOT_VERSION + 3;
+        snap_b.version = SNAPSHOT_VERSION;
 
-        let (usable_for_a, outdated_for_a) = partition_by_version(snap_a.version, vec![snap_b.clone()]);
-        assert!(outdated_for_a.is_empty(), "B is only one version behind A, must not be treated as outdated");
-        apply(&mut conn_a, &merge(&snap_a, &usable_for_a)).unwrap();
+        apply(&mut conn_a, &merge(&snap_a, &[snap_b.clone()])).unwrap();
+        apply(&mut conn_b, &merge(&snap_b, &[snap_a.clone()])).unwrap();
 
-        let (usable_for_b, outdated_for_b) = partition_by_version(snap_b.version, vec![snap_a.clone()]);
-        assert!(outdated_for_b.is_empty(), "A is only one version ahead of B, must not be treated as outdated");
-        apply(&mut conn_b, &merge(&snap_b, &usable_for_b)).unwrap();
-
-        let a_has_both: i64 = conn_a.query_row("SELECT COUNT(*) FROM extension_storage WHERE extension_id = 'quicklinks' AND key IN ('s1','s2')", [], |row| row.get(0)).unwrap();
-        let b_has_both: i64 = conn_b.query_row("SELECT COUNT(*) FROM extension_storage WHERE extension_id = 'quicklinks' AND key IN ('s1','s2')", [], |row| row.get(0)).unwrap();
-        assert_eq!(a_has_both, 2, "A (newer) must still pick up B's (older-format) value");
-        assert_eq!(b_has_both, 2, "B (older) must still pick up A's (newer-format) value");
+        let a_has_both: i64 = conn_a.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id IN ('cmd.s1','cmd.s2')", [], |row| row.get(0)).unwrap();
+        let b_has_both: i64 = conn_b.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id IN ('cmd.s1','cmd.s2')", [], |row| row.get(0)).unwrap();
+        assert_eq!(a_has_both, 2, "a version gap must not stop the merge");
+        assert_eq!(b_has_both, 2, "a version gap must not stop the merge");
     }
 
     #[test]

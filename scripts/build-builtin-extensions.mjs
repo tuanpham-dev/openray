@@ -26,7 +26,7 @@ if (!existsSync(builderPath)) {
   process.exit(1)
 }
 
-const { buildCommand, readManifest } = await import(builderPath)
+const { buildCommand, buildExportEntry, readManifest } = await import(builderPath)
 
 if (!existsSync(extensionsRoot)) {
   console.log('no extensions/ directory — nothing to build')
@@ -52,6 +52,14 @@ for (const name of dirs) {
     } else {
       console.log(`  ${manifest.name}:${command.name} OK`)
     }
+  }
+
+  const exportError = await buildExportEntry(extensionDir, manifest)
+  if (exportError) {
+    failed = true
+    console.error(`  ${manifest.name} ${exportError}`)
+  } else if (manifest.export) {
+    console.log(`  ${manifest.name}:<export hooks> OK`)
   }
 }
 

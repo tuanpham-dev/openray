@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ThemeProvider } from '../../theme/ThemeProvider'
 import { SettingsSidebar, type SettingsSelection } from './SettingsSidebar'
 import { GeneralPane } from './GeneralPane'
-import { SyncPane } from './SyncPane'
+import { ImportExportPane } from './ImportExportPane'
 import { AdvancedPane } from './AdvancedPane'
 import { ApplicationsView, InstallExtensionView } from './ApplicationsView'
 import { ExtensionSettingsView } from './ExtensionSettingsView'
@@ -93,8 +93,8 @@ export function SettingsWindow() {
               onHotkey={updateHotkey}
               onEnabled={updateEnabled}
             />
-          ) : selection.kind === 'sync' ? (
-            <SyncPane settings={settings} onChange={setSettings} />
+          ) : selection.kind === 'transfer' ? (
+            <ImportExportPane />
           ) : selection.kind === 'advanced' ? (
             <AdvancedPane settings={settings} onChange={setSettings} />
           ) : selection.kind === 'applications' ? (

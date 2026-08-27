@@ -1095,3 +1095,79 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- Modal (Import / Export passphrase prompt) ---------- */
+
+/* Covers the settings window rather than the pane: the prompt blocks the
+   whole surface while it's open, and the pane itself scrolls. */
+.openray-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 45%);
+}
+
+.openray-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+  padding: 18px 20px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 40%);
+}
+
+.openray-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--openray-text-primary);
+}
+
+.openray-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Indeterminate checkbox: the "some children checked" bar. Drawn as a
+   sibling element rather than a CSS pseudo on :indeterminate, so it
+   follows the same checked/unchecked markup path as the tick. */
+.openray-checkbox-dash {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--openray-accent);
+}
+
+/* Child rows under the Extensions master toggle. Indents the label column
+   only — the control column stays aligned with every other row so the
+   checkboxes still line up down the pane. */
+.openray-settings-subrow-label {
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.openray-modal-list {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 160px;
+  overflow-y: auto;
+  list-style: none;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  font-size: 12px;
+  color: var(--openray-text-secondary);
+}
+
+.openray-modal-list li + li {
+  margin-top: 4px;
+}

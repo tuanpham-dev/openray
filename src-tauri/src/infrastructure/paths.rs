@@ -1,6 +1,6 @@
 //! Shared filesystem-path helpers. `expand_home` used to live in
 //! `application::script_commands` and was imported cross-feature by
-//! `application::screenshots` and `application::sync` — an infrastructure
+//! `application::screenshots` and `application::transfer` — an infrastructure
 //! concern (path resolution) that had drifted into a feature module. Moved
 //! here as part of the extension-platform refactor's layering pass
 //! (`plans/refactor-extension-platform.md`, T7).

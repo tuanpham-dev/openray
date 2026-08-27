@@ -2,7 +2,7 @@
 
 A Raycast-style command palette and launcher, built on Tauri 2. The native
 platform is a slim shell — search/frecency, SQLite storage, global hotkeys,
-window/paste/clipboard OS adapters, Cloud Sync, and a `@raycast/api`-compatible
+window/paste/clipboard OS adapters, data import/export, and a `@raycast/api`-compatible
 extension runtime — and every feature (app search rows aside) is an
 extension running on that runtime: quicklinks, snippets, system commands,
 window management, switch windows, script commands, the calculator, translate,
@@ -17,9 +17,9 @@ build history of this architecture (superseding the earlier
 
 ```
 ┌────────────────────────── Rust platform (4 enforced layers) ─────────────────────────┐
-│ api/        thin Tauri commands: search, settings, sync, extension mgmt, bridge RPC  │
+│ api/        thin Tauri commands: search, settings, transfer, extension mgmt, bridge  │
 │ application/ palette search+frecency · CommandRegistry (static+dynamic+inline rows)  │
-│              extensions registry · sync engine · hotkey dispatch                     │
+│              extensions registry · import/export engine · hotkey dispatch            │
 │ domain/     Command, RootRow, manifest types, ports (PasteInjector, WindowControl,   │
 │              OcrEngine, ClipboardSource, MenuSource) · crate Error enum              │
 │ infrastructure/ db · settings · windows(main/settings/ext-owned) · hotkeys(locked)   │
@@ -37,7 +37,7 @@ build history of this architecture (superseding the earlier
 ```
 
 The Rust platform owns windowing, hotkeys, search orchestration, the
-extension host process, the bridge, sync, settings, and the OS adapters
+extension host process, the bridge, import/export, settings, and the OS adapters
 features reach through the bridge (clipboard images/paste injection, window
 control, selected text, confirm dialogs, and queries against platform-owned
 data like clipboard history, the screenshot index, and menu bars). Extensions
@@ -47,7 +47,7 @@ code with the full runtime available directly (no bridge round-trip for
 `@raycast/api`-compatible subset. The webview renders UI trees the extension
 host streams over as commits and hosts the palette shell plus any
 extension-owned secondary windows (Notes, AI chat) through the same renderer.
-Feature data lives in `extension_storage` (synced via Cloud Sync, per
+Feature data lives in `extension_storage` (carried by Import/Export, per
 `(extension_id, key)`, last-writer-wins); platform-owned data (clipboard
 history, the screenshot index, usage/frecency, settings) stays in native
 SQLite tables.
@@ -76,6 +76,52 @@ doesn't bundle — see `tauri.conf.json`'s `bundle.icon`).
 `pnpm build` runs a full `tauri build`; CI (`.github/workflows/build.yml`)
 runs it across all three OSes on a tagged push and uploads installers.
 
+### Extension Import/Export
+
+An extension opts into Settings → Import / Export by declaring an `export`
+block in its manifest and shipping the two hooks it names:
+
+```jsonc
+// package.json
+"export": {
+  "title": "Quicklinks",                 // the checkbox label
+  "description": "Your saved quicklinks", // optional, shown beside it
+  "entry": "export"                       // optional, defaults to "export"
+}
+```
+
+```ts
+// src/export.ts
+export const exportVersion = 1                      // optional, yours to define
+export async function exportData(): Promise<unknown>
+export async function importData(data: unknown, version: unknown): Promise<void>
+```
+
+The declaration is read from the manifest at registration, so the pane can
+list the extension without starting it; the hooks are only called when the
+user actually exports or imports. Whatever `exportData` returns is stored
+verbatim under the extension's id and handed back to `importData`
+unchanged — the host never interprets it, so the payload shape and its
+versioning are entirely the extension's own.
+
+Three rules worth knowing:
+
+- **Keep both hooks async, and yield.** Every extension shares one Node
+  process. The host tells a slow export from a hung one by pinging that
+  process, so synchronous CPU work blocks the probe and gets the export
+  treated as a hang.
+- **Never return secrets.** Nothing filters `exportData`'s return value.
+  API keys and tokens belong under a `secret:`-prefixed storage key, which
+  the host's own export already refuses (migration 0026), and should be
+  excluded from your payload too.
+- **Import adds and updates; it does not wipe.** Restore under the original
+  keys so re-importing the same file overwrites rather than duplicating,
+  and leave entries the file doesn't mention alone.
+
+An extension's own data reaches the file *only* through these hooks — the
+host no longer exports `extension_storage` generically — so an extension
+without them contributes nothing to an export.
+
 ## Platform notes & manual QA checklist
 
 OpenRay's core logic (search, frecency, SQLite storage, the extension
@@ -103,7 +149,7 @@ only be confirmed on real hardware. Each item is marked:
 | Accessibility permission prompt | known-gap | `infrastructure/platform/macos_accessibility.rs` calls `AXIsProcessTrustedWithOptions` with the prompt option before every keystroke-injection attempt; falls back to `PasteOutcome::CopiedOnly` if not (yet) trusted. Cross-compile-checked; the actual system dialog and its System Settings deep-link have not been seen on a real Mac. |
 | Cmd+Space default hotkey | verified-in-CI | `infrastructure::settings::tests::default_hotkey_matches_this_platform_convention` — defaults to `Cmd+Space` on macOS, `Alt+Space` elsewhere, since "Cmd" only means the Mac modifier (see `hotkey.rs`). Actual registration/conflict with system Spotlight: known-gap. |
 | Dock icon hidden (`ActivationPolicy::Accessory`) | known-gap | Set once in `lib.rs`'s setup; cross-compile-checked only. |
-| Cloud Sync (folder sync, encryption, key-cache permissions) | known-gap | The sync engine (`application::sync`) has no macOS-specific code beyond `#[cfg(unix)]` 0600 permissions on the cached derived key (`save_key_cache`) — the same branch Linux uses. Verified end-to-end on Linux, including that 0600 permission; cross-compile-checked for macOS but the `cfg(unix)` branch has not run on a real Mac. |
+| Import / Export (file dialogs, encryption) | known-gap | `application::transfer` is pure Rust file I/O, SQLite, and encryption with no macOS-specific code; the save/open dialogs come from `tauri-plugin-dialog`. Verified end-to-end on Linux; cross-compile-checked for macOS but the native dialogs have not been opened on a real Mac. |
 
 ### Windows
 
@@ -113,7 +159,7 @@ only be confirmed on real hardware. Each item is marked:
 | Focus-stealing workaround on show | known-gap | `infrastructure/platform/windows_focus.rs` does the standard `AttachThreadInput` dance before `SetForegroundWindow` so showing from the tray icon or a single-instance re-launch (not just a hotkey press) reliably takes focus — Windows' foreground-lock heuristic otherwise silently ignores those. Cross-compile-checked, never run. |
 | Hotkey conflicts with Win-key combos | known-gap (documented) | `tauri-plugin-global-shortcut` can't bind combos the shell reserves (`Win+*` almost entirely, some `Alt+*`). The default `Alt+Space` avoids the worst of these, but a user-chosen hotkey can silently fail to register — there's no in-app conflict detection yet. If rebinding a hotkey appears to do nothing, try a combo starting with `Ctrl` or `Alt` instead of `Win`. |
 | Paste injection (`enigo` Ctrl+V simulation) | known-gap | No Accessibility-style permission gate on Windows, but untested on real hardware. |
-| Cloud Sync (folder sync, encryption) | known-gap | Core engine (export/merge/apply, encryption, folder layout) is pure Rust with no Windows-specific code — verified end-to-end on Linux. One real gap, not just an untested one: the derived-key cache file's 0600 permission (`save_key_cache`) is behind `#[cfg(unix)]` and is a no-op on Windows — no ACL tightening implemented yet, so the cached key relies solely on the user account's own filesystem permissions. Cross-compile-checked; untested on real hardware. |
+| Import / Export (file dialogs, encryption) | known-gap | Core engine (export/merge/apply, encryption, file format) is pure Rust with no Windows-specific code — verified end-to-end on Linux. Nothing is cached to disk: the passphrase-derived key lives only for the duration of one export or import, so the old sync feature's `#[cfg(unix)]`-only key-file permissions gap no longer applies. Cross-compile-checked; the native dialogs are untested on real hardware. |
 
 ### Linux — X11
 
@@ -122,7 +168,7 @@ only be confirmed on real hardware. Each item is marked:
 | App scanning (`.desktop` file parsing, XDG dirs) | verified-in-CI | Runs natively in this project's dev/CI sandbox. |
 | Global hotkey (`tauri-plugin-global-shortcut`) | verified-in-CI | Same code path as Windows/macOS's non-Wayland branch; exercised by the existing test suite's process-level tests, not a real X11 key-grab. |
 | Paste injection | verified-in-CI (unit-level) | `SystemPasteInjector` logic covered; real keystroke delivery to another app untested here (no display in this sandbox). |
-| Cloud Sync (folder sync, encryption, worker thread, key-cache permissions) | verified-manually (2026-08-19; re-verified 2026-08-20 post `SNAPSHOT_VERSION` 1→2) | End-to-end QA on this sandbox's Linux/X11 (Xvfb): two independently-launched real `openray` processes, each with isolated `XDG_CONFIG_HOME`/`XDG_DATA_HOME`, converging through a shared encrypted folder — a snippet created on one appeared verbatim in the other's own SQLite database, deleting it there propagated back as a tombstone on the next automatic worker tick, and an incorrect passphrase was rejected with a visible error without disturbing an already-established valid key. `sync.key`'s 0600 permission confirmed directly (`ls -la`). No hotkey/window/paste-injection interaction at all — the entire feature is file I/O, SQLite, and encryption — so nothing here is expected to differ under Wayland; not separately re-run there. Re-run after the extension-platform migration retired six native tables in favor of `extension_storage` (T31) — same create/converge/delete/tombstone round trip, driven through a quicklink extension's own UI this time instead of a native table. Found and fixed one real gap in that pass: a `root-provider` extension's cached root-search listing (populated once at host startup) never refreshed when Cloud Sync pulled in a remote's new `extension_storage` data, so a synced item was correctly present in the extension's own view but invisible from root search until restart — fixed by triggering the same targeted native-side listing refresh T29 already used for a Settings-driven case (`application::sync::mod::refresh_root_providers_for`), re-verified live afterward. |
+| Import / Export (file format, encryption, merge) | verified-in-CI + known-gap (UI) | The data path is covered end-to-end by `application::transfer`'s own tests over real migrated schemas: an encrypted export round-trips and its payload is unreadable without the passphrase, an unencrypted export is plain readable JSON, a wrong passphrase is rejected distinctly from a corrupted or non-export file, an unfamiliar `version` still imports (best-effort — `apply_record` skips kinds it doesn't know), clipboard export carries text entries but never image entries, an unchecked category is absent from the file, importing an older export does not resurrect something deleted since (and a newer one still wins), and re-importing the same file is a no-op. Startup cleanup of the retired sync feature's `sync-device-id`/`sync.key` confirmed against a real launched app. **Known gap:** the pane, the native save/open dialogs, and the passphrase modal have not been exercised on screen — this sandbox's headless WebKitGTK does not render the app's transparent window, so the UI layer is typecheck/lint-clean but visually unverified. |
 
 ### Linux — Wayland
 

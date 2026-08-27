@@ -1,4 +1,4 @@
-//! Passphrase-derived encryption for sync payloads: Argon2id turns a
+//! Passphrase-derived encryption for export files: Argon2id turns a
 //! passphrase into a symmetric key, XChaCha20-Poly1305 seals/opens bytes
 //! under that key. No crate here reads or writes files — callers own I/O.
 
@@ -10,10 +10,6 @@ use thiserror::Error;
 pub const SALT_LEN: usize = 16;
 pub const KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 24;
-
-/// Fixed plaintext sealed with a newly-set key so a later machine can
-/// verify a passphrase without ever decrypting real sync data.
-const KEYCHECK_SENTINEL: &[u8] = b"openray-sync-keycheck-v1";
 
 #[derive(Debug, Error)]
 pub enum CryptoError {
@@ -75,20 +71,8 @@ pub fn open(key: &Key32, sealed: &[u8]) -> Result<Vec<u8>, CryptoError> {
     cipher.decrypt(nonce, ciphertext).map_err(|_| CryptoError::Open)
 }
 
-/// Seals the keycheck sentinel under `key`, for storage in `meta.json` so a
-/// later machine can verify a passphrase before trusting it against real data.
-pub fn seal_keycheck(key: &Key32) -> Result<Vec<u8>, CryptoError> {
-    seal(key, KEYCHECK_SENTINEL)
-}
-
-/// Verifies `key` against a keycheck payload previously produced by
-/// [`seal_keycheck`]. Returns `false` (not an error) for a wrong passphrase.
-pub fn verify_keycheck(key: &Key32, keycheck: &[u8]) -> bool {
-    matches!(open(key, keycheck), Ok(plaintext) if plaintext == KEYCHECK_SENTINEL)
-}
-
-/// Lowercase hex encoding — used for `meta.json`'s `kdf_salt`/`keycheck`
-/// fields, which need to be plain JSON strings. No `hex` crate dependency:
+/// Lowercase hex encoding — used for the export file header's `kdfSalt`
+/// field, which needs to be a plain JSON string. No `hex` crate dependency:
 /// this is the same per-byte `{b:02x}` approach `placeholders::pseudo_uuid`
 /// already uses elsewhere in this codebase.
 pub fn to_hex(bytes: &[u8]) -> String {
@@ -110,9 +94,9 @@ mod tests {
     fn seal_open_roundtrip() {
         let salt = generate_salt().unwrap();
         let key = derive_key("correct horse battery staple", &salt).unwrap();
-        let sealed = seal(&key, b"hello sync").unwrap();
+        let sealed = seal(&key, b"hello export").unwrap();
         let opened = open(&key, &sealed).unwrap();
-        assert_eq!(opened, b"hello sync");
+        assert_eq!(opened, b"hello export");
     }
 
     #[test]
@@ -140,16 +124,6 @@ mod tests {
         assert!(matches!(open(&key, &[1, 2, 3]), Err(CryptoError::Truncated)));
     }
 
-    #[test]
-    fn keycheck_roundtrip() {
-        let salt = generate_salt().unwrap();
-        let key = derive_key("device passphrase", &salt).unwrap();
-        let keycheck = seal_keycheck(&key).unwrap();
-        assert!(verify_keycheck(&key, &keycheck));
-
-        let wrong_key = derive_key("not the passphrase", &salt).unwrap();
-        assert!(!verify_keycheck(&wrong_key, &keycheck));
-    }
 
     #[test]
     fn hex_round_trips_arbitrary_bytes() {

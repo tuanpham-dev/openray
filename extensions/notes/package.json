@@ -2,6 +2,10 @@
   "name": "notes",
   "title": "Notes",
   "description": "A floating, always-available markdown scratchpad.",
+  "export": {
+    "title": "Notes",
+    "description": "Your notes and their contents"
+  },
   "icon": "note",
   "commands": [
     {
@@ -15,14 +19,23 @@
       "title": "Notes",
       "description": "Open or close the notes window.",
       "mode": "no-view",
-      "keywords": ["notes", "note", "scratchpad"]
+      "keywords": [
+        "notes",
+        "note",
+        "scratchpad"
+      ]
     },
     {
       "name": "create-note",
       "title": "Create Note",
       "description": "Create a new note and open it.",
       "mode": "no-view",
-      "keywords": ["notes", "note", "create", "new"]
+      "keywords": [
+        "notes",
+        "note",
+        "create",
+        "new"
+      ]
     },
     {
       "name": "capture-note",
@@ -30,7 +43,12 @@
       "description": "Create a note from the given text and open it.",
       "mode": "no-view",
       "arguments": [
-        { "name": "text", "type": "text", "placeholder": "Note text", "required": true }
+        {
+          "name": "text",
+          "type": "text",
+          "placeholder": "Note text",
+          "required": true
+        }
       ]
     },
     {
@@ -38,7 +56,11 @@
       "title": "Search Notes",
       "description": "Search your notes.",
       "mode": "view",
-      "keywords": ["notes", "note", "search"]
+      "keywords": [
+        "notes",
+        "note",
+        "search"
+      ]
     }
   ],
   "dependencies": {

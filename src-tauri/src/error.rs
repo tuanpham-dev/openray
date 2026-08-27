@@ -1,5 +1,5 @@
 //! Crate-wide error type for platform code (`infrastructure/` and
-//! `application::sync`). Feature modules (notes, snippets, translate, AI,
+//! `application::transfer`). Feature modules (notes, snippets, translate, AI,
 //! etc.) keep their existing `Result<_, String>` signatures — they're
 //! slated for deletion as the extension-platform migration proceeds
 //! (`plans/refactor-extension-platform.md`), so restructuring their error
@@ -36,7 +36,7 @@ pub enum Error {
     Host(#[from] crate::infrastructure::extension_host::process::HostError),
 
     #[error(transparent)]
-    Crypto(#[from] crate::application::sync::crypto::CryptoError),
+    Crypto(#[from] crate::application::transfer::crypto::CryptoError),
 
     /// Catch-all for handwritten, ad-hoc messages — the overwhelmingly
     /// common case in the code being migrated onto this type. Construct

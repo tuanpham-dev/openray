@@ -4,5 +4,5 @@ pub mod icons;
 pub mod screenshots;
 pub mod search;
 pub mod settings;
-pub mod sync;
+pub mod transfer;
 pub mod window;

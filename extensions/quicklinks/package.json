@@ -3,6 +3,10 @@
   "title": "Quicklinks",
   "description": "Create shortcuts to URLs, files, and folders with placeholders for query, clipboard, selection, and more.",
   "icon": "link",
+  "export": {
+    "title": "Quicklinks",
+    "description": "Your saved quicklinks and their URL templates"
+  },
   "commands": [
     {
       "name": "list",
@@ -15,14 +19,23 @@
       "title": "Search Quicklinks",
       "description": "Browse, edit, and delete your quicklinks.",
       "mode": "view",
-      "keywords": ["quicklink", "bookmark", "link", "search"]
+      "keywords": [
+        "quicklink",
+        "bookmark",
+        "link",
+        "search"
+      ]
     },
     {
       "name": "create-quicklink",
       "title": "Create Quicklink",
       "description": "Create a new quicklink.",
       "mode": "view",
-      "keywords": ["quicklink", "bookmark", "link"]
+      "keywords": [
+        "quicklink",
+        "bookmark",
+        "link"
+      ]
     }
   ],
   "dependencies": {

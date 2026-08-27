@@ -49,6 +49,8 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 chrono = { version = "0.4.45", features = ["unstable-locales"] }
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-shell = "2.3.5"
+# Native save/open dialogs for Import/Export's file picker.
+tauri-plugin-dialog = "2"
 tokio = { version = "1.53.1", features = ["sync", "time"] }
 thiserror = "2.0.20"
 # For {uuid} in snippets. Already in the tree via other crates, so this
@@ -140,3 +142,9 @@ wl-clipboard-rs = "0.9"
 [dev-dependencies]
 tauri = { version = "2.11.3", features = ["test"] }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+
+# Full debuginfo pushes the dev target dir into tens of gigabytes. Line tables
+# keep backtraces and panic locations accurate; only variable-level inspection
+# under a step debugger is lost.
+[profile.dev]
+debug = "line-tables-only"

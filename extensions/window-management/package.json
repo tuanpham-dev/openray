@@ -2,6 +2,10 @@
   "name": "window-management",
   "title": "Window Management",
   "description": "Tile, resize, and move windows with presets and custom layouts.",
+  "export": {
+    "title": "Window Management",
+    "description": "Your saved window presets and layouts"
+  },
   "icon": "window-center",
   "commands": [
     {
@@ -15,14 +19,23 @@
       "title": "Search Window Commands",
       "description": "Browse, edit, and delete your custom window commands.",
       "mode": "view",
-      "keywords": ["window", "custom", "layout", "search"]
+      "keywords": [
+        "window",
+        "custom",
+        "layout",
+        "search"
+      ]
     },
     {
       "name": "create-window-command",
       "title": "Create Window Command",
       "description": "Create a new custom window command.",
       "mode": "view",
-      "keywords": ["window", "custom", "layout"]
+      "keywords": [
+        "window",
+        "custom",
+        "layout"
+      ]
     }
   ],
   "dependencies": {

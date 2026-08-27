@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::error::Error;
 use crate::infrastructure::db::{SharedConnection, WithTransaction};
 use crate::infrastructure::extension_host::protocol::{
-    ArgumentType, ExtensionManifest, ExtensionPreference, PreferenceType,
+    ArgumentType, ExportDeclaration, ExtensionManifest, ExtensionPreference, PreferenceType,
 };
 
 /// T28: clipboard-history became a real extension (seeded via
@@ -50,6 +50,11 @@ pub struct ExtensionEntry {
     /// convention as `script-commands`' own icon resolution on the JS
     /// side). `None` when the manifest declares none.
     pub icon: Option<String>,
+    /// The manifest's `export` block, or `None` for an extension that
+    /// doesn't opt into Import/Export. Read from storage rather than by
+    /// running the extension, which is the whole point — the Settings pane
+    /// lists categories without starting anything.
+    pub export: Option<ExportDeclaration>,
 }
 
 /// Resolves a manifest icon string read back out of storage. A relative
@@ -239,12 +244,19 @@ impl ExtensionsRegistry {
     fn query_list(&self) -> Vec<ExtensionEntry> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-            .prepare("SELECT id, title, path, enabled, description, source, icon FROM extensions ORDER BY title")
+            .prepare("SELECT id, title, path, enabled, description, source, icon, export_json FROM extensions ORDER BY title")
             .expect("valid query");
         let rows = stmt
             .query_map([], |row| {
                 let path: Option<String> = row.get(2)?;
                 let icon: Option<String> = row.get(6)?;
+                // A declaration that fails to parse (hand-edited row, or
+                // written by a newer build with a shape this one doesn't
+                // understand) degrades to "this extension doesn't export"
+                // rather than dropping the whole entry from the list.
+                let export = row
+                    .get::<_, Option<String>>(7)?
+                    .and_then(|json| serde_json::from_str::<ExportDeclaration>(&json).ok());
                 Ok(ExtensionEntry {
                     id: row.get(0)?,
                     title: row.get(1)?,
@@ -252,6 +264,7 @@ impl ExtensionsRegistry {
                     description: row.get(4)?,
                     source: row.get(5)?,
                     icon: resolve_icon(icon, path.as_deref()),
+                    export,
                     path,
                 })
             })
@@ -296,11 +309,17 @@ impl ExtensionsRegistry {
         source: &str,
     ) -> Result<(), Error> {
         self.conn.with_transaction(|tx| {
+            let export_json = manifest
+                .export
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()
+                .map_err(|e| Error::msg(format!("extension '{id}' has an unserializable export declaration: {e}")))?;
             tx.execute(
-                "INSERT INTO extensions (id, title, path, enabled, description, source, icon)
-                 VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6)
-                 ON CONFLICT(id) DO UPDATE SET title = ?2, path = ?3, description = ?4, source = ?5, icon = ?6",
-                params![id, manifest.title, path, manifest.description, source, manifest.icon],
+                "INSERT INTO extensions (id, title, path, enabled, description, source, icon, export_json)
+                 VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(id) DO UPDATE SET title = ?2, path = ?3, description = ?4, source = ?5, icon = ?6, export_json = ?7",
+                params![id, manifest.title, path, manifest.description, source, manifest.icon, export_json],
             )?;
 
             tx.execute("DELETE FROM extension_commands WHERE extension_id = ?1", params![id])?;
@@ -503,7 +522,8 @@ mod tests {
                 command_hotkey TEXT,
                 description TEXT,
                 source TEXT NOT NULL DEFAULT 'builtin',
-                icon TEXT
+                icon TEXT,
+                export_json TEXT
             );
             CREATE TABLE extension_commands (
                 extension_id TEXT NOT NULL,
@@ -574,6 +594,7 @@ mod tests {
                 },
             ],
             preferences: None,
+                    export: None,
         }
     }
 
@@ -582,6 +603,47 @@ mod tests {
     // `BUILTIN_FEATURES` (Navigation was its last entry), so this test
     // would only ever exercise a `for` loop over nothing. Restore an
     // equivalent test if `BUILTIN_FEATURES` ever gains an entry again.
+
+    #[test]
+    fn register_installed_round_trips_an_export_declaration() {
+        let registry = test_registry();
+        let mut manifest = fake_manifest();
+        manifest.export = Some(ExportDeclaration {
+            title: "Demo Data".into(),
+            description: Some("Everything Demo saved".into()),
+            entry: None,
+        });
+
+        registry.register_installed("demo", &manifest, "/tmp/demo", "installed").unwrap();
+
+        let entry = registry.list().into_iter().find(|e| e.id == "demo").unwrap();
+        let export = entry.export.expect("declaration must survive the write/read round trip");
+        assert_eq!(export.title, "Demo Data");
+        assert_eq!(export.description.as_deref(), Some("Everything Demo saved"));
+        assert_eq!(export.entry_name(), ExportDeclaration::DEFAULT_ENTRY, "an absent entry defaults to \"export\"");
+    }
+
+    #[test]
+    fn an_extension_declaring_no_export_reads_back_as_none() {
+        let registry = test_registry();
+        registry.register_installed("demo", &fake_manifest(), "/tmp/demo", "installed").unwrap();
+
+        let entry = registry.list().into_iter().find(|e| e.id == "demo").unwrap();
+        assert!(entry.export.is_none());
+    }
+
+    #[test]
+    fn a_declared_entry_overrides_the_default() {
+        let registry = test_registry();
+        let mut manifest = fake_manifest();
+        manifest.export =
+            Some(ExportDeclaration { title: "Demo Data".into(), description: None, entry: Some("backup".into()) });
+
+        registry.register_installed("demo", &manifest, "/tmp/demo", "installed").unwrap();
+
+        let entry = registry.list().into_iter().find(|e| e.id == "demo").unwrap();
+        assert_eq!(entry.export.unwrap().entry_name(), "backup");
+    }
 
     #[test]
     fn register_installed_persists_extension_and_commands() {

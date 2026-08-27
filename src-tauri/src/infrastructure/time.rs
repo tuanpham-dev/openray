@@ -1,7 +1,7 @@
 //! Shared "now" accessors. Before this module existed, `now_unix()` (10
 //! copies) and `now_nanos()` (6 copies) were hand-rolled identically in
 //! every feature module that needed a timestamp or a `<kind>.<nanos>` row
-//! id, plus one differently-named `now_ms()` in `application::sync`. Moved
+//! id, plus one differently-named `now_ms()` in `application::transfer`. Moved
 //! here as part of the extension-platform refactor's layering pass
 //! (`plans/refactor-extension-platform.md`, T8) — each call site keeps its
 //! own local name via a `use ... as ...` import (e.g. `use
@@ -23,7 +23,7 @@ pub fn now_secs() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
 }
 
-/// `unwrap_or_default()`, not `unwrap()` — matches `application::sync`'s
+/// `unwrap_or_default()`, not `unwrap()` — matches `application::transfer`'s
 /// original `now_ms`, whose only caller (timestamping a sync event) needs
 /// this to stay infallible rather than panic on a clock set before 1970.
 pub fn now_millis() -> i64 {

@@ -53,19 +53,6 @@ export interface Settings {
   aiSkillDirs: string[]
   /** User-defined `cli:custom:<name>` presets. */
   aiCustomClis: { name: string; command: string[] }[]
-  /** Whether Cloud Sync is turned on at all. */
-  syncEnabled: boolean
-  /** Absolute path to the sync folder (Dropbox/Drive/Syncthing/a network share). */
-  syncFolder: string
-  /** Notes, snippets, quicklinks, window-management presets, translate
-   *  commands, command aliases/hotkeys, and the portable subset of settings. */
-  syncCore: boolean
-  /** Extension preference values and extension LocalStorage. */
-  syncExtensions: boolean
-  /** Clipboard history (including image blobs) and translate history. */
-  syncClipboard: boolean
-  /** Command usage/frecency counts. */
-  syncUsage: boolean
   /** How long after the palette is hidden its query/view/selection reset
    *  back to root search on next show. */
   popToRootDelay: 'never' | 'immediately' | '10' | '30' | '60' | '90' | '180'

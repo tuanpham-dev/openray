@@ -45,10 +45,14 @@ export function GearIcon(props: IconProps) {
   )
 }
 
-export function CloudIcon(props: IconProps) {
+/* Import / Export: an arrow leaving and an arrow arriving. */
+export function TransferIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+      <path d="M8 3v12" />
+      <path d="M4 7l4-4 4 4" />
+      <path d="M16 21V9" />
+      <path d="M20 17l-4 4-4-4" />
     </Svg>
   )
 }

@@ -16,4 +16,4 @@ pub mod screenshots;
 pub mod search;
 pub mod settings_provider;
 pub mod state;
-pub mod sync;
+pub mod transfer;

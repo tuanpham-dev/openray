@@ -1,7 +1,11 @@
 {
   "name": "translate",
   "title": "Translate",
-  "description": "Translate text via Google's free gtx endpoint — inline root-search intent, a full translate view, and fixed-language-pair custom commands.",
+  "description": "Translate text via Google's free gtx endpoint \u2014 inline root-search intent, a full translate view, and fixed-language-pair custom commands.",
+  "export": {
+    "title": "Translate",
+    "description": "Your saved translate commands (not translation history)"
+  },
   "icon": "translate",
   "commands": [
     {

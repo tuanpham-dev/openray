@@ -7,8 +7,8 @@ import { BUILTIN_AI_COMMANDS, sortChats, type ChatRecord } from '@openray/ai-cor
  * kinds. Port of `src-tauri/src/application/ai/storage.rs`.
  *
  * Keys prefixed `secret:` (provider API keys, MCP OAuth tokens, MCP
- * client secrets) are excluded from Cloud Sync's `extension_storage`
- * export — see `application::sync::snapshot`'s `EXCLUDED_KEY_PREFIX`
+ * client secrets) are excluded from Import/Export's `extension_storage`
+ * export — see `application::transfer::snapshot`'s `EXCLUDED_KEY_PREFIX`
  * (T27; native never had this — provider keys/MCP secrets were plain
  * `ai_provider_keys`/`mcp_servers` SQLite columns exported wholesale like
  * everything else. This tightens on native, doesn't just port it).
