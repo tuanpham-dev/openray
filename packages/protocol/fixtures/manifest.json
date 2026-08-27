@@ -1,0 +1,36 @@
+{
+  "name": "demo-extension",
+  "title": "Demo Extension",
+  "description": "A fixture extension manifest",
+  "icon": "icon.png",
+  "author": "example",
+  "categories": ["Productivity"],
+  "commands": [
+    {
+      "name": "search",
+      "title": "Search Demo",
+      "subtitle": "Demo",
+      "mode": "view",
+      "keywords": ["demo", "search"]
+    },
+    {
+      "name": "quick-action",
+      "title": "Quick Action",
+      "mode": "no-view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "apiToken",
+      "type": "password",
+      "title": "API Token",
+      "required": true
+    },
+    {
+      "name": "showDetails",
+      "type": "checkbox",
+      "label": "Show details",
+      "default": true
+    }
+  ]
+}

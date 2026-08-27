@@ -1,0 +1,9 @@
+{
+  "kind": "diff",
+  "ops": [
+    { "op": "updateProps", "id": "item-1", "props": { "title": "Alpha Updated" } },
+    { "op": "insert", "node": { "id": "item-3", "type": "List.Item", "props": { "title": "Gamma" }, "children": [] }, "parentId": "root", "index": 2 },
+    { "op": "reorder", "parentId": "root", "childIds": ["item-2", "item-1", "item-3"] },
+    { "op": "remove", "id": "item-2" }
+  ]
+}

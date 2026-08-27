@@ -1,0 +1,31 @@
+{
+  "name": "@openray/api-shim",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.cts",
+  "types": "./src/index.cts",
+  "exports": {
+    ".": "./src/index.cts",
+    "./utils": "./src/utils.cts",
+    "./openray": "./src/openray.cts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-reconciler": "^0.33.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-reconciler": "^0.33.0",
+    "@openray/protocol": "workspace:*",
+    "esbuild": "^0.27.1",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.10"
+  }
+}

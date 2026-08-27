@@ -1,0 +1,11 @@
+{
+  "kind": "snapshot",
+  "snapshot": {
+    "rootId": "root",
+    "nodes": {
+      "root": { "id": "root", "type": "List", "props": { "isLoading": false }, "children": ["item-1", "item-2"] },
+      "item-1": { "id": "item-1", "type": "List.Item", "props": { "title": "Alpha", "subtitle": "First" }, "children": [] },
+      "item-2": { "id": "item-2", "type": "List.Item", "props": { "title": "Beta", "subtitle": "Second" }, "children": [] }
+    }
+  }
+}
