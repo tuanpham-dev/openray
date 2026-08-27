@@ -1,0 +1,17 @@
+{
+  "name": "script-commands",
+  "title": "Script Commands",
+  "description": "Run user-authored scripts annotated with @raycast.* headers.",
+  "icon": "code",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Script Commands Root Provider",
+      "description": "Discovers and runs scripts from the configured script directories.",
+      "mode": "root-provider"
+    }
+  ],
+  "dependencies": {
+    "@openray/script-discovery": "workspace:*"
+  }
+}

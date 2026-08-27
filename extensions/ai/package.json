@@ -1,0 +1,68 @@
+{
+  "name": "ai",
+  "title": "AI",
+  "description": "Chat, Quick AI, AI Commands, Agents, Skills, and MCP servers.",
+  "icon": "sparkles",
+  "commands": [
+    {
+      "name": "list",
+      "title": "AI Root Provider",
+      "description": "Contributes per-command and per-agent rows to root search.",
+      "mode": "root-provider"
+    },
+    {
+      "name": "chat-command",
+      "title": "AI Chat",
+      "description": "Open or focus the AI Chat window.",
+      "mode": "no-view",
+      "keywords": ["ai", "chat", "assistant"]
+    },
+    {
+      "name": "quick-ai-command",
+      "title": "Quick AI",
+      "description": "Ask AI a quick question.",
+      "mode": "no-view",
+      "keywords": ["ai", "ask", "quick"],
+      "arguments": [{ "name": "query", "type": "text", "placeholder": "Ask anything", "required": false }]
+    },
+    {
+      "name": "search-ai-commands",
+      "title": "Search AI Commands",
+      "description": "Browse and run AI Commands.",
+      "mode": "view",
+      "keywords": ["ai", "commands"]
+    },
+    {
+      "name": "create-ai-command",
+      "title": "Create AI Command",
+      "description": "Create a new AI Command.",
+      "mode": "view",
+      "keywords": ["ai", "command", "create"]
+    },
+    {
+      "name": "manage-mcp-servers",
+      "title": "Manage MCP Servers",
+      "description": "Configure MCP servers for tool-calling.",
+      "mode": "view",
+      "keywords": ["mcp", "servers", "ai"]
+    },
+    {
+      "name": "manage-providers",
+      "title": "AI Providers",
+      "description": "Configure API keys for AI providers.",
+      "mode": "view",
+      "keywords": ["ai", "provider", "key", "anthropic", "openai", "gemini", "ollama"]
+    },
+    {
+      "name": "create-agent",
+      "title": "Create Agent",
+      "description": "Create a new AI agent.",
+      "mode": "view",
+      "keywords": ["ai", "agent", "create"]
+    }
+  ],
+  "dependencies": {
+    "@openray/ai-core": "workspace:*",
+    "@openray/placeholders": "workspace:*"
+  }
+}

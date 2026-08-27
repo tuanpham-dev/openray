@@ -1,0 +1,14 @@
+{
+  "name": "file-search",
+  "title": "File Search",
+  "description": "Search files by name across configured folders.",
+  "icon": "search",
+  "commands": [
+    {
+      "name": "list",
+      "title": "File Search Root Provider",
+      "description": "Contributes a Search Files row to root search, only once at least one search scope is configured.",
+      "mode": "root-provider"
+    }
+  ]
+}

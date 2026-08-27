@@ -1,0 +1,35 @@
+{
+  "name": "translate",
+  "title": "Translate",
+  "description": "Translate text via Google's free gtx endpoint — inline root-search intent, a full translate view, and fixed-language-pair custom commands.",
+  "icon": "translate",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Translate Commands Root Provider",
+      "description": "Contributes custom translate pairs to root search and an inline translation row.",
+      "mode": "root-provider"
+    },
+    {
+      "name": "translate",
+      "title": "Translate",
+      "description": "Translate text between languages.",
+      "mode": "view"
+    },
+    {
+      "name": "search-translate-commands",
+      "title": "Search Translate Commands",
+      "description": "Browse, run, and manage custom translate commands.",
+      "mode": "view"
+    },
+    {
+      "name": "create-translate-command",
+      "title": "Create Translate Command",
+      "description": "Create a fixed-language-pair translate command.",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@openray/translate-core": "workspace:*"
+  }
+}

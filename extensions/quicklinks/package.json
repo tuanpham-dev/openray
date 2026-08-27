@@ -1,0 +1,31 @@
+{
+  "name": "quicklinks",
+  "title": "Quicklinks",
+  "description": "Create shortcuts to URLs, files, and folders with placeholders for query, clipboard, selection, and more.",
+  "icon": "link",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Quicklinks Root Provider",
+      "description": "Contributes every saved quicklink to root search.",
+      "mode": "root-provider"
+    },
+    {
+      "name": "search-quicklinks",
+      "title": "Search Quicklinks",
+      "description": "Browse, edit, and delete your quicklinks.",
+      "mode": "view",
+      "keywords": ["quicklink", "bookmark", "link", "search"]
+    },
+    {
+      "name": "create-quicklink",
+      "title": "Create Quicklink",
+      "description": "Create a new quicklink.",
+      "mode": "view",
+      "keywords": ["quicklink", "bookmark", "link"]
+    }
+  ],
+  "dependencies": {
+    "@openray/placeholders": "workspace:*"
+  }
+}

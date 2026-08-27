@@ -1,0 +1,15 @@
+{
+  "name": "clipboard-history",
+  "title": "Clipboard History",
+  "description": "Browse, search, and paste from your clipboard history.",
+  "icon": "clipboard",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Clipboard History",
+      "description": "Search text, files, and images you've copied.",
+      "mode": "view",
+      "keywords": ["clipboard", "history", "paste", "copy"]
+    }
+  ]
+}

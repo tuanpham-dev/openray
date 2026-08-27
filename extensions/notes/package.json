@@ -1,0 +1,47 @@
+{
+  "name": "notes",
+  "title": "Notes",
+  "description": "A floating, always-available markdown scratchpad.",
+  "icon": "note",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Notes Root Provider",
+      "description": "Contributes per-note rows to root search and the quick-capture inline row.",
+      "mode": "root-provider"
+    },
+    {
+      "name": "toggle-notes",
+      "title": "Notes",
+      "description": "Open or close the notes window.",
+      "mode": "no-view",
+      "keywords": ["notes", "note", "scratchpad"]
+    },
+    {
+      "name": "create-note",
+      "title": "Create Note",
+      "description": "Create a new note and open it.",
+      "mode": "no-view",
+      "keywords": ["notes", "note", "create", "new"]
+    },
+    {
+      "name": "capture-note",
+      "title": "Capture Note",
+      "description": "Create a note from the given text and open it.",
+      "mode": "no-view",
+      "arguments": [
+        { "name": "text", "type": "text", "placeholder": "Note text", "required": true }
+      ]
+    },
+    {
+      "name": "search-notes",
+      "title": "Search Notes",
+      "description": "Search your notes.",
+      "mode": "view",
+      "keywords": ["notes", "note", "search"]
+    }
+  ],
+  "dependencies": {
+    "@openray/notes-core": "workspace:*"
+  }
+}

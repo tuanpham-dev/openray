@@ -1,0 +1,14 @@
+{
+  "name": "system-commands",
+  "title": "System Commands",
+  "description": "Lock, sleep, restart, and other system controls.",
+  "icon": "power",
+  "commands": [
+    {
+      "name": "list",
+      "title": "System Commands Root Provider",
+      "description": "Contributes available system commands to root search.",
+      "mode": "root-provider"
+    }
+  ]
+}

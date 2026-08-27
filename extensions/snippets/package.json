@@ -1,0 +1,31 @@
+{
+  "name": "snippets",
+  "title": "Snippets",
+  "description": "Save and paste reusable text with placeholders for arguments, clipboard, selection, and more.",
+  "icon": "scissors",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Snippets Root Provider",
+      "description": "Contributes every saved snippet to root search.",
+      "mode": "root-provider"
+    },
+    {
+      "name": "search-snippets",
+      "title": "Search Snippets",
+      "description": "Browse, edit, and delete your snippets.",
+      "mode": "view",
+      "keywords": ["snippet", "search", "text"]
+    },
+    {
+      "name": "create-snippet",
+      "title": "Create Snippet",
+      "description": "Create a new snippet.",
+      "mode": "view",
+      "keywords": ["snippet", "text", "template"]
+    }
+  ],
+  "dependencies": {
+    "@openray/placeholders": "workspace:*"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "emoji",
+  "title": "Emoji & Symbols",
+  "description": "Search and paste emoji and symbols.",
+  "icon": "🙂",
+  "commands": [
+    {
+      "name": "search",
+      "title": "Search Emoji & Symbols",
+      "description": "Search, copy, and paste emoji and symbols.",
+      "mode": "view",
+      "keywords": ["emoji", "symbols", "unicode", "smiley"]
+    }
+  ]
+}

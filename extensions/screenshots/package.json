@@ -1,0 +1,14 @@
+{
+  "name": "screenshots",
+  "title": "Screenshots",
+  "description": "Search, paste, and drop screenshots and screen recordings.",
+  "icon": "camera",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Screenshots Root Provider",
+      "description": "Contributes Search/Paste Latest/Drop Latest rows to root search, only once at least one search scope is configured.",
+      "mode": "root-provider"
+    }
+  ]
+}

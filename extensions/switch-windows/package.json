@@ -1,0 +1,15 @@
+{
+  "name": "switch-windows",
+  "title": "Switch Windows",
+  "description": "Search and switch between open windows.",
+  "icon": "window-move",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Switch Windows",
+      "description": "Search and switch between open windows.",
+      "mode": "view",
+      "keywords": ["window", "switcher", "focus"]
+    }
+  ]
+}

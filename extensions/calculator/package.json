@@ -1,0 +1,17 @@
+{
+  "name": "calculator",
+  "title": "Calculator",
+  "description": "Arithmetic, unit/currency conversion, and date/time math as an inline root-search row.",
+  "icon": "calculator",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Calculator Root Provider",
+      "description": "Contributes the inline calculator row to root search; carries no rows of its own.",
+      "mode": "root-provider"
+    }
+  ],
+  "dependencies": {
+    "@openray/calculator-core": "workspace:*"
+  }
+}

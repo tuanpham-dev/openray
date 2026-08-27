@@ -1,0 +1,14 @@
+{
+  "name": "menu-bar-search",
+  "title": "Menu Bar Search",
+  "description": "Search and trigger the frontmost app's menu bar items.",
+  "icon": "monitor",
+  "commands": [
+    {
+      "name": "list",
+      "title": "Menu Bar Search Root Provider",
+      "description": "Contributes a Search Menu Bar Items row to root search, only on platforms where menu introspection is available.",
+      "mode": "root-provider"
+    }
+  ]
+}
