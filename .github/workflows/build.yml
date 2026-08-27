@@ -1,0 +1,229 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (lint, typecheck, unit tests)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            patchelf \
+            build-essential
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # Found live while adding a new TS test suite (apps/desktop's
+      # fuzzyMatch): nothing here ever ran packages/api-shim's (36) or
+      # packages/extension-host's (27) own vitest suites — only Rust tests
+      # and typecheck/lint were gated. `pnpm test` (root) fans out to every
+      # workspace package's own `test` script via `-r --if-present`, same
+      # convention `typecheck`/`lint` already use.
+      - name: JS/TS unit tests
+        run: pnpm test
+
+      - name: Fetch node sidecar (host triple)
+        run: pnpm fetch:node-sidecar
+
+      # T32: without this, `hello_world_round_trips_through_the_real_sidecar`
+      # and its siblings (infrastructure::extension_host::process::tests)
+      # self-skip rather than fail when packages/extension-host/dist/host.cjs
+      # doesn't exist — CI was silently never exercising the real sidecar
+      # round trip. Also needed for the builtin-extension registry itself:
+      # `register_builtin_extensions` reads each extension's `.openray/build/`
+      # output directly off disk (see lib.rs's doc comment), so any test
+      # that exercises extension registration/launch needs these built too,
+      # same as a real `tauri dev`/`tauri build` now gets automatically via
+      # `beforeDevCommand`/`beforeBuildCommand` in tauri.conf.json.
+      - name: Build extension host + builtin extensions
+        run: |
+          pnpm --filter @openray/extension-host build
+          node scripts/build-builtin-extensions.mjs
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test --lib --features custom-protocol
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+  platform-check:
+    name: Platform check (${{ matrix.target }})
+    # Compile-only verification for target_os-gated code (Navigation's
+    # window_list/menu_bar backends) that can never be type-checked on
+    # this repo's Linux dev machines — cargo check/clippy, not a full
+    # tauri build, so this runs on every push/PR rather than only at
+    # release time like the `build` job below.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch node sidecar (${{ matrix.target }})
+        run: node scripts/fetch-node-sidecar.mjs ${{ matrix.target }}
+
+      - name: Check
+        working-directory: src-tauri
+        run: cargo check --target ${{ matrix.target }} --features custom-protocol
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --target ${{ matrix.target }} --features custom-protocol --all-targets -- -D warnings
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tauri's Linux bundler produces .deb + .rpm + .AppImage together
+      # from one native build — no separate Fedora runner needed, the .rpm
+      # from this same job is the Fedora-installable package.
+      - name: Install Linux Tauri build dependencies
+        if: startsWith(matrix.os, 'ubuntu-22.04')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            patchelf \
+            build-essential
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch node sidecar (${{ matrix.target }})
+        run: node scripts/fetch-node-sidecar.mjs ${{ matrix.target }}
+
+      # Two mutually-exclusive invocations rather than one with ternary'd
+      # inputs: tauri-action treats a *present-but-empty* tagName/releaseName
+      # differently from an *omitted* one (only omitting skips release
+      # creation), so a tag push and a manual dispatch each get their own
+      # step with only the inputs that apply to them.
+      - name: Build and publish release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: openray ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      - name: Build only (manual dispatch)
+        if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/v')
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --target ${{ matrix.target }}
+
+      - name: Upload build artifacts
+        if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: openray-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*
+          if-no-files-found: error

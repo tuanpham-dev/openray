@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "extensions/*": {
+      "entry": ["src/*.{ts,tsx}"]
+    },
+    "packages/extension-host": {
+      "entry": [
+        "src/index.ts",
+        "src/builder.ts",
+        "test/**/*.test.ts",
+        "test/fixtures/**/*.{ts,tsx}",
+        "fixtures/**/src/*.{ts,tsx}"
+      ]
+    }
+  },
+  "ignoreDependencies": [
+    "@raycast/api",
+    "@openray/extras",
+    "react"
+  ],
+  "ignoreBinaries": ["loginctl", "gsettings", "rustc"],
+  "ignore": [
+    "packages/extension-host/fixtures/hacker-news/**",
+    "packages/extension-host/fixtures/password-generator/**"
+  ]
+}

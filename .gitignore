@@ -1,0 +1,33 @@
+node_modules/
+.claude/
+dist/
+dist-ssr/
+*.local
+
+# Extension build output (extensions/*/, packages/extension-host/fixtures/*/) —
+# rebuilt by scripts/build-builtin-extensions.mjs / the install pipeline,
+# same convention as dist/ above.
+.openray/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/binaries/node-*
+src-tauri/gen/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.local
