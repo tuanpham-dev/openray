@@ -986,6 +986,26 @@ body,
   color: var(--openray-text-tertiary);
 }
 
+/* Group boundary, applied by the call site when a section follows content
+   of its own group (Commands under a pane's preference form, or under a
+   Preferences section) — `.openray-settings-pane` has no flex gap at all,
+   which left "COMMANDS" sitting flush against the last preference row,
+   and `.openray-extension-view`'s gap spaces two sections apart without
+   ever visually dividing them. Deliberately not an `+` sibling rule: an
+   extension with no preferences renders an empty `display: contents`
+   section that still matches as a sibling, which would double this rule
+   up against the header's own bottom border. */
+.openray-extension-view-section--divided {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--openray-border);
+}
+
+/* The flex gap already supplies the space above the rule here. */
+.openray-extension-view > .openray-extension-view-section--divided {
+  margin-top: 0;
+}
+
 /* Non-extension full-width views (Applications, Install) reuse the same
    section vocabulary but skip the centered header. */
 .openray-settings-view-heading {

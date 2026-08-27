@@ -2,7 +2,7 @@
   "name": "emoji",
   "title": "Emoji & Symbols",
   "description": "Search and paste emoji and symbols.",
-  "icon": "🙂",
+  "icon": "smiley",
   "commands": [
     {
       "name": "search",

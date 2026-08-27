@@ -1,7 +1,6 @@
 import { Checkbox } from './Checkbox'
 import { AliasField } from './AliasField'
 import { HotkeyRecorder } from './HotkeyRecorder'
-import { THEME_ICONS, ThemeIcon } from './extensionIcons'
 import { IconGlyph } from '../../components/IconGlyph'
 import type { CommandSettingsEntry, SettingsCommand } from '../../ipc/commandSettings'
 import { AppWindowIcon, PuzzleIcon } from '../../components/icons'
@@ -19,13 +18,7 @@ function CommandIcon({ command }: { command: SettingsCommand }) {
     )
   }
   if (command.kind === 'app') {
-    return (
-      <ThemeIcon names={THEME_ICONS.applications}>
-        <span className="openray-settings-row-icon">
-          <AppWindowIcon size={18} />
-        </span>
-      </ThemeIcon>
-    )
+    return <span className="openray-settings-row-icon"><AppWindowIcon size={18} /></span>
   }
   return <span className="openray-settings-row-icon"><PuzzleIcon size={18} /></span>
 }

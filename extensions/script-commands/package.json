@@ -1,7 +1,7 @@
 {
   "name": "script-commands",
   "title": "Script Commands",
-  "description": "Run user-authored scripts annotated with @raycast.* headers.",
+  "description": "Run user-authored scripts annotated with @raycast.* or @openray.* headers.",
   "icon": "code",
   "commands": [
     {

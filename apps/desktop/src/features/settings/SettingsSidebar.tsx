@@ -67,11 +67,7 @@ export function SettingsSidebar({ extensions, selection, onChange }: SettingsSid
           </span>
           {matches('Applications') && (
             <SidebarEntry
-              icon={
-                <ThemeIcon names={THEME_ICONS.applications}>
-                  <AppWindowIcon size={16} />
-                </ThemeIcon>
-              }
+              icon={<AppWindowIcon size={16} />}
               title="Applications"
               active={activeKey === 'applications'}
               onClick={() => onChange({ kind: 'applications' })}

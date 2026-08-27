@@ -33,7 +33,8 @@ function ScriptCommandsPrefs({ settings, onChange }: BuiltinPrefsProps) {
         placeholder="~/scripts"
         hint={
           <>
-            Folders scanned for scripts with Raycast-compatible <code>@raycast.*</code> headers
+            Folders scanned for scripts with Raycast-compatible <code>@raycast.*</code> headers —{' '}
+            <code>@openray.*</code> is accepted for the same fields
           </>
         }
         values={settings.scriptDirectories ?? []}

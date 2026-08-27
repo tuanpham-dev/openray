@@ -60,6 +60,19 @@ pnpm fetch:node-sidecar   # fetches the Node runtime the extension host sidecar 
 pnpm dev                  # tauri dev
 ```
 
+The app icon's source of truth is `src-tauri/icons/icon.svg` — the same
+bolt the webview ships as its favicon, on a filled tile. After editing it,
+rasterize and regenerate the whole PNG/ICO/ICNS set:
+
+```sh
+magick -background none src-tauri/icons/icon.svg -resize 1024x1024 /tmp/openray-icon.png
+pnpm tauri icon /tmp/openray-icon.png
+rm -rf src-tauri/icons/android src-tauri/icons/ios src-tauri/icons/64x64.png
+```
+
+(the last line drops output for the mobile targets and a size this project
+doesn't bundle — see `tauri.conf.json`'s `bundle.icon`).
+
 `pnpm build` runs a full `tauri build`; CI (`.github/workflows/build.yml`)
 runs it across all three OSes on a tagged push and uploads installers.
 

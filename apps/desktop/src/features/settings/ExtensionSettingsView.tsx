@@ -96,7 +96,7 @@ export function ExtensionSettingsView({
       </section>
 
       {showCommands && (
-        <section className="openray-extension-view-section">
+        <section className={`openray-extension-view-section${showPreferences ? ' openray-extension-view-section--divided' : ''}`}>
           <h3>Commands</h3>
           <CommandList commands={ownCommands} commandSettings={commandSettings} onAlias={onAlias} onHotkey={onHotkey} onEnabled={onEnabled} />
         </section>

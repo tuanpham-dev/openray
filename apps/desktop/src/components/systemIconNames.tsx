@@ -26,6 +26,7 @@ import {
   SendIcon,
   SkipBackIcon,
   SkipForwardIcon,
+  SmileyIcon,
   SparklesIcon,
   SystemThemeIcon,
   TranslateIcon,
@@ -71,10 +72,12 @@ interface IconProps {
  * chat's "Send"/"Error" `List.Item`s — see `VisualContent` in
  * `TreeRenderer.tsx`, which consults this map the same way `IconGlyph`
  * does). Rows backed by external/user content (script commands, user
- * quicklinks/snippets, clipboard entries, the "emoji" extension's own
- * icon) instead carry a literal glyph — an emoji or an image path —
- * through `icon` unchanged; there's no single "right" SVG for arbitrary
- * user content, so those never need an entry here.
+ * quicklinks/snippets, clipboard entries) instead carry a literal glyph
+ * — an emoji or an image path — through `icon` unchanged; there's no
+ * single "right" SVG for arbitrary user content, so those never need an
+ * entry here. The "emoji" extension is first-party chrome, not user
+ * content, so its manifest icon is the `smiley` name below rather than a
+ * literal 🙂 — the reason in the next paragraph applied to it too.
  *
  * A symbolic name rather than a literal emoji glyph: the OS emoji font
  * renders each glyph in that font's own style and color (compare
@@ -130,6 +133,7 @@ export const SYSTEM_ICON_NAMES: Record<string, ComponentType<IconProps>> = {
   link: LinkIcon,
   scissors: ScissorsIcon,
   clipboard: ClipboardIcon,
+  smiley: SmileyIcon,
   note: NoteIcon,
   code: CodeIcon,
   translate: TranslateIcon,

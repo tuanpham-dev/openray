@@ -4,7 +4,6 @@ import { useThemeIcon } from '../../ipc/icons'
 /* Names to try in the desktop's icon theme, most specific first. Themes
    aren't required to carry every standard name, so each is a chain. */
 export const THEME_ICONS = {
-  applications: ['applications-other', 'applications-all', 'application-x-executable'],
   builtins: ['applications-utilities', 'preferences-desktop', 'applications-system', 'preferences-system'],
   extension: ['preferences-plugin', 'application-x-addon', 'extension'],
 } as const

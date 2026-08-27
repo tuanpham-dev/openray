@@ -212,7 +212,7 @@ export function GeneralPane({ settings, onChange, builtinCommands, commandSettin
         </span>
       </div>
 
-      <section className="openray-extension-view-section">
+      <section className="openray-extension-view-section openray-extension-view-section--divided">
         <h3>Commands</h3>
         <CommandList
           commands={builtinCommands}

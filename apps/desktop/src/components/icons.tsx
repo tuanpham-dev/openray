@@ -269,6 +269,20 @@ export function ScissorsIcon(props: IconProps) {
   )
 }
 
+export function SmileyIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
+      {/* Zero-length strokes: `stroke-linecap: round` on the shared <Svg>
+          renders each as a dot, which stays round at every size where a
+          tiny <circle> would go lumpy. */}
+      <line x1="9.3" y1="9.8" x2="9.31" y2="9.8" />
+      <line x1="14.7" y1="9.8" x2="14.71" y2="9.8" />
+    </Svg>
+  )
+}
+
 export function ChevronDownIcon({ size = 12, ...props }: IconProps) {
   return (
     <Svg size={size} {...props}>
