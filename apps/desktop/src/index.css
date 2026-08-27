@@ -1,0 +1,24 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  /* `system-ui` first: it's the actual mechanism for "use the OS's UI
+     font" (resolves to San Francisco on macOS, Segoe UI on Windows, and
+     the user's configured GTK font on Linux via Pango/fontconfig — not a
+     hardcoded default). The named fallbacks after it only matter on the
+     rare setup where the webview doesn't support the `system-ui` keyword
+     at all, not for picking between OSes. */
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

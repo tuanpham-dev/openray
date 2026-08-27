@@ -1,0 +1,1735 @@
+.openray-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  height: 60px;
+  border-bottom: 1px solid var(--openray-border);
+  flex-shrink: 0;
+}
+
+.openray-search-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--openray-text-secondary);
+  cursor: default;
+}
+
+.openray-search-back:hover {
+  background: var(--openray-hover-bg);
+  color: var(--openray-text-primary);
+}
+
+.openray-search-icon {
+  color: var(--openray-text-tertiary);
+  flex-shrink: 0;
+}
+
+.openray-search-input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: calc(18px * var(--openray-font-scale, 1));
+  font-family: inherit;
+  color: var(--openray-text-primary);
+}
+
+/* An extension List/Grid's navigationTitle, ahead of the search field. */
+.openray-search-title {
+  flex-shrink: 0;
+  font-size: calc(15px * var(--openray-font-scale, 1));
+  font-weight: 500;
+  color: var(--openray-text-secondary);
+  padding-right: 4px;
+  border-right: 1px solid var(--openray-border);
+  margin-right: 2px;
+}
+
+.openray-search-input::placeholder {
+  color: var(--openray-text-tertiary);
+}
+
+/* Raycast's calculator card: a raised panel under a "Calculator" heading,
+   split into equal expression / result halves by a centered divider with
+   an arrow sitting on it. */
+.openray-calc-section {
+  flex-shrink: 0;
+  padding: 8px 8px 0;
+}
+
+.openray-calc-card {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 16px;
+  border-radius: 10px;
+  background: var(--openray-selected-bg);
+  cursor: default;
+}
+
+.openray-calc-card--selected {
+  /* Layered over the card fill rather than replacing it, so the selected
+     state reads as a lift in both themes. */
+  background:
+    linear-gradient(rgba(127, 127, 127, 0.14), rgba(127, 127, 127, 0.14)),
+    var(--openray-selected-bg);
+}
+
+.openray-calc-side {
+  min-width: 0;
+  font-size: calc(22px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--openray-text-primary);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Full-height rule with a gap for the arrow. Drawn as two segments rather
+   than one line masked by the arrow: the card background changes with the
+   selected state, so anything relying on painting over the line would have
+   to track that background exactly. */
+.openray-calc-divider {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+}
+
+.openray-calc-divider::before,
+.openray-calc-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  background: var(--openray-border);
+}
+
+.openray-calc-divider::before {
+  top: 0;
+  bottom: calc(50% + 15px);
+}
+
+.openray-calc-divider::after {
+  top: calc(50% + 15px);
+  bottom: 0;
+}
+
+.openray-calc-arrow {
+  font-size: calc(17px * var(--openray-font-scale, 1));
+  line-height: 1;
+  color: var(--openray-text-secondary);
+}
+
+.openray-result-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+/* `List.Item.detail`'s two-column layout (T28) — the row list narrows to a
+   fixed rail, the selected item's detail fills the rest. */
+.openray-list-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.openray-list-split > .openray-result-list {
+  flex: 0 0 320px;
+  border-right: 1px solid var(--openray-border);
+}
+
+.openray-list-detail-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* `List`'s `searchBarAccessory` (a `List.Dropdown`) — trailing edge of the
+   search bar, e.g. clipboard-history's content-type filter (T28). */
+.openray-searchbar-dropdown {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-secondary);
+  font-family: inherit;
+  font-size: calc(12.5px * var(--openray-font-scale, 1));
+  cursor: default;
+}
+
+/* Sentence case, not uppercase — Raycast labels its result groups
+   "Results" / "Suggestions" in plain sentence case (see raycast-ref7). */
+.openray-result-section-label {
+  padding: 6px 8px 4px;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  font-weight: 400;
+  color: var(--openray-text-secondary);
+}
+
+.openray-empty-view {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--openray-text-tertiary);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+}
+
+/* An extension's `List.EmptyView`/`Grid.EmptyView`, with its own icon,
+ * title, and optional description — stacked instead of the plain
+ * single-line "No results" fallback. */
+.openray-empty-view--custom {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.openray-empty-view-icon {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.openray-empty-view-title {
+  color: var(--openray-text-secondary);
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  font-weight: 500;
+}
+
+.openray-empty-view-description {
+  color: var(--openray-text-tertiary);
+  font-size: calc(12px * var(--openray-font-scale, 1));
+}
+
+/* Trailing accessories on a `List.Item` — text, a tag pill, or an icon. */
+.openray-list-item-accessories {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.openray-list-item-accessory {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.openray-accessory-text {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+  white-space: nowrap;
+}
+
+.openray-accessory-glyph {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+}
+
+.openray-accessory-tag {
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--openray-border);
+  color: var(--openray-text-secondary);
+  white-space: nowrap;
+}
+
+/* `Detail.Metadata.TagList` — a row of pills, each an optionally-clickable
+ * `TagList.Item`. */
+.openray-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.openray-tag {
+  font: inherit;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+  cursor: default;
+}
+
+button.openray-tag {
+  cursor: pointer;
+}
+
+button.openray-tag:hover {
+  background: var(--openray-hover-bg);
+}
+
+/* `Detail.Metadata.Link` — opens `target` via the OS default handler
+ * instead of navigating the webview. */
+.openray-metadata-link {
+  color: var(--openray-accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.openray-metadata-link:hover {
+  text-decoration: underline;
+}
+
+.openray-form-textarea {
+  width: 100%;
+  min-height: calc(96px * var(--openray-font-scale, 1));
+  resize: vertical;
+  font: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-input-bg, transparent);
+  color: var(--openray-text-primary);
+}
+
+.openray-settings-row--textarea {
+  align-items: flex-start;
+}
+
+/* Row metrics mirror Raycast's palette (corroborated by flare's
+   `h-12 gap-3 rounded-md px-2` list item with a 22px icon). */
+.openray-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: calc(48px * var(--openray-font-scale, 1));
+  padding: 0 8px;
+  border-radius: 6px;
+  cursor: default;
+  color: var(--openray-text-primary);
+}
+
+.openray-list-item:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-list-item--selected,
+.openray-list-item--selected:hover {
+  background: var(--openray-selected-bg);
+}
+
+.openray-list-item-icon {
+  font-size: 17px;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.openray-list-item-icon-image {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+.openray-list-item-icon-svg {
+  flex-shrink: 0;
+  color: var(--openray-text-secondary);
+}
+
+.openray-list-item-icon-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--openray-selected-bg);
+  color: var(--openray-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Title + subtitle + alias share a baseline-aligned run, with the type
+   label pushed to the trailing edge — the row anatomy Raycast uses
+   ("Search Menu Items  Navigation  [smi]" … "Command"). */
+.openray-list-item-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.openray-list-item-title {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  font-weight: 450;
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+}
+
+.openray-list-item-subtitle {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-list-item-alias {
+  align-self: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--openray-kbd-border);
+  background: var(--openray-kbd-bg);
+  color: var(--openray-text-secondary);
+  font-size: calc(11.5px * var(--openray-font-scale, 1));
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.openray-list-item-type {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+  flex-shrink: 0;
+}
+
+.openray-list-item-accessory {
+  padding-left: 12px;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+  flex-shrink: 0;
+}
+
+.openray-list-item--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Extension Grid view: fixed column count from the Grid's `columns` prop
+   (via a CSS variable), square-ish cells with the visual on top and text
+   beneath. */
+.openray-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--openray-grid-columns, 5), 1fr);
+  gap: 10px;
+  align-content: start;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.openray-grid-section-title {
+  grid-column: 1 / -1;
+  padding: 6px 2px 0;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+}
+
+.openray-grid .openray-empty-view {
+  grid-column: 1 / -1;
+}
+
+.openray-grid-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: default;
+  min-width: 0;
+}
+
+.openray-grid-cell:hover {
+  background: var(--openray-hover-bg);
+}
+
+/* Raycast marks grid selection with a ring around the cell rather than a
+   filled row. */
+.openray-grid-cell--selected,
+.openray-grid-cell--selected:hover {
+  border-color: var(--openray-accent);
+  background: var(--openray-selected-bg);
+}
+
+.openray-grid-cell-content {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--openray-selected-bg);
+  overflow: hidden;
+}
+
+.openray-grid-cell-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.openray-grid-cell-swatch {
+  width: 100%;
+  height: 100%;
+}
+
+.openray-grid-cell-glyph {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.openray-grid-cell-title {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-grid-cell-subtitle {
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.openray-form-header {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  color: var(--openray-text-primary);
+}
+
+.openray-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.openray-form-field label {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+}
+
+.openray-form-field input,
+.openray-form-field select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  font-family: inherit;
+  outline: none;
+}
+
+.openray-form-field input:focus,
+.openray-form-field select:focus {
+  border-color: var(--openray-accent);
+}
+
+/* Two fields side by side, e.g. width/height or x/y. */
+.openray-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.openray-form-row .openray-form-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Snippet rows: name with its keyword shown as a trailing pill, so a
+   snippet's trigger is visible without opening it. */
+.openray-snippet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: default;
+}
+
+.openray-snippet-row--selected {
+  background: var(--openray-selected-bg);
+}
+
+.openray-snippet-row-name {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-snippet-keyword {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--openray-kbd-border);
+  background: var(--openray-kbd-bg);
+  color: var(--openray-text-secondary);
+  font-size: calc(11.5px * var(--openray-font-scale, 1));
+}
+
+.openray-form-field--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.openray-form-textarea {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: calc(96px * var(--openray-font-scale, 1));
+  resize: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  line-height: 1.5;
+  outline: none;
+}
+
+.openray-form-textarea:focus {
+  border-color: var(--openray-accent);
+}
+
+.openray-form-error {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-danger);
+}
+
+.openray-form-hint {
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+}
+
+.openray-form-actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.openray-form-button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  font-family: inherit;
+  cursor: default;
+}
+
+.openray-form-button--primary {
+  background: var(--openray-accent);
+  border-color: var(--openray-accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+.openray-form-button:disabled {
+  opacity: 0.5;
+}
+
+.openray-argument-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: calc(52px * var(--openray-font-scale, 1));
+  border-bottom: 1px solid var(--openray-border);
+  flex-shrink: 0;
+}
+
+.openray-argument-bar-label {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  font-weight: 500;
+  color: var(--openray-text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--openray-selected-bg);
+}
+
+.openray-argument-bar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: calc(15px * var(--openray-font-scale, 1));
+  font-family: inherit;
+  color: var(--openray-text-primary);
+}
+
+.openray-clipboard-history {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.openray-clipboard-list {
+  width: 45%;
+  overflow-y: auto;
+  padding: 8px;
+  border-right: 1px solid var(--openray-border);
+}
+
+.openray-clipboard-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: default;
+}
+
+/* Colour entries carry their swatch into the list so the type is visible
+   without selecting the row. */
+.openray-clipboard-swatch-dot {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid var(--openray-border);
+}
+
+.openray-clipboard-list-item--selected {
+  background: var(--openray-selected-bg);
+}
+
+.openray-clipboard-list-item-text {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.openray-clipboard-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-width: 0;
+}
+
+.openray-clipboard-preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+}
+
+/* The preview's visual scrolls; the Information block stays put beneath
+   it rather than scrolling away with long content. */
+.openray-clipboard-preview-typed {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.openray-clipboard-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.openray-clipboard-info {
+  flex-shrink: 0;
+}
+
+.openray-clipboard-thumb {
+  width: 26px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid var(--openray-border);
+  object-fit: cover;
+}
+
+.openray-clipboard-image {
+  max-width: 100%;
+  max-height: 240px;
+  align-self: flex-start;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  object-fit: contain;
+  /* A chequerboard, so transparent regions read as transparent rather
+     than as part of the panel. */
+  background-color: var(--openray-bg-raised);
+  background-image:
+    linear-gradient(45deg, var(--openray-selected-bg) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--openray-selected-bg) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--openray-selected-bg) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--openray-selected-bg) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+}
+
+.openray-clipboard-swatch {
+  height: 96px;
+  border-radius: 10px;
+  border: 1px solid var(--openray-border);
+  flex-shrink: 0;
+}
+
+.openray-clipboard-filename {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  font-weight: 500;
+  color: var(--openray-text-primary);
+  word-break: break-all;
+}
+
+.openray-clipboard-link {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-accent);
+  word-break: break-all;
+}
+
+/* Same treatment as the Extensions detail panel's metadata: label left,
+   value right, one rule between rows. */
+.openray-clipboard-section {
+  margin: 0 0 2px;
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-clipboard-meta {
+  display: flex;
+  flex-direction: column;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+}
+
+.openray-clipboard-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--openray-border);
+}
+
+.openray-clipboard-meta-row:last-child {
+  border-bottom: none;
+}
+
+.openray-clipboard-meta-label {
+  color: var(--openray-text-secondary);
+  white-space: nowrap;
+}
+
+.openray-clipboard-meta-value {
+  min-width: 0;
+  color: var(--openray-text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+/* View-level failure notice, e.g. a paste that couldn't be injected. */
+.openray-view-error {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--openray-border);
+  color: var(--openray-danger);
+  font-size: calc(12px * var(--openray-font-scale, 1));
+}
+
+.openray-flex-spacer {
+  flex: 1;
+}
+
+.openray-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: calc(40px * var(--openray-font-scale, 1));
+  border-top: 1px solid var(--openray-border);
+  background: var(--openray-footer-bg);
+  flex-shrink: 0;
+}
+
+.openray-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(12.5px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  color: var(--openray-text-primary);
+}
+
+.openray-footer-brand-mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--openray-accent);
+  flex-shrink: 0;
+}
+
+.openray-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.openray-footer-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--openray-border);
+}
+
+.openray-footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+  padding: 4px 2px;
+  border-radius: 6px;
+}
+
+.openray-action-panel {
+  position: absolute;
+  bottom: 48px;
+  right: 8px;
+  width: 260px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--openray-bg-solid);
+  border: 1px solid var(--openray-border);
+  box-shadow: var(--openray-shadow);
+  z-index: 10;
+}
+
+.openray-action-panel-header {
+  padding: 4px 8px 6px;
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-action-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: default;
+  color: var(--openray-text-primary);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+}
+
+.openray-action-item--selected {
+  background: var(--openray-selected-bg);
+}
+
+.openray-action-item-icon {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.openray-action-item-title {
+  flex: 1;
+}
+
+.openray-footer-hint kbd,
+.openray-action-item-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(18px * var(--openray-font-scale, 1));
+  height: calc(18px * var(--openray-font-scale, 1));
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--openray-kbd-bg);
+  border: 1px solid var(--openray-kbd-border);
+  font-family: inherit;
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  font-weight: 500;
+  color: var(--openray-text-primary);
+}
+
+/* Raycast's toast: a style marker, text, and up to two actions, pinned
+   just above the footer. */
+.openray-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  box-shadow: var(--openray-shadow);
+  z-index: 30;
+}
+
+.openray-toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--openray-text-secondary);
+}
+
+.openray-toast--success .openray-toast-icon {
+  color: #30d158;
+}
+
+.openray-toast--failure .openray-toast-icon {
+  color: var(--openray-danger);
+}
+
+.openray-toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.openray-toast-title {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  font-weight: 500;
+  color: var(--openray-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-toast-message {
+  font-size: calc(11.5px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.openray-toast-action {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  cursor: default;
+  white-space: nowrap;
+}
+
+.openray-toast-action:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-toast-action--primary {
+  background: var(--openray-accent);
+  border-color: var(--openray-accent);
+  color: #fff;
+}
+
+/* ANIMATED means work in progress, so the marker spins until the
+   extension hides the toast. */
+.openray-toast-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--openray-border);
+  border-top-color: var(--openray-accent);
+  animation: openray-spin 0.7s linear infinite;
+}
+
+@keyframes openray-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .openray-toast-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* A HUD is a bare confirmation — no icon, no actions, nothing to act on. */
+.openray-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--openray-bg-raised);
+  border: 1px solid var(--openray-border);
+  box-shadow: var(--openray-shadow);
+  color: var(--openray-text-primary);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 30;
+}
+
+/* host.system.confirmAlert — a real modal, unlike the toast/HUD above it
+   shares this file's overlay conventions with: it covers the whole
+   palette rather than pinning to one edge. */
+.openray-confirm-alert-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+
+.openray-confirm-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: calc(100% - 64px);
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--openray-bg-raised);
+  border: 1px solid var(--openray-border);
+  box-shadow: var(--openray-shadow);
+}
+
+.openray-confirm-alert-title {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  color: var(--openray-text-primary);
+}
+
+.openray-confirm-alert-message {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+}
+
+.openray-confirm-alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+
+/* ---- Script command output (fullOutput mode) ---- */
+
+.openray-script-output-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  height: calc(60px * var(--openray-font-scale, 1));
+  border-bottom: 1px solid var(--openray-border);
+  flex-shrink: 0;
+}
+
+.openray-script-output-title {
+  flex: 1;
+  font-size: calc(15px * var(--openray-font-scale, 1));
+  font-weight: 500;
+  color: var(--openray-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-script-output-status {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+}
+
+.openray-script-output-status--failed {
+  color: var(--openray-danger);
+}
+
+.openray-script-output-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 18px;
+}
+
+.openray-script-output-text {
+  margin: 0;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', monospace;
+  font-size: calc(12.5px * var(--openray-font-scale, 1));
+  line-height: 1.55;
+  color: var(--openray-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Destructive system command confirmation ---- */
+
+.openray-confirm-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.openray-confirm-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.openray-confirm-title {
+  font-size: calc(16px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  color: var(--openray-text-primary);
+}
+
+.openray-confirm-message {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+}
+
+.openray-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.openray-confirm-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  cursor: default;
+}
+
+.openray-confirm-actions button:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-confirm-actions button kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--openray-kbd-border);
+  background: var(--openray-kbd-bg);
+  font-size: calc(11px * var(--openray-font-scale, 1));
+}
+
+.openray-confirm-confirm {
+  border-color: var(--openray-danger);
+  color: var(--openray-danger);
+}
+
+/* Translate: a split source/translation view under a header carrying the
+   language pair, mirroring the Raycast Translate command's card layout. */
+.openray-translate-view {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.openray-translate-title {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  color: var(--openray-text-primary);
+  flex-shrink: 0;
+}
+
+.openray-translate-lang-bar {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.openray-translate-lang-button {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  cursor: default;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-translate-lang-button:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-translate-swap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--openray-text-secondary);
+  cursor: default;
+}
+
+.openray-translate-swap:hover:not(:disabled) {
+  background: var(--openray-hover-bg);
+  color: var(--openray-text-primary);
+}
+
+.openray-translate-swap:disabled {
+  opacity: 0.4;
+}
+
+.openray-translate-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.openray-translate-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px 16px;
+  gap: 8px;
+}
+
+.openray-translate-divider {
+  width: 1px;
+  background: var(--openray-border);
+  flex-shrink: 0;
+}
+
+.openray-ai-view {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.openray-ai-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.openray-ai-empty {
+  color: var(--openray-text-secondary);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  padding: 8px 2px;
+}
+
+.openray-ai-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.openray-ai-message-role {
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--openray-text-secondary);
+}
+
+.openray-ai-message--user .openray-ai-message-role {
+  color: var(--openray-accent, var(--openray-text-primary));
+}
+
+.openray-ai-message-content {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  line-height: 1.6;
+  color: var(--openray-text-primary);
+  white-space: pre-wrap;
+}
+
+.openray-ai-message-content--pending {
+  color: var(--openray-text-secondary);
+  font-style: italic;
+}
+
+.openray-ai-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--openray-border);
+  padding: 10px 16px;
+}
+
+.openray-ai-composer-input {
+  width: 100%;
+  min-height: calc(44px * var(--openray-font-scale, 1));
+  max-height: calc(140px * var(--openray-font-scale, 1));
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  line-height: 1.5;
+}
+
+.openray-ai-view {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.openray-ai-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.openray-ai-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--openray-border);
+  padding: 6px;
+}
+
+.openray-ai-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.openray-ai-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--openray-border);
+  flex-shrink: 0;
+}
+
+.openray-ai-model-select {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-primary);
+}
+
+.openray-ai-agents-hint {
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+}
+
+.openray-ai-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.openray-ai-empty {
+  color: var(--openray-text-secondary);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  padding: 8px 2px;
+}
+
+.openray-ai-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.openray-ai-message-role {
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--openray-text-secondary);
+}
+
+.openray-ai-message--user .openray-ai-message-role {
+  color: var(--openray-accent, var(--openray-text-primary));
+}
+
+.openray-ai-message-content {
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  line-height: 1.6;
+  color: var(--openray-text-primary);
+  white-space: pre-wrap;
+}
+
+.openray-ai-message-content--pending {
+  color: var(--openray-text-secondary);
+  font-style: italic;
+}
+
+.openray-ai-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--openray-border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.openray-ai-composer-input {
+  flex: 1;
+  min-height: calc(44px * var(--openray-font-scale, 1));
+  max-height: calc(140px * var(--openray-font-scale, 1));
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(14px * var(--openray-font-scale, 1));
+  line-height: 1.5;
+}
+
+.openray-ai-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.openray-translate-textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(15px * var(--openray-font-scale, 1));
+  line-height: 1.6;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.openray-translate-textarea--readonly {
+  color: var(--openray-text-primary);
+}
+
+.openray-translate-meta {
+  flex-shrink: 0;
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+}
+
+.openray-translate-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  color: var(--openray-danger);
+  font-size: calc(13px * var(--openray-font-scale, 1));
+}
+
+.openray-translate-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.openray-translate-history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: default;
+  font-family: inherit;
+}
+
+.openray-translate-history-row:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-translate-history-source {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.openray-translate-history-target {
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  color: var(--openray-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Language picker: a search-filtered overlay, positioned like the Actions
+   panel but anchored full-width under the header rather than the corner. */
+.openray-language-picker {
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  right: 12px;
+  max-height: min(360px, calc(100% - 90px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  z-index: 20;
+}
+
+.openray-language-picker-input {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--openray-border);
+  outline: none;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+}
+
+.openray-language-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.openray-language-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: default;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+}
+
+.openray-language-picker-row:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-language-picker-row--selected,
+.openray-language-picker-row--selected:hover {
+  background: var(--openray-selected-bg);
+}
+
+.openray-language-picker-code {
+  flex-shrink: 0;
+  color: var(--openray-text-tertiary);
+  font-size: calc(11px * var(--openray-font-scale, 1));
+}
+
+/* Search Notes view — the notes window's own chrome lives in
+   features/notes/notes.css; this covers the palette-hosted list/preview
+   only, styled like Translate Commands' list. */
+.openray-notes-search-pin {
+  flex-shrink: 0;
+  margin-right: 6px;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-notes-search-preview {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  line-height: 1.5;
+  color: var(--openray-text-primary);
+}

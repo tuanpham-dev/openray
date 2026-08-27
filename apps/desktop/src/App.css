@@ -1,0 +1,22 @@
+/* Inset by PALETTE_SHADOW_MARGIN (src-tauri/src/infrastructure/window.rs,
+   which sizes the window to fit the palette plus this gutter on each
+   side). A CSS box-shadow paints outside the border box, so filling the
+   window edge-to-edge would clip the shadow and the rounded corners would
+   read as a hard rectangle. The compositor's own window shadow is off for
+   the same reason — it traces the rectangular frame, not this radius. */
+.palette {
+  position: relative;
+  width: calc(100% - 28px);
+  height: calc(100% - 28px);
+  margin: 14px;
+  border-radius: 10px;
+  background: var(--openray-bg);
+  color: var(--openray-text-primary);
+  border: 1px solid var(--openray-border);
+  box-shadow: var(--openray-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(24px) saturate(1.6);
+  font-feature-settings: 'ss01' 1;
+}

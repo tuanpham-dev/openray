@@ -1,0 +1,203 @@
+/* T25: split out of features/notes/notes.css — these rules style
+   `MarkdownEditorCore`/`FormatBar`/the emoji-suggestion popup, which no
+   longer live under features/notes/ (the notes window is one consumer
+   among others now, not the owner). Class names kept as-is (still
+   `openray-notes-*`) to avoid an unrelated rename churning this move's diff;
+   `notes.css` keeps only the notes *window's* own chrome (toolbar, browse
+   panel). */
+
+.openray-notes-editor {
+  height: 100%;
+}
+
+.openray-notes-editor .ProseMirror {
+  height: 100%;
+  padding: 20px 24px;
+  outline: none;
+  font-size: 1em;
+  line-height: 1.6;
+}
+
+.openray-notes-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--openray-text-tertiary);
+  pointer-events: none;
+}
+
+.openray-notes-editor .ProseMirror h1,
+.openray-notes-editor .ProseMirror h2,
+.openray-notes-editor .ProseMirror h3 {
+  line-height: 1.3;
+  margin: 0.8em 0 0.4em;
+}
+
+.openray-notes-editor .ProseMirror h1:first-child,
+.openray-notes-editor .ProseMirror h2:first-child,
+.openray-notes-editor .ProseMirror h3:first-child,
+.openray-notes-editor .ProseMirror p:first-child {
+  margin-top: 0;
+}
+
+.openray-notes-editor .ProseMirror p {
+  margin: 0.4em 0;
+}
+
+.openray-notes-editor .ProseMirror blockquote {
+  margin: 0.4em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--openray-border);
+  color: var(--openray-text-secondary);
+}
+
+.openray-notes-editor .ProseMirror pre {
+  background: var(--openray-hover-bg);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  overflow-x: auto;
+}
+
+.openray-notes-editor .ProseMirror code {
+  background: var(--openray-hover-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.openray-notes-editor .ProseMirror pre code {
+  background: none;
+  padding: 0;
+}
+
+.openray-notes-editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--openray-border);
+  margin: 1em 0;
+}
+
+.openray-notes-editor .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.openray-notes-editor .ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.openray-notes-editor .ProseMirror ul[data-type='taskList'] li > label {
+  margin-top: 0.2em;
+}
+
+.openray-notes-editor .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--openray-text-secondary);
+  text-decoration: line-through;
+}
+
+.openray-notes-formatbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--openray-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.openray-notes-formatbar-select {
+  border: none;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font: inherit;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.openray-notes-formatbar-select:hover {
+  background: var(--openray-hover-bg);
+}
+
+.openray-notes-formatbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--openray-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.openray-notes-formatbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--openray-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  cursor: default;
+}
+
+.openray-notes-formatbar-button:hover {
+  background: var(--openray-hover-bg);
+  color: var(--openray-text-primary);
+}
+
+.openray-notes-formatbar-button--active {
+  background: var(--openray-selected-bg);
+  color: var(--openray-text-primary);
+}
+
+.openray-notes-formatbar-link-input {
+  flex: 1;
+  border: none;
+  background: var(--openray-hover-bg);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--openray-text-primary);
+  font: inherit;
+  font-size: calc(12px * var(--openray-font-scale, 1));
+}
+
+.openray-notes-emoji-suggest {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--openray-bg-solid);
+  border: 1px solid var(--openray-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  z-index: 20;
+}
+
+.openray-notes-emoji-suggest-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.openray-notes-emoji-suggest-item--selected {
+  background: var(--openray-selected-bg);
+}

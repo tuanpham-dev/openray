@@ -1,0 +1,1077 @@
+/* No background here: Vite bundles every imported stylesheet into one file
+   loaded by BOTH windows, so an `html, body, #root` background declared
+   for Settings also paints the transparent palette window (where it shows
+   as an opaque rectangle behind the palette's rounded, inset card). The
+   window background belongs on the settings root element instead. */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+.openray-settings-window {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  /* See index.css for why system-ui comes first. */
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ---------- Sidebar (SettingsSidebar) ---------- */
+
+.openray-settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 230px;
+  flex-shrink: 0;
+  min-height: 0;
+  border-right: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+}
+
+.openray-settings-sidebar-search {
+  position: relative;
+  flex-shrink: 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--openray-border);
+}
+
+.openray-settings-sidebar-search-icon {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--openray-text-tertiary);
+  pointer-events: none;
+}
+
+.openray-settings-sidebar-search input {
+  width: 100%;
+  padding: 6px 10px 6px 28px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.openray-settings-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.openray-settings-sidebar-section + .openray-settings-sidebar-section {
+  margin-top: 14px;
+}
+
+.openray-settings-sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-settings-sidebar-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--openray-text-tertiary);
+  cursor: default;
+}
+
+.openray-settings-sidebar-add:hover {
+  background: var(--openray-hover-bg, var(--openray-selected-bg));
+  color: var(--openray-text-primary);
+}
+
+.openray-settings-sidebar-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--openray-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.openray-settings-sidebar-entry:hover {
+  background: var(--openray-hover-bg, var(--openray-selected-bg));
+}
+
+.openray-settings-sidebar-entry--active {
+  background: var(--openray-accent);
+  color: #fff;
+}
+
+.openray-settings-sidebar-entry--dimmed {
+  opacity: 0.5;
+}
+
+.openray-settings-sidebar-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.openray-settings-sidebar-entry-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-settings-content {
+  flex: 1;
+  padding: 28px 32px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.openray-settings-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Centered form pane (General and the feature panes still using their old
+   standalone wrapper). */
+.openray-settings-pane--form {
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+/* A real, sized element carries the trailing gap below the last row —
+   WebKitGTK doesn't reliably include a scroll container's own trailing
+   padding/margin in its scrollable range, so an empty spacer (an actual
+   box with height, not edge spacing) is what reliably shows up once
+   scrolled to the end. Rendered once per form pane, after the form. */
+.openray-settings-bottom-spacer {
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.openray-settings-pane--form .openray-settings-banner,
+.openray-settings-pane--form .openray-settings-description {
+  max-width: none;
+}
+
+/* Raycast's General layout: one grid, right-aligned labels in a fixed
+   column with controls left-aligned beside them, so every control starts
+   at the same x regardless of label length. Rows are separated by spacing
+   and the occasional full-width rule — not a border under each row. */
+.openray-settings-form {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px 16px;
+}
+
+.openray-settings-form > * {
+  justify-self: start;
+}
+
+.openray-settings-form-label {
+  justify-self: end;
+  text-align: right;
+  font-size: 13px;
+  color: var(--openray-text-secondary);
+}
+
+.openray-settings-form .openray-form-field,
+.openray-settings-form .openray-settings-control-stack {
+  position: relative;
+  justify-self: stretch;
+}
+
+/* Boxed like `.openray-settings-script-dir`, with an explicit drawn chevron
+   (`.openray-settings-select-chevron`, a sibling `ChevronDownIcon`) rather
+   than relying on native select chrome — WebKitGTK's native popup renders
+   with a plain white background that doesn't follow the app's theme.
+   Scoped to Settings only: `<select>`s elsewhere in the app
+   (command-creation dialogs) keep the plain `.openray-form-field select`
+   look, since those aren't inside `.openray-settings-form`. */
+.openray-settings-form select {
+  padding: 6px 30px 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.openray-settings-form select:focus {
+  border-color: var(--openray-accent);
+}
+
+.openray-settings-select-chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--openray-text-tertiary);
+  pointer-events: none;
+}
+
+.openray-settings-separator {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  height: 1px;
+  margin: 6px 0;
+  border: 0;
+  background: var(--openray-border);
+}
+
+/* Icon tiles replacing the native <select>s. Following Raycast, the pill
+   marks the selected option's *label*; the icon above stays plain, so the
+   row reads as a set of choices rather than a set of buttons. */
+.openray-segmented {
+  display: flex;
+  gap: 4px;
+}
+
+.openray-segmented-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 60px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--openray-text-tertiary);
+  font-family: inherit;
+  cursor: default;
+}
+
+.openray-segmented-option:hover {
+  color: var(--openray-text-secondary);
+}
+
+.openray-segmented-option--active {
+  color: var(--openray-text-primary);
+}
+
+.openray-segmented-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+}
+
+.openray-segmented-label {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--openray-text-secondary);
+}
+
+.openray-segmented-option--active .openray-segmented-label {
+  background: var(--openray-selected-bg);
+  color: var(--openray-text-primary);
+}
+
+.openray-segmented-option:focus-visible {
+  outline: 2px solid var(--openray-accent);
+  outline-offset: 1px;
+}
+
+.openray-settings-control-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.openray-settings-control-hint {
+  font-size: 12px;
+  color: var(--openray-text-tertiary);
+}
+
+/* A control with a caption *beneath* it (vs. `openray-settings-control-group`'s
+   inline-beside layout) — still one grid child, so `openray-settings-form`'s
+   implicit 2-per-row auto-placement doesn't shift it into the label
+   column. */
+.openray-settings-control-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.openray-settings-pane h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.openray-settings-banner {
+  max-width: 420px;
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-selected-bg);
+  color: var(--openray-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.openray-settings-banner code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-size: 11.5px;
+}
+
+.openray-settings-description {
+  margin: 0 0 18px;
+  font-size: 12.5px;
+  color: var(--openray-text-secondary);
+  max-width: 420px;
+}
+
+.openray-settings-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.openray-settings-fields dt {
+  color: var(--openray-text-secondary);
+  font-size: 12px;
+}
+
+.openray-settings-fields dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--openray-text-primary);
+  word-break: break-word;
+}
+
+.openray-settings-subheading {
+  margin: 24px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--openray-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.openray-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 420px;
+  min-height: 38px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--openray-border);
+}
+
+.openray-settings-row label {
+  font-size: 13px;
+  color: var(--openray-text-primary);
+}
+
+.openray-settings-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.openray-settings-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--openray-text-secondary);
+  flex-shrink: 0;
+}
+
+.openray-settings-row-icon-image {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.openray-settings-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.openray-settings-range input[type='range'] {
+  width: 140px;
+  accent-color: var(--openray-accent);
+}
+
+.openray-settings-range-value {
+  min-width: 34px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--openray-text-secondary);
+}
+
+.openray-settings-row select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* ---------- Alias field (inline editor) ---------- */
+
+.openray-alias-field {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.openray-alias-button {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: default;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-alias-button:hover {
+  border-color: var(--openray-border);
+}
+
+.openray-alias-button--ghost {
+  color: var(--openray-text-tertiary);
+}
+
+.openray-alias-input {
+  width: 90%;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-accent);
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.openray-alias-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  font-family: inherit;
+  cursor: default;
+}
+
+.openray-alias-clear:hover,
+.openray-hotkey-clear:hover {
+  opacity: 1;
+}
+
+/* ---------- Uninstall button (reused in extension detail) ---------- */
+
+.openray-extensions-uninstall {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: default;
+}
+
+.openray-extension-prefs-empty {
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-extension-prefs-group h4 {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-extension-pref-row {
+  max-width: none;
+  gap: 12px;
+}
+
+.openray-extension-pref-row input[type='text'],
+.openray-extension-pref-row input[type='password'] {
+  min-width: 120px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.openray-extension-pref-required {
+  margin-left: 4px;
+  color: var(--openray-danger);
+}
+
+/* ---------- Shared toggle / checkbox controls ---------- */
+
+.openray-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 19px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.openray-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.openray-toggle-track {
+  position: absolute;
+  inset: 0;
+  background: rgba(120, 120, 128, 0.32);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+
+.openray-toggle-track::before {
+  content: '';
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease;
+}
+
+.openray-toggle input:checked + .openray-toggle-track {
+  background: var(--openray-accent);
+}
+
+.openray-toggle input:checked + .openray-toggle-track::before {
+  transform: translateX(13px);
+}
+
+.openray-toggle input:focus-visible + .openray-toggle-track {
+  outline: 2px solid var(--openray-accent);
+  outline-offset: 2px;
+}
+
+.openray-checkbox {
+  position: relative;
+  display: inline-flex;
+  cursor: default;
+}
+
+.openray-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.openray-checkbox-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  color: #fff;
+}
+
+.openray-checkbox input:checked + .openray-checkbox-box {
+  background: var(--openray-accent);
+  border-color: var(--openray-accent);
+}
+
+.openray-checkbox input:focus-visible + .openray-checkbox-box {
+  outline: 2px solid var(--openray-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Hotkey recorder ---------- */
+
+.openray-hotkey-recorder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.openray-hotkey-recorder-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.openray-hotkey-button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-selected-bg);
+  color: var(--openray-text-primary);
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: default;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.openray-hotkey-button--ghost {
+  color: var(--openray-text-tertiary);
+  background: transparent;
+}
+
+.openray-hotkey-button--recording {
+  border-color: var(--openray-accent);
+  color: var(--openray-accent);
+}
+
+.openray-hotkey-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  font-family: inherit;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.openray-hotkey-error {
+  font-size: 11px;
+  color: var(--openray-danger);
+}
+
+/* Recording popover. Fixed-positioned from the button's measured rect
+   (see HotkeyRecorder) so the scrolling table can't clip it; `left`/`top`
+   come from that rect and the transform lifts it above the button. */
+.openray-hotkey-popover {
+  position: fixed;
+  z-index: 50;
+  transform: translate(-50%, -100%) translateY(-10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 168px;
+  padding: 14px 16px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  box-shadow: var(--openray-shadow);
+}
+
+/* Tail. Two stacked triangles so the 1px border reads continuously around
+   the bubble instead of stopping where the tail begins. */
+.openray-hotkey-popover::before,
+.openray-hotkey-popover::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+}
+
+.openray-hotkey-popover::before {
+  margin-left: -7px;
+  border-top: 7px solid var(--openray-border);
+}
+
+.openray-hotkey-popover::after {
+  margin-left: -6px;
+  border-left-width: 6px;
+  border-right-width: 6px;
+  border-top: 6px solid var(--openray-bg-raised);
+}
+
+.openray-hotkey-popover-close {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--openray-text-tertiary);
+  cursor: default;
+}
+
+.openray-hotkey-popover-close:hover {
+  color: var(--openray-text-primary);
+}
+
+.openray-hotkey-popover-keys {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+}
+
+.openray-hotkey-cap {
+  min-width: 24px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-kbd-border);
+  background: var(--openray-kbd-bg);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.openray-hotkey-popover-hint {
+  font-size: 11.5px;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-hotkey-popover-label {
+  font-size: 12px;
+  color: var(--openray-text-secondary);
+}
+
+/* ---- Script command directories (General pane) ---- */
+
+.openray-settings-script-dirs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.openray-settings-script-dir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+}
+
+.openray-settings-script-dir-path {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--openray-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-settings-script-dir-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--openray-text-tertiary);
+  cursor: default;
+}
+
+.openray-settings-script-dir-remove:hover {
+  background: var(--openray-hover-bg);
+  color: var(--openray-text-primary);
+}
+
+.openray-settings-script-dir-add {
+  display: flex;
+  gap: 6px;
+}
+
+.openray-settings-script-dir-add input {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.openray-settings-script-dir-add input:focus {
+  border-color: var(--openray-accent);
+}
+
+.openray-settings-script-dir-add button {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: default;
+}
+
+.openray-settings-script-dir-add button:hover:not(:disabled) {
+  background: var(--openray-hover-bg);
+}
+
+.openray-settings-script-dir-add button:disabled {
+  opacity: 0.5;
+}
+
+.openray-settings-script-dirs code {
+  font-size: 11px;
+  color: var(--openray-text-secondary);
+}
+
+/* ---------- Extension settings view (ExtensionSettingsView) ---------- */
+
+.openray-extension-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.openray-extension-view-header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  /* Right padding must clear the absolutely-positioned actions cluster
+     below (toggle +, for non-builtins, an Uninstall button) or its text
+     overlaps the centered title on a narrow window. */
+  padding: 8px 160px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--openray-border);
+}
+
+.openray-extension-view-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 4px;
+  font-size: 40px;
+  color: var(--openray-text-secondary);
+}
+
+.openray-extension-view-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.openray-extension-view-description {
+  margin: 0;
+  max-width: 420px;
+  font-size: 13px;
+  color: var(--openray-text-secondary);
+}
+
+.openray-extension-view-meta {
+  font-size: 11.5px;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-extension-view-actions {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.openray-extension-view-section h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--openray-text-tertiary);
+}
+
+/* Non-extension full-width views (Applications, Install) reuse the same
+   section vocabulary but skip the centered header. */
+.openray-settings-view-heading {
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--openray-border);
+}
+
+.openray-settings-view-heading h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---------- Command list (CommandList / CommandRow) ---------- */
+
+.openray-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.openray-command-list-filter {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* Block, not flex: a flex column defaults every child to `flex-shrink: 1`,
+   and the windowed variant's empty spacer divs (their whole job is to
+   fake scroll height via an explicit `height` style, see CommandList.tsx)
+   have no content to floor their min size — the flex algorithm happily
+   shrinks them to fit inside `max-height`, which silently caps how far
+   the list can actually scroll to a fraction of its real content height.
+   Plain block stacking has no such shrink-to-fit step. */
+.openray-command-list-rows {
+  display: block;
+}
+
+.openray-command-list-rows--virtualized {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.openray-command-row {
+  display: grid;
+  grid-template-columns: 1fr 92px 132px 56px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--openray-border);
+}
+
+.openray-command-list-rows > .openray-command-row:last-child {
+  border-bottom: none;
+}
+
+.openray-command-row--header {
+  padding-top: 0;
+  padding-bottom: 8px;
+  font-size: 12px;
+  color: var(--openray-text-secondary);
+}
+
+.openray-command-row > :last-child {
+  justify-self: center;
+}
+
+.openray-command-row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openray-command-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

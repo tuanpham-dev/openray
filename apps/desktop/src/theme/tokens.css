@@ -1,0 +1,93 @@
+/*
+ * Raycast-matched palette.
+ *
+ * Dark values follow ByteAtATime/flare's `src/app.css` — a Svelte+Tauri
+ * Raycast clone built to match Raycast's look, and a better source than
+ * pixel-sampling Raycast's macOS screenshots: those windows are rendered
+ * with vibrancy over the desktop wallpaper, so the sampled "background"
+ * (#383839) is a blend, not Raycast's actual surface color (#1b1b1b).
+ *
+ * Two distinct selection idioms, both genuinely Raycast:
+ *   --openray-selected-bg  neutral gray  → command-palette rows (Raycast draws
+ *                                        these itself; flare uses #323232)
+ *   --openray-accent       system blue   → Settings table rows, toggles,
+ *                                        checkboxes, focus rings (Raycast's
+ *                                        Settings is a native macOS table,
+ *                                        so it inherits the system accent)
+ */
+
+:root {
+  /* Tells the engine which UA palette to render native controls with —
+     without it a <select> and its dropdown keep light chrome (and light
+     scrollbars) even when every custom color around them is dark. */
+  color-scheme: light;
+
+  /* Palette translucency is user-configurable, so the background is
+     composed from an RGB triplet plus a live alpha that ThemeProvider
+     overwrites from settings — a baked rgba() couldn't be re-alpha'd. */
+  --openray-palette-opacity: 0.85;
+  --openray-bg-rgb: 252, 252, 252;
+  --openray-bg: rgba(var(--openray-bg-rgb), var(--openray-palette-opacity));
+  --openray-bg-solid: #fcfcfc;
+  --openray-bg-raised: #f2f2f2;
+  --openray-border: #e2e2e2;
+  --openray-text-primary: #1b1b1b;
+  --openray-text-secondary: #5c5c5c;
+  --openray-text-tertiary: #8a8a8a;
+  --openray-selected-bg: #e6e6e6;
+  --openray-hover-bg: #eeeeee;
+  --openray-accent: #007aff;
+  --openray-danger: #e5484d;
+  --openray-footer-bg: rgba(242, 242, 242, 0.9);
+  --openray-kbd-bg: rgba(0, 0, 0, 0.05);
+  --openray-kbd-border: rgba(0, 0, 0, 0.1);
+  --openray-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.09),
+    0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --openray-bg-rgb: 27, 27, 27;
+  --openray-bg: rgba(var(--openray-bg-rgb), var(--openray-palette-opacity));
+  --openray-bg-solid: #1b1b1b;
+  --openray-bg-raised: #222222;
+  --openray-border: #303030;
+  --openray-text-primary: #f2f2f2;
+  --openray-text-secondary: #a5a5a5;
+  --openray-text-tertiary: #7d7d7d;
+  --openray-selected-bg: #323232;
+  --openray-hover-bg: #272727;
+  --openray-accent: #007aff;
+  --openray-danger: #f84e4e;
+  --openray-footer-bg: rgba(34, 34, 34, 0.92);
+  --openray-kbd-bg: #323232;
+  --openray-kbd-border: #3d3d3d;
+  --openray-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --openray-bg-rgb: 27, 27, 27;
+    --openray-bg: rgba(var(--openray-bg-rgb), var(--openray-palette-opacity));
+    --openray-bg-solid: #1b1b1b;
+    --openray-bg-raised: #222222;
+    --openray-border: #303030;
+    --openray-text-primary: #f2f2f2;
+    --openray-text-secondary: #a5a5a5;
+    --openray-text-tertiary: #7d7d7d;
+    --openray-selected-bg: #323232;
+    --openray-hover-bg: #272727;
+    --openray-accent: #007aff;
+    --openray-danger: #f84e4e;
+    --openray-footer-bg: rgba(34, 34, 34, 0.92);
+    --openray-kbd-bg: #323232;
+    --openray-kbd-border: #3d3d3d;
+    --openray-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.3),
+      0 2px 6px rgba(0, 0, 0, 0.18);
+  }
+}
