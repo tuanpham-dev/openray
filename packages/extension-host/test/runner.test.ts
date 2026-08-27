@@ -43,6 +43,9 @@ async function bundleFixture(name: string, outDir: string, ext: 'tsx' | 'ts' = '
       react: reactPath,
       'react/jsx-runtime': jsxRuntimePath,
       '@raycast/api': join(apiShimSrcDir, 'index.cts'),
+      '@raycast/utils': join(apiShimSrcDir, 'utils.cts'),
+      '@openray/api': join(apiShimSrcDir, 'index.cts'),
+      '@openray/utils': join(apiShimSrcDir, 'utils.cts'),
       '@openray/extras': join(apiShimSrcDir, 'openray.cts'),
     },
     external: [reactPath, jsxRuntimePath],
@@ -608,6 +611,32 @@ describe('command context survives an async callback dispatched later (T15 regre
     expect(capturedExtensionId).toBe('ctx-real-extension')
 
     await unmountCommand(dispatcher, written, 'ctx-real-extension', 'context-callback-cmd')
+  })
+})
+
+describe('@openray/* imports resolve to the same compat surface as @raycast/*', () => {
+  let openrayImportPath: string
+
+  beforeAll(async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'openray-import-test-'))
+    openrayImportPath = await bundleFixture('openray-import-command', outDir)
+  }, 30_000)
+
+  it('mounts a command whose components and hooks came from @openray/api and @openray/utils', async () => {
+    const { dispatcher, written } = makeDispatcher()
+    registerRunnerMethods(dispatcher)
+
+    await runCommand(dispatcher, written, 'openray-import-extension', 'openray-import-cmd', openrayImportPath)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    const commitNotification = lastNotification(written, 'ui.commit')
+    const wrapped = commitNotification?.params as {
+      commit: { snapshot: { nodes: Record<string, { props: Record<string, unknown> }> } }
+    }
+    const titles = Object.values(wrapped.commit.snapshot.nodes).map((node) => node.props.title)
+    expect(titles).toContain('Imported via @openray/api')
+
+    await unmountCommand(dispatcher, written, 'openray-import-extension', 'openray-import-cmd')
   })
 })
 

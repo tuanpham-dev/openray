@@ -73,4 +73,40 @@ describe('parseScriptMetadata', () => {
     const script = parse('# @raycast.schemaVersion 1\n# @raycast.title Real\n# @raycast.mode compact\necho "@raycast.title Fake"\n')
     expect(script?.title).toBe('Real')
   })
+
+  test('parses @openray headers the same as @raycast ones', () => {
+    const script = parse(
+      '#!/bin/bash\n' +
+        '# @openray.schemaVersion 1\n' +
+        '# @openray.title Say Hello\n' +
+        '# @openray.mode compact\n' +
+        '# @openray.icon 🌤\n' +
+        '# @openray.needsConfirmation true\n' +
+        '# @openray.argument1 { "type": "text", "placeholder": "query", "percentEncoded": true }\n' +
+        'echo hello\n',
+    )
+    expect(script).toBeDefined()
+    expect(script?.title).toBe('Say Hello')
+    expect(script?.mode).toBe('compact')
+    expect(script?.icon).toBe('🌤')
+    expect(script?.needsConfirmation).toBe(true)
+    expect(script?.arguments[0]?.placeholder).toBe('query')
+    expect(script?.arguments[0]?.percentEncoded).toBe(true)
+  })
+
+  test('rejects @openray files without the required headers', () => {
+    expect(parse('# @openray.schemaVersion 1\n# @openray.title X\n')).toBeUndefined()
+    expect(parse('# @openray.schemaVersion 2\n# @openray.title X\n# @openray.mode compact\n')).toBeUndefined()
+  })
+
+  test('accepts a file mixing both prefixes', () => {
+    const script = parse('# @raycast.schemaVersion 1\n# @openray.title Mixed\n# @raycast.mode silent\n')
+    expect(script?.title).toBe('Mixed')
+    expect(script?.mode).toBe('silent')
+  })
+
+  test('a code line mentioning the @openray marker is not a header', () => {
+    const script = parse('# @openray.schemaVersion 1\n# @openray.title Real\n# @openray.mode compact\necho "@openray.title Fake"\n')
+    expect(script?.title).toBe('Real')
+  })
 })

@@ -16,6 +16,8 @@
   },
   "ignoreDependencies": [
     "@raycast/api",
+    "@openray/api",
+    "@openray/utils",
     "@openray/extras",
     "react"
   ],

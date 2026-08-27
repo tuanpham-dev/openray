@@ -83,7 +83,8 @@ async function npmInstall(extensionDir: string): Promise<void> {
 }
 
 /**
- * Bundles one command entry point, aliasing @raycast/api, @raycast/utils,
+ * Bundles one command entry point, aliasing @raycast/api, @raycast/utils
+ * (and their @openray/* equivalents),
  * and react (see resolveApiShimReactAliases) to our shim. Non-fatal on
  * failure — a command whose bundle fails (an unimplemented API, an
  * unresolvable import) still gets registered so it appears in search;
@@ -122,8 +123,14 @@ export async function buildCommand(extensionDir: string, commandName: string): P
       alias: {
         '@raycast/api': join(apiShimSrcDir, 'index.cts'),
         '@raycast/utils': join(apiShimSrcDir, 'utils.cts'),
-        // OpenRay's own extras (T12) — never mutates the @raycast/* compat
-        // surface above, kept as a genuinely separate import.
+        // The same compat surface under OpenRay's own name, so an extension
+        // can be written against either spelling. These resolve to the very
+        // same modules as the `@raycast/*` entries above — deliberately not
+        // a second, divergent API.
+        '@openray/api': join(apiShimSrcDir, 'index.cts'),
+        '@openray/utils': join(apiShimSrcDir, 'utils.cts'),
+        // OpenRay's own extras (T12) — never mutates the compat surface
+        // above, kept as a genuinely separate import.
         '@openray/extras': join(apiShimSrcDir, 'openray.cts'),
         ...reactPaths,
       },

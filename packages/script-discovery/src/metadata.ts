@@ -1,7 +1,8 @@
-// Port of src-tauri/src/application/script_commands.rs's
-// `parse_script_metadata`. Raycast script commands are annotated with
-// `@raycast.*` comment headers — see that module's own doc comment for
-// the canonical example this parser must keep accepting unmodified.
+// Parser for script-command metadata headers. Raycast script commands are
+// annotated with `@raycast.*` comment headers; OpenRay accepts `@openray.*`
+// as an equal alternative so a script can be written against either name.
+// The two spell the same schema — keys, values and arguments are parsed
+// identically, and a single file may mix them.
 
 export type ScriptMode = 'fullOutput' | 'compact' | 'silent' | 'inline'
 
@@ -55,6 +56,21 @@ function parseArgument(json: string): ScriptArgument | undefined {
 
 const COMMENT_PREFIX_CHARS = new Set(['#', '/', '-', '*', ' ', '\t'])
 
+/** Both accepted header markers. Order is irrelevant — `findMarker` picks
+ * whichever appears earliest on the line, so a line can't be claimed by the
+ * later-listed prefix just because it was checked first. */
+const HEADER_MARKERS = ['@raycast.', '@openray.']
+
+function findMarker(line: string): { at: number; length: number } | undefined {
+  let found: { at: number; length: number } | undefined
+  for (const marker of HEADER_MARKERS) {
+    const at = line.indexOf(marker)
+    if (at === -1) continue
+    if (!found || at < found.at) found = { at, length: marker.length }
+  }
+  return found
+}
+
 /** Returns `undefined` unless the file declares `schemaVersion 1`, a
  * non-empty `title`, and a valid `mode` — Raycast's own minimum for a
  * script to appear at all. `path` is the script's own path, kept as the
@@ -72,15 +88,15 @@ export function parseScriptMetadata(source: string, path: string): ScriptCommand
 
   const lines = source.split('\n').slice(0, 200)
   for (const line of lines) {
-    const at = line.indexOf('@raycast.')
-    if (at === -1) continue
+    const marker = findMarker(line)
+    if (marker === undefined) continue
     // Headers live in comments; require only comment-ish characters
     // before the marker so a code line mentioning the literal string
     // (like this parser's own source) isn't misread as a header.
-    const before = line.slice(0, at).trimStart()
+    const before = line.slice(0, marker.at).trimStart()
     if (![...before].every((c) => COMMENT_PREFIX_CHARS.has(c))) continue
 
-    const rest = line.slice(at + '@raycast.'.length)
+    const rest = line.slice(marker.at + marker.length)
     const whitespaceMatch = rest.match(/\s/)
     const key = whitespaceMatch ? rest.slice(0, whitespaceMatch.index) : rest.trim()
     const value = whitespaceMatch ? rest.slice((whitespaceMatch.index ?? 0) + 1).trim() : ''
