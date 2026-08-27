@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS usage (
+    command_id TEXT PRIMARY KEY,
+    hits INTEGER NOT NULL DEFAULT 0,
+    last_used_at INTEGER NOT NULL
+);

@@ -1,0 +1,32 @@
+-- T18: migrate existing custom window commands into extension_storage
+-- under the "window-management" extension id, one row per command keyed
+-- by its existing id, so root search shows them via the new
+-- window-management extension instead of the native WindowManagementProvider
+-- (deleted this same task).
+--
+-- The `window_commands` table itself is deliberately left in place — not
+-- dropped, not truncated, its sync triggers (0018_sync.sql) untouched —
+-- for one release: see SNAPSHOT_VERSION's doc comment in
+-- application/sync/snapshot.rs (the same dual-write rationale T15/T16
+-- used for quicklinks/snippets). A device that hasn't updated yet still
+-- reads the old `window_commands` sync kind, which keeps exporting
+-- whatever was frozen here at migration time; the *next* wave that
+-- touches window commands is what actually drops this table.
+--
+-- INSERT OR IGNORE (rather than a NOT-IN guard) since this migration
+-- itself only ever runs once per database (tracked by _migrations), and
+-- the extension_storage AFTER INSERT trigger stamps a fresh sync_meta row
+-- for each inserted key the same way any live LocalStorage.setItem would
+-- — no manual sync_meta backfill needed here.
+--
+-- json_quote(printf('%s', json_object(...))) — not json_object(...)
+-- alone — matches extension_storage's own encoding contract: json_object
+-- ()'s result carries SQLite's internal JSON subtype, which json_quote
+-- recognizes and passes through unquoted rather than re-quoting;
+-- printf('%s', ...) strips that subtype tag first, so the stored column
+-- ends up holding a JSON *string* (the same shape a live
+-- JSON.stringify(x) + LocalStorage.setItem write produces), not a bare
+-- object — the exact bug T15's migration shipped with and fixed.
+INSERT OR IGNORE INTO extension_storage (extension_id, key, value)
+SELECT 'window-management', id, json_quote(printf('%s', json_object('id', id, 'title', title, 'unit', unit, 'x', x, 'y', y, 'width', width, 'height', height, 'createdAt', created_at)))
+FROM window_commands;

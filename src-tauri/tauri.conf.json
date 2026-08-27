@@ -1,0 +1,77 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "openray",
+  "version": "../package.json",
+  "identifier": "com.openray.desktop",
+  "build": {
+    "frontendDist": "../apps/desktop/dist",
+    "devUrl": "http://localhost:15420",
+    "beforeDevCommand": "pnpm --filter @openray/extension-host build && node scripts/build-builtin-extensions.mjs && pnpm --filter @openray/desktop dev",
+    "beforeBuildCommand": "pnpm --filter @openray/extension-host build && node scripts/build-builtin-extensions.mjs && pnpm --filter @openray/desktop build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenRay",
+        "width": 778,
+        "height": 503,
+        "minWidth": 628,
+        "minHeight": 428,
+        "maxWidth": 928,
+        "maxHeight": 628,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "/usr/share/icons/**",
+          "/usr/share/pixmaps/**",
+          "/usr/local/share/icons/**",
+          "$HOME/.local/share/icons/**",
+          "$HOME/.icons/**",
+          "$TEMP/openray-icons/**",
+          "$APPDATA/clipboard-images/**",
+          "$APPCACHE/video-thumbnails/**",
+          "$APPDATA/extensions/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": [
+      "binaries/node"
+    ],
+    "resources": {
+      "../extensions": "extensions"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    },
+    "linux": {
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "gtk3", "libappindicator"]
+      }
+    }
+  }
+}

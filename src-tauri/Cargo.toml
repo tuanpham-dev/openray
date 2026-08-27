@@ -1,0 +1,142 @@
+[package]
+name = "openray"
+version = "0.1.0"
+description = "A Raycast-style command palette and launcher"
+authors = ["Tuan Pham"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "openray_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[features]
+# Standard Tauri feature: when enabled (by `cargo build --features custom-protocol`,
+# which is what `tauri build`/a packaged run does), the app loads the bundled
+# `frontendDist` assets instead of the `devUrl` dev server.
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-log = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+nucleo-matcher = "0.3"
+ignore = "0.4"
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-opener = "2.5.4"
+urlencoding = "2.1.3"
+enigo = "0.6.1"
+arboard = "3.6.1"
+# PNG encoding for clipboard images (captured clipboard images are always
+# PNG). jpeg/gif/webp/bmp decoding added for Screenshots' Paste/Copy,
+# which must round-trip whatever image format the user's screenshot
+# folder actually contains, not just PNG.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+# `unstable-locales` backs the placeholder `locale=` attribute
+# ({date locale="fr-FR"} in snippets/quicklinks).
+chrono = { version = "0.4.45", features = ["unstable-locales"] }
+tauri-plugin-autostart = "2.5.1"
+tauri-plugin-shell = "2.3.5"
+tokio = { version = "1.53.1", features = ["sync", "time"] }
+thiserror = "2.0.20"
+# For {uuid} in snippets. Already in the tree via other crates, so this
+# only makes the existing dependency explicit.
+getrandom = "0.3"
+# Calculator currency conversion: one blocking JSON GET on a background
+# thread. reqwest exists in the lockfile only for non-Linux targets and
+# pulls hyper/tower; ureq is a small client suited to this one call.
+ureq = { version = "3", features = ["json"] }
+# Calculator timezone conversion ("5pm ldn in sf").
+chrono-tz = "0.10"
+# Navigation: encodes extracted window/app icons as data: URIs. Already in
+# the tree transitively via tauri, but declared explicitly since this
+# crate depends on it directly.
+base64 = "0.22"
+# MCP OAuth (Dynamic PKCE): code_challenge = base64url(sha256(code_verifier)).
+# Already in the tree transitively; declared explicitly since this crate
+# now depends on it directly.
+sha2 = "0.10"
+# Cloud Sync: Argon2id turns a user passphrase into a symmetric key.
+# Pure-Rust, no OS keychain dependency (avoids the unverified macOS/Windows
+# credential-store surface).
+argon2 = "0.5"
+# Cloud Sync: XChaCha20-Poly1305 AEAD seals/opens synced snapshot files
+# under the Argon2-derived key. Pure-Rust, small, matches argon2's RustCrypto
+# lineage.
+chacha20poly1305 = "0.10"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+plist = "1.10.0"
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+# NSScreen: Window Management's work-area/display-list queries (explicit
+# alongside the crate's defaults, which already cover NSWorkspace/
+# NSRunningApplication for Navigation).
+# NSPasteboard/NSPasteboardItem: Screenshots' "Auto" paste format
+# (`clipboard_multi/macos.rs`) — multi-representation clipboard write.
+objc2-app-kit = { version = "0.3", features = ["NSScreen", "NSPasteboard", "NSPasteboardItem"] }
+objc2-core-foundation = { version = "0.3", features = ["CFString", "CFDictionary", "CFNumber"] }
+# Screenshots' macOS OCR backend (`platform/ocr/macos.rs`):
+# VNImageRequestHandler/VNRecognizeTextRequest, plus the Foundation types
+# (NSURL, NSString, NSArray, NSDictionary) that API is expressed in terms
+# of.
+objc2 = "0.6"
+# NSData: Screenshots' "Auto" paste format (`clipboard_multi/macos.rs`)
+# writes raw PNG bytes to the pasteboard as an `NSData`.
+objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSDictionary", "NSData"] }
+objc2-vision = { version = "0.3", features = ["VNRequest", "VNRequestHandler", "VNRecognizeTextRequest", "VNObservation"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+lnk = "0.6.4"
+# Win32_Graphics_Dwm: DWM-cloak detection for Navigation's window list (a
+# window can be visible-by-Win32-flags but cloaked/invisible on a
+# different virtual desktop — see window_list/windows.rs).
+# Win32_Graphics_Gdi: MENUITEMINFOW (menu_bar/windows.rs) carries HBITMAP
+# fields from this module even though nothing here touches bitmaps.
+# Media_Ocr/Graphics_Imaging/Storage/Storage_Streams: Screenshots' Windows
+# OCR backend (`platform/ocr/windows.rs`) — `OcrEngine` +
+# `BitmapDecoder`/`SoftwareBitmap` + `StorageFile`'s async file-open path.
+# Win32_System_DataExchange/Win32_System_Memory: Screenshots' "Auto" paste
+# format (`clipboard_multi/windows.rs`) — the classic
+# OpenClipboard/SetClipboardData flow and the GlobalAlloc/GlobalLock
+# global-memory handles it writes into.
+windows = { version = "0.62.2", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Win32_System_DataExchange", "Win32_System_Memory"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13.13", features = ["global_shortcuts"] }
+# De-prioritizing the Screenshots OCR sweep's background thread (see
+# platform::background_priority) so it doesn't compete evenly with the
+# WebKit UI thread for CPU under contention.
+libc = "0.2"
+# Waking the GTK main loop after cross-thread window operations; already
+# compiled as a transitive dependency of gtk.
+glib = "0.18"
+# Restoring input focus when the palette hides; X11 doesn't do it for us.
+# randr: per-monitor work-area resolution for Window Management's
+# Next/Previous Display and multi-monitor gap math.
+x11rb = { version = "0.13.2", features = ["randr"] }
+futures-util = "0.3.34"
+# Navigation: reads/activates app menu bars over D-Bus (Qt/KDE dbusmenu,
+# GTK org.gtk.Menus, AppMenu.Registrar). Blocking API only — verified via
+# a throwaway spike that it coexists with the app's own tokio runtime
+# without deadlocking (default backend uses its own async-io reactor
+# thread, independent of tokio).
+zbus = "5"
+# "Auto" paste format's Wayland backend (wlr-data-control protocol) —
+# see infrastructure::platform::clipboard_multi::wayland.
+wl-clipboard-rs = "0.9"
+
+[dev-dependencies]
+tauri = { version = "2.11.3", features = ["test"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }

@@ -1,0 +1,35 @@
+-- T15: migrate existing quicklinks into extension_storage under the
+-- "quicklinks" extension id, one row per quicklink keyed by its existing
+-- id, so root search shows them via the new quicklinks extension instead
+-- of the native QuicklinkProvider (deleted this same task).
+--
+-- The `quicklinks` table itself is deliberately left in place — not
+-- dropped, not truncated, its sync triggers (0018_sync.sql) untouched —
+-- for one release: see SNAPSHOT_VERSION's doc comment in
+-- application/sync/snapshot.rs. A device that hasn't updated yet still
+-- reads the old `quicklinks` sync kind, which keeps exporting whatever
+-- was frozen here at migration time; the *next* wave that touches
+-- quicklinks is what actually drops this table.
+--
+-- INSERT OR IGNORE (rather than a NOT-IN guard) since this migration
+-- itself only ever runs once per database (tracked by _migrations), and
+-- the extension_storage AFTER INSERT trigger stamps a fresh sync_meta row
+-- for each inserted key the same way any live LocalStorage.setItem would
+-- — no manual sync_meta backfill needed here.
+--
+-- `extension_storage.value` stores whatever `extension_storage::set`
+-- would have written for a live `LocalStorage.setItem(key, jsonText)`
+-- call — the JSON *string* encoding of the stored value (quotes and all,
+-- e.g. `"{\"id\":...}"`), not the bare object text `json_object(...)`
+-- itself. `json_object()`'s result carries SQLite's internal JSON
+-- subtype, which `json_quote()` treats as already-valid-JSON and passes
+-- through unquoted — `printf('%s', ...)` strips that subtype tag first
+-- so `json_quote` actually re-quotes it into a JSON string, matching
+-- what the extension's own `JSON.stringify(quicklink)` +
+-- `LocalStorage.setItem` round trip produces. Verified directly against
+-- this migration's own test (`migration_0021_copies_pre_existing_quicklinks_into_extension_storage`
+-- in infrastructure/db.rs) asserting the value round-trips through one
+-- `JSON.parse` on the TypeScript side, exactly like any other stored item.
+INSERT OR IGNORE INTO extension_storage (extension_id, key, value)
+SELECT 'quicklinks', id, json_quote(printf('%s', json_object('id', id, 'title', title, 'urlTemplate', url_template, 'icon', icon, 'createdAt', created_at)))
+FROM quicklinks;

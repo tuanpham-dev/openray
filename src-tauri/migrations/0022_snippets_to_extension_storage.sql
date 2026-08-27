@@ -1,0 +1,31 @@
+-- T16: migrate existing snippets into extension_storage under the
+-- "snippets" extension id, one row per snippet keyed by its existing id,
+-- so root search shows them via the new snippets extension instead of
+-- the native SnippetProvider (deleted this same task).
+--
+-- The `snippets` table itself is deliberately left in place — not
+-- dropped, not truncated, its sync triggers (0018_sync.sql) untouched —
+-- for one release: see SNAPSHOT_VERSION's doc comment in
+-- application/sync/snapshot.rs (the same dual-write rationale T15 used
+-- for quicklinks). A device that hasn't updated yet still reads the old
+-- `snippets` sync kind, which keeps exporting whatever was frozen here
+-- at migration time; the *next* wave that touches snippets is what
+-- actually drops this table.
+--
+-- INSERT OR IGNORE (rather than a NOT-IN guard) since this migration
+-- itself only ever runs once per database (tracked by _migrations), and
+-- the extension_storage AFTER INSERT trigger stamps a fresh sync_meta row
+-- for each inserted key the same way any live LocalStorage.setItem would
+-- — no manual sync_meta backfill needed here.
+--
+-- json_quote(printf('%s', json_object(...))) — not json_object(...)
+-- alone — matches extension_storage's own encoding contract: json_object
+-- ()'s result carries SQLite's internal JSON subtype, which json_quote
+-- recognizes and passes through unquoted rather than re-quoting;
+-- printf('%s', ...) strips that subtype tag first, so the stored column
+-- ends up holding a JSON *string* (the same shape a live
+-- JSON.stringify(x) + LocalStorage.setItem write produces), not a bare
+-- object — the exact bug T15's migration shipped with and fixed.
+INSERT OR IGNORE INTO extension_storage (extension_id, key, value)
+SELECT 'snippets', id, json_quote(printf('%s', json_object('id', id, 'name', name, 'keyword', keyword, 'body', body, 'createdAt', created_at)))
+FROM snippets;
