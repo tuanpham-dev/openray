@@ -52,15 +52,11 @@ pub fn device_id(app: &AppHandle) -> io::Result<String> {
 }
 
 fn device_id_path(app: &AppHandle) -> io::Result<PathBuf> {
-    let config_dir = app.path().app_config_dir().map_err(io::Error::other)?;
-    fs::create_dir_all(&config_dir)?;
-    Ok(config_dir.join(DEVICE_ID_FILE))
+    Ok(crate::infrastructure::paths::config_dir(app)?.join(DEVICE_ID_FILE))
 }
 
 fn key_cache_path(app: &AppHandle) -> io::Result<PathBuf> {
-    let config_dir = app.path().app_config_dir().map_err(io::Error::other)?;
-    fs::create_dir_all(&config_dir)?;
-    Ok(config_dir.join(KEY_CACHE_FILE))
+    Ok(crate::infrastructure::paths::config_dir(app)?.join(KEY_CACHE_FILE))
 }
 
 /// Caches the Argon2-derived key (never the passphrase) so the user enters

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 use crate::error::Error;
 
@@ -573,8 +573,7 @@ fn write_settings_atomic(path: &Path, settings: &Settings) -> Result<(), Error> 
 
 impl SettingsStore {
     pub fn load(app: AppHandle) -> Result<Self, Box<dyn std::error::Error>> {
-        let config_dir = app.path().app_config_dir()?;
-        fs::create_dir_all(&config_dir)?;
+        let config_dir = crate::infrastructure::paths::config_dir(&app)?;
         let path = config_dir.join(SETTINGS_FILE);
         let current = if path.exists() { load_settings_from(&path) } else { Settings::default() };
 
