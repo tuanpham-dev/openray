@@ -47,7 +47,7 @@ use crate::application::extension_commands::parse_extension_command_id;
 /// static command, or a row from an extension whose listing hasn't
 /// pushed yet — falls through to ordinary classification either way).
 fn classify(command: &Command, extension_mode: Option<&str>, root_provider_flags: Option<(bool, bool)>) -> Launch {
-    if command.requires_argument {
+    if command.requires_input() {
         return Launch::View;
     }
     if let Some((needs_confirm, opens_view)) = root_provider_flags {
@@ -120,7 +120,17 @@ mod tests {
             icon: None,
             kind,
             keywords: vec![],
-            requires_argument,
+            arguments: if requires_argument {
+                vec![crate::domain::command::CommandArgument {
+                    name: "argument".to_string(),
+                    argument_type: "text".to_string(),
+                    placeholder: None,
+                    required: true,
+                    data: None,
+                }]
+            } else {
+                Vec::new()
+            },
         }
     }
 

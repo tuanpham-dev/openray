@@ -41,7 +41,7 @@ pub struct CommandRegistry {
     cache: RwLock<Vec<CacheEntry>>,
     /// Command id → index into `providers`/`cache`. Rebuilt whenever
     /// `refresh()` finds any provider stale, so `execute`/
-    /// `execute_with_argument` are an O(1) hash lookup instead of an
+    /// `execute_with_arguments` are an O(1) hash lookup instead of an
     /// O(providers) scan that calls `commands()` (and thus hits SQLite)
     /// on every provider in turn until one matches.
     id_index: RwLock<HashMap<String, usize>>,
@@ -110,11 +110,15 @@ impl CommandRegistry {
         }
     }
 
-    pub fn execute_with_argument(&self, command_id: &str, argument: &str) -> Result<(), String> {
+    pub fn execute_with_arguments(
+        &self,
+        command_id: &str,
+        arguments: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
         self.refresh();
         let owner = self.id_index.read().unwrap().get(command_id).copied();
         match owner {
-            Some(i) => self.providers[i].execute_with_argument(command_id, argument),
+            Some(i) => self.providers[i].execute_with_arguments(command_id, arguments),
             None => Err(format!("no provider found for command '{command_id}'")),
         }
     }
@@ -150,7 +154,7 @@ mod tests {
                 icon: None,
                 kind: CommandKind::Builtin,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             }],
         }));
 
@@ -170,7 +174,7 @@ mod tests {
                 icon: None,
                 kind: CommandKind::Builtin,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             }],
         }));
         registry.register(Arc::new(FakeProvider {
@@ -181,7 +185,7 @@ mod tests {
                 icon: None,
                 kind: CommandKind::App,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             }],
         }));
 
@@ -214,7 +218,7 @@ mod tests {
                 icon: None,
                 kind: CommandKind::Builtin,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             }]
         }
 
@@ -264,7 +268,7 @@ mod tests {
                 icon: None,
                 kind: CommandKind::Builtin,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             }]
         }
 
@@ -293,7 +297,9 @@ mod tests {
             registry.all_commands();
         }
         registry.execute("cached.command").unwrap();
-        registry.execute_with_argument("cached.command", "arg").unwrap();
+        registry
+            .execute_with_arguments("cached.command", &std::collections::HashMap::new())
+            .unwrap();
 
         assert_eq!(
             provider.call_count.load(std::sync::atomic::Ordering::SeqCst),
@@ -368,7 +374,7 @@ mod tests {
                 icon: None,
                 kind: CommandKind::Builtin,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             }],
         }));
 

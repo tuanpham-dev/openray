@@ -1,0 +1,18 @@
+{
+  "name": "developer",
+  "title": "Developer",
+  "description": "Scaffold and develop OpenRay extensions.",
+  "icon": "code",
+  "commands": [
+    {
+      "name": "create-extension",
+      "title": "Create Extension",
+      "description": "Scaffold a new extension and start developing it.",
+      "mode": "view",
+      "keywords": ["create", "new", "extension", "scaffold", "develop", "template"]
+    }
+  ],
+  "dependencies": {
+    "@openray/extension-template": "workspace:*"
+  }
+}

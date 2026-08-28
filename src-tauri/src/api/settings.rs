@@ -202,7 +202,7 @@ mod tests {
             icon: None,
             kind: CommandKind::App,
             keywords: vec![],
-            requires_argument: false,
+            arguments: Vec::new(),
         }
     }
 

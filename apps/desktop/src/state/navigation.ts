@@ -2,11 +2,16 @@ import type { PaletteItem } from '../components/types'
 
 export type PaletteView =
   | { type: 'search' }
-  /** Generic argument-prompt bar for any command whose `requiresArgument`
-   *  flag is set — the name is a holdover from when quicklinks were the
-   *  only such command (T15 migrated quicklinks itself to an extension,
-   *  but any extension command declaring `arguments` in its manifest
-   *  still reaches this same view). */
-  | { type: 'quicklink-argument'; item: PaletteItem }
-  | { type: 'extension'; extensionId: string; commandName: string; title: string; icon?: string | null }
+  /** `args`/`positionalArgument` are what the command was launched with,
+   *  kept so a dev-mode hot reload re-runs it exactly as the user did
+   *  rather than dropping back to an argument-less run. */
+  | {
+      type: 'extension'
+      extensionId: string
+      commandName: string
+      title: string
+      icon?: string | null
+      args?: Record<string, string>
+      positionalArgument?: string
+    }
   | { type: 'confirm'; item: PaletteItem }

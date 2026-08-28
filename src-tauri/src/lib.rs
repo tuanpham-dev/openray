@@ -55,7 +55,7 @@ pub fn run() {
       // api::search
       api::search::search,
       api::search::run_command,
-      api::search::run_command_with_argument,
+      api::search::run_command_with_arguments,
       // api::settings
       api::settings::get_settings,
       api::settings::update_settings,
@@ -73,6 +73,20 @@ pub fn run() {
       api::extensions::install_extension_from_path,
       api::extensions::install_extension_from_slug,
       api::extensions::uninstall_extension,
+      api::extensions::install_extension_from_archive,
+      api::extensions::develop_extension,
+      api::extensions::stop_developing,
+      api::extensions::remove_dev_extension,
+      api::extensions::list_dev_extensions,
+      // api::registry
+      api::registry::list_registry_sources,
+      api::registry::add_registry_source,
+      api::registry::remove_registry_source,
+      api::registry::set_registry_source_enabled,
+      api::registry::set_registry_source_auto_update,
+      api::registry::fetch_registry_catalog,
+      api::registry::classify_registry_install,
+      api::registry::install_from_registry,
       api::extensions::extension_preference_definitions,
       api::extensions::extension_preference_values,
       api::extensions::set_extension_preference_value,
@@ -189,11 +203,16 @@ fn build_app_state(app: &tauri::App) -> Result<AppState, Box<dyn std::error::Err
   let settings = Arc::new(SettingsStore::load(app.handle().clone())?);
   app.manage(Arc::clone(&settings));
 
+  // Managed separately from `AppState` so `extension_bridge` can publish to
+  // it without the control socket becoming a dependency of the bridge.
+  app.manage(crate::infrastructure::control_socket::ControlEvents::new());
+
   let db_connection = infrastructure::db::open(app.handle())?;
 
   let clipboard = Arc::new(ClipboardHistoryProvider::new(db_connection.clone(), Box::new(SystemPasteInjector)));
   let extensions = Arc::new(ExtensionsRegistry::new(db_connection.clone()));
   register_builtin_extensions(app.handle(), &extensions);
+  allow_extension_icon_directories(app.handle(), &extensions);
   let root_commands = Arc::new(RootCommandProvider::new(app.handle().clone()));
   let navigation = Arc::new(NavigationProvider::new(Box::new(PlatformAppScanner::new())));
   let screenshots = Arc::new(ScreenshotsProvider::new(
@@ -222,6 +241,13 @@ fn build_app_state(app: &tauri::App) -> Result<AppState, Box<dyn std::error::Err
     Box::pin(extension_bridge::dispatch_request(app, method, params))
   }));
   extension_host.set_notification_handler(std::sync::Arc::new(extension_bridge::dispatch_notification));
+  // Dev-mode watchers live inside the Node process, so a crash or an
+  // unresponsive-host kill takes every one of them down while the UI still
+  // shows dev mode as on. Re-establish them whenever a fresh process comes
+  // up — see `dev_extensions::replay`.
+  extension_host.set_started_handler(std::sync::Arc::new(|app| {
+    crate::application::dev_extensions::replay(&app);
+  }));
 
   Ok(AppState {
     registry,
@@ -233,6 +259,9 @@ fn build_app_state(app: &tauri::App) -> Result<AppState, Box<dyn std::error::Err
     root_commands,
     inline_queries: crate::application::inline_query::InlineQueryDispatcher::new(),
     extension_host,
+    dev_extensions: crate::application::dev_extensions::DevExtensions::new(),
+    registry_sources: crate::application::registry_sources::RegistrySources::new(db_connection.clone()),
+    app: app.handle().clone(),
     command_settings: CommandSettingsStore::new(db_connection.clone()),
     extension_storage: ExtensionStorage::new(db_connection.clone()),
     extension_windows: window::ExtensionWindows::new(app.handle().clone()),
@@ -312,11 +341,36 @@ fn register_builtin_extensions(app: &tauri::AppHandle, extensions: &ExtensionsRe
   }
 }
 
+/// Lets the asset protocol serve every registered extension's own files,
+/// which is how their icons reach the webview.
+///
+/// `tauri.conf.json`'s static scope covers `$APPDATA/extensions/**`, but an
+/// extension being developed lives in its author's own folder, and those
+/// registrations outlive the process that created them — so on the next
+/// launch nothing would widen the scope and the icon would render as a
+/// broken image. `api::extensions` does the same for a freshly registered
+/// extension; this covers everything already in the registry at startup.
+fn allow_extension_icon_directories(app: &tauri::AppHandle, extensions: &ExtensionsRegistry) {
+  for entry in extensions.list() {
+    if let Some(path) = entry.path {
+      let _ = app.asset_protocol_scope().allow_directory(&path, true);
+    }
+  }
+}
+
 /// Everything spawned independently of `AppState` construction (the
 /// clipboard watcher and sync worker start their own threads inline as
 /// part of `build_app_state`, since they're stored as `AppState` fields —
 /// this is for the rest).
 fn spawn_background_workers(app: &tauri::AppHandle) {
+  // Registry-installed extensions keep themselves current — same source
+  // only, same verification as an interactive install, per-source consent.
+  // See `application::auto_update`.
+  crate::application::auto_update::spawn(app);
+  // The terminal-driven half of dev mode (`openray develop`), which needs
+  // nothing running but this listener — see `infrastructure::control_socket`.
+  crate::infrastructure::control_socket::spawn(app);
+
   // T23: currency-rate refresh moved into the calculator extension's own
   // root-provider listing (`extensions/calculator/src/rates.ts`),
   // triggered here for free by `spawn_root_provider_startup` (T14) —

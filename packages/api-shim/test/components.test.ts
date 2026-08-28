@@ -187,3 +187,116 @@ describe('useNavigation', () => {
     expect(insertedTypes).toHaveLength(3)
   })
 })
+
+describe('built-in action icons', () => {
+  /**
+   * Raycast's built-in actions each ship with their own icon. Ours carried
+   * none, so a panel mixing them with actions that named an icon showed
+   * blank rows next to filled ones — visible in `wikipedia`, where only
+   * the two `Icon.Trash` entries had anything at all.
+   */
+  it('gives Action.OpenInBrowser and Action.CopyToClipboard a default icon', async () => {
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        List,
+        null,
+        createElement(List.Item, {
+          title: 'Row',
+          actions: createElement(
+            ActionPanel,
+            null,
+            createElement(Action.OpenInBrowser, { url: 'https://example.com' }),
+            createElement(Action.CopyToClipboard, { content: 'text' }),
+          ),
+        }),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    const icons = nodesByType(commits.at(-1)!, 'Action').map((node) => node.props.icon)
+    expect(icons).toEqual(['globe', 'clipboard'])
+  })
+
+  it('lets an extension override the default', async () => {
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        List,
+        null,
+        createElement(List.Item, {
+          title: 'Row',
+          actions: createElement(ActionPanel, null, createElement(Action.OpenInBrowser, { url: 'https://example.com', icon: 'star' })),
+        }),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    expect(nodesByType(commits.at(-1)!, 'Action')[0]?.props.icon).toBe('star')
+  })
+})
+
+describe('unimplemented Action variants', () => {
+  /**
+   * The failure this prevents: `Action.CreateSnippet` was `undefined`, so
+   * React threw "Element type is invalid" during render and
+   * `unicode-symbols` mounted nothing at all — a whole extension lost to
+   * one action in a menu the user might never open.
+   */
+  it('renders an unknown Action.* as a row instead of undefined', async () => {
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        List,
+        null,
+        createElement(List.Item, {
+          title: 'Row',
+          actions: createElement(
+            ActionPanel,
+            null,
+            // @ts-expect-error deliberately an action this shim doesn't implement
+            createElement(Action.ToggleQuickLook, {}),
+          ),
+        }),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    const actions = nodesByType(commits.at(-1)!, 'Action')
+    expect(actions).toHaveLength(1)
+    expect(actions[0]?.props.title).toBe('ToggleQuickLook')
+  })
+
+  it('keeps one component identity per variant, so rows do not remount', () => {
+    // @ts-expect-error same deliberately-missing variant
+    expect(Action.ToggleQuickLook).toBe(Action.ToggleQuickLook)
+  })
+
+  it('leaves real members and non-component properties alone', () => {
+    expect(Action.Style.Destructive).toBe('destructive')
+    expect(Action.CopyToClipboard).toBeTypeOf('function')
+    // Lower-cased and symbol lookups must not become components.
+    expect((Action as unknown as Record<string, unknown>).nope).toBeUndefined()
+  })
+
+  it('renders Action.CreateSnippet, which has no store to write to', async () => {
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        List,
+        null,
+        createElement(List.Item, {
+          title: 'Row',
+          actions: createElement(ActionPanel, null, createElement(Action.CreateSnippet, { snippet: { text: 'x' } })),
+        }),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    expect(nodesByType(commits.at(-1)!, 'Action')[0]?.props.title).toBe('Create Snippet')
+  })
+})

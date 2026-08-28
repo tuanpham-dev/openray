@@ -1,0 +1,20 @@
+{
+  "name": "@openray/cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "openray": "./bin/openray.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openray/extension-host": "workspace:*",
+    "@openray/extension-template": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2"
+  }
+}

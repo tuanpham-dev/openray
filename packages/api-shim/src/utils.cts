@@ -3,15 +3,12 @@
 // needs a concrete ownKeys list rather than being a fully-dynamic Proxy —
 // both fixes here mirror index.cts exactly.
 
-import { usePromise, useCachedState } from './utils-hooks'
+import { usePromise, useCachedState, useCachedPromise, useFetch, useLocalStorage } from './utils-hooks'
 
 const KNOWN_EXPORTS = [
-  'useFetch',
-  'useCachedPromise',
   'useExec',
   'useSQL',
   'useForm',
-  'useLocalStorage',
   'useFrontmostApplication',
   'useStreamJSON',
   'runAppleScript',
@@ -23,7 +20,9 @@ const KNOWN_EXPORTS = [
   'MutatePromise',
 ]
 
+/** See `index.cts`'s `shimLog` for why `OPENRAY_SHIM_QUIET` exists. */
 function utilsShimLog(message: string): void {
+  if (process.env.OPENRAY_SHIM_QUIET) return
   process.stderr.write(`[api-shim/utils] ${message}\n`)
 }
 
@@ -33,6 +32,20 @@ function makeUtilsStub(path: string): unknown {
     get(_t, prop) {
       if (typeof prop === 'symbol') return undefined
       if (prop === 'then' || prop === 'toJSON' || prop === '$$typeof') return undefined
+      // A stub is routinely handed straight to React as a prop
+      // (`shortcut={Keyboard.Shortcut.Common.Open}`), and React's own dev
+      // logging stringifies props. Returning a nested stub for `toString`
+      // and `valueOf` makes the object impossible to coerce — JS throws
+      // "Cannot convert object to primitive value", and because that lands
+      // *during the commit phase* it leaves the reconciler mid-work, so
+      // every later update dies with "Should not already be working". One
+      // unimplemented API used as a prop took the whole command down.
+      // Found with the real `wikipedia` extension.
+      // (`Symbol.toPrimitive` is already handled by the symbol check above,
+      // which returns undefined and so falls back to these two.)
+      if (prop === 'toString' || prop === 'valueOf') {
+        return () => `[openray stub: ${path}]`
+      }
       utilsShimLog(`access ${path}.${String(prop)}`)
       return makeUtilsStub(`${path}.${String(prop)}`)
     },
@@ -76,4 +89,7 @@ module.exports = {
   __esModule: false,
   usePromise,
   useCachedState,
+  useCachedPromise,
+  useFetch,
+  useLocalStorage,
 }

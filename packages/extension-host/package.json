@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@openray/api-shim": "workspace:*",
-    "@openray/protocol": "workspace:*"
+    "@openray/protocol": "workspace:*",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

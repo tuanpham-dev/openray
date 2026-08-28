@@ -25,7 +25,7 @@ impl CommandProvider for SettingsCommandProvider {
             icon: Some("settings".into()),
             kind: CommandKind::Builtin,
             keywords: vec!["settings".into(), "preferences".into(), "config".into()],
-            requires_argument: false,
+            arguments: Vec::new(),
         }]
     }
 

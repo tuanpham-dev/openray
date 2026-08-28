@@ -73,6 +73,16 @@ pub type RequestHandler<R> = Arc<dyn Fn(AppHandle<R>, String, Option<Value>) -> 
 /// expected, typically just forwards to the webview as a Tauri event.
 pub type NotificationHandler<R> = Arc<dyn Fn(AppHandle<R>, String, Option<Value>) + Send + Sync>;
 
+/// Called after the sidecar has been (re)spawned, so the application layer
+/// can restore whatever process-local state a fresh Node process starts
+/// out without. Dev mode's file watchers are the motivating case: they
+/// live entirely inside the host process, so a crash (or a
+/// [`HostError::Unresponsive`] kill) silently stops every one of them
+/// while the platform still believes dev mode is on. Fired from
+/// `ensure_started` *after* the process lock is released, since a handler
+/// that calls back into the host would otherwise deadlock on it.
+pub type StartedHandler<R> = Arc<dyn Fn(AppHandle<R>) + Send + Sync>;
+
 /// Supervises the Node sidecar that hosts Raycast extensions: spawns it
 /// lazily on first use, restarts it after a crash or an unresponsive call,
 /// and routes JSON-RPC messages over the length-prefixed stdio framing from
@@ -91,6 +101,7 @@ pub struct ExtensionHost<R: Runtime> {
     // an await point.
     request_handler: StdMutex<Option<RequestHandler<R>>>,
     notification_handler: StdMutex<Option<NotificationHandler<R>>>,
+    started_handler: StdMutex<Option<StartedHandler<R>>>,
 }
 
 impl<R: Runtime> ExtensionHost<R> {
@@ -102,6 +113,7 @@ impl<R: Runtime> ExtensionHost<R> {
             next_id: AtomicI64::new(1),
             request_handler: StdMutex::new(None),
             notification_handler: StdMutex::new(None),
+            started_handler: StdMutex::new(None),
         }
     }
 
@@ -114,6 +126,11 @@ impl<R: Runtime> ExtensionHost<R> {
 
     pub fn set_notification_handler(&self, handler: NotificationHandler<R>) {
         *self.notification_handler.lock().unwrap() = Some(handler);
+    }
+
+    /// Installs the post-spawn handler — see [`StartedHandler`].
+    pub fn set_started_handler(&self, handler: StartedHandler<R>) {
+        *self.started_handler.lock().unwrap() = Some(handler);
     }
 
     fn host_js_path(&self) -> Result<PathBuf, HostError> {
@@ -220,6 +237,15 @@ impl<R: Runtime> ExtensionHost<R> {
         });
 
         *guard = Some(RunningProcess { child });
+        drop(guard);
+
+        // After the lock, never inside it: a handler's natural
+        // implementation is "call back into the host to re-establish
+        // something", and `call` -> `ensure_started` -> `self.process.lock()`
+        // on a still-held guard is a deadlock with no timeout to break it.
+        if let Some(handler) = self.started_handler.lock().unwrap().clone() {
+            handler(self.app.clone());
+        }
         Ok(())
     }
 

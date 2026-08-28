@@ -215,7 +215,7 @@ mod tests {
             icon: None,
             kind: CommandKind::App,
             keywords: keywords.iter().map(|k| k.to_string()).collect(),
-            requires_argument: false,
+            arguments: Vec::new(),
         }
     }
 

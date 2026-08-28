@@ -1283,3 +1283,118 @@ button.openray-settings-browse-button:hover {
 .openray-modal-list li + li {
   margin-top: 4px;
 }
+
+/* Add Extension view — the install field, the dev-mode picker, and the
+   build report a dev extension's own page shows. These share the plain
+   control styling the rest of this pane uses (see
+   `.openray-extensions-uninstall`) rather than introducing a second
+   button look. */
+.openray-extensions-install {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.openray-extensions-install input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-solid);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.openray-extensions-install button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: transparent;
+  color: var(--openray-text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: default;
+}
+
+.openray-extensions-install button:disabled {
+  opacity: 0.5;
+}
+
+.openray-extensions-install-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--openray-text-tertiary);
+}
+
+.openray-extensions-install-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--openray-danger);
+}
+
+.openray-extension-view-meta--warning {
+  color: var(--openray-danger);
+}
+
+.openray-extensions-build-errors {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--openray-danger);
+  /* Build errors are long, single-line esbuild messages — wrapping mid-path
+     beats a horizontal scrollbar inside a settings pane. */
+  overflow-wrap: anywhere;
+}
+
+/* Registry list in the Add Extension view. Rows are wide and mostly text,
+   so they lay out as a flex row with the toggles pinned right rather than
+   as a table — the URL is the part that needs the room. */
+.openray-registry-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.openray-registry-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--openray-border);
+  border-radius: 8px;
+}
+
+.openray-registry-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.openray-registry-row-title {
+  font-size: 13px;
+  color: var(--openray-text-primary);
+}
+
+.openray-registry-row-url {
+  font-size: 11.5px;
+  color: var(--openray-text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.openray-registry-row-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--openray-text-secondary);
+  white-space: nowrap;
+}

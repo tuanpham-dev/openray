@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { SYSTEM_ICON_NAMES } from './systemIconNames'
+import { looksLikeIconName, lookupSystemIcon } from './systemIconNames'
 
 /** Unix `/…` or Windows `C:\…` — an icon that is a file on disk rather
  *  than an emoji/glyph. */
@@ -26,7 +26,7 @@ interface IconGlyphProps {
  *  rendered in that order, falling through to `fallback` when `icon` is
  *  empty or doesn't match any of those. */
 export function IconGlyph({ icon, size = 18, svgClassName, imageClassName, textClassName, fallback = null }: IconGlyphProps) {
-  const SystemIcon = icon ? SYSTEM_ICON_NAMES[icon] : undefined
+  const SystemIcon = icon ? lookupSystemIcon(icon) : undefined
   if (SystemIcon) {
     return <SystemIcon size={size} className={svgClassName} />
   }
@@ -38,7 +38,10 @@ export function IconGlyph({ icon, size = 18, svgClassName, imageClassName, textC
     return <img className={imageClassName} src={convertFileSrc(icon)} alt="" />
   }
 
-  if (icon) {
+  // An icon *name* with no glyph behind it falls through to `fallback`
+  // rather than being printed — a row labelled "arrow-up-circle" is worse
+  // than one with no icon. Emoji and other real glyphs still render.
+  if (icon && !looksLikeIconName(icon)) {
     return <span className={textClassName}>{icon}</span>
   }
 

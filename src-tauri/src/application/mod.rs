@@ -1,6 +1,8 @@
 pub mod app_provider;
+pub mod auto_update;
 pub mod clipboard;
 pub mod command_settings;
+pub mod dev_extensions;
 pub mod extension_bridge;
 pub mod extension_commands;
 pub mod extension_storage;
@@ -12,6 +14,7 @@ pub mod inline_query;
 pub mod navigation;
 pub mod root_commands;
 pub mod registry;
+pub mod registry_sources;
 pub mod screenshots;
 pub mod search;
 pub mod settings_provider;

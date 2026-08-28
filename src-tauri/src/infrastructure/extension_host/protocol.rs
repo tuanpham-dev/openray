@@ -289,6 +289,29 @@ pub struct ExtensionPreference {
     pub data: Option<Vec<PreferenceOption>>,
 }
 
+/// What the host answers with after building an extension — the shared
+/// response shape of `extension.installLocal`, `extension.installStoreSlug`
+/// and `extension.developStart`, all three of which end in the same
+/// "resolve a manifest, build every command, report what failed" pipeline
+/// on the Node side (`builder.ts`'s `buildExtensionInPlace`).
+///
+/// `build_errors` is deliberately not fatal: a command whose bundle failed
+/// is still registered so it appears in search and reports the real error
+/// when run, rather than silently vanishing.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostBuildResult {
+    pub id: String,
+    pub manifest: ExtensionManifest,
+    pub dir: String,
+    #[serde(default)]
+    pub build_errors: Vec<String>,
+    /// Present only from the archive path, which reads it out of the
+    /// packed manifest — the source-building paths don't report one.
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtensionManifest {
     pub name: String,

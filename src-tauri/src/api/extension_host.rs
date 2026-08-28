@@ -30,14 +30,42 @@ use crate::infrastructure::window;
 /// generic `run_command_with_argument`) for exactly this reason: it's the
 /// only entry point that's mode-aware, so a *view*-mode command with an
 /// argument still opens its view once mounted.
+/// `arguments` is keyed by the manifest's own argument names — the palette
+/// collects a value per declared field, so nothing has to be inferred here.
+/// `positional_argument` is the one-value alternative for callers that have
+/// a value but no field name (an inline root row, Quick AI's Tab shortcut);
+/// it is mapped onto whichever argument the manifest declares first.
 #[tauri::command]
 pub async fn run_extension_command(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     extension_id: String,
     command_name: String,
-    argument: Option<String>,
+    arguments: Option<std::collections::HashMap<String, String>>,
+    positional_argument: Option<String>,
 ) -> Result<String, String> {
+    let mut arguments = arguments.unwrap_or_default();
+    // Callers that have a value but no field name — an inline root row, or
+    // Quick AI's Tab shortcut — can't build the keyed map themselves, so
+    // the manifest's first argument name is filled in for them here.
+    if let Some(value) = positional_argument {
+        if arguments.is_empty() {
+            if let Some(name) = state
+                .extensions
+                .installed_commands()
+                .into_iter()
+                .find(|c| c.extension_id == extension_id && c.name == command_name)
+                .and_then(|c| c.arguments.into_iter().next())
+                .map(|a| a.name)
+            {
+                arguments.insert(name, value);
+            } else {
+                // A root-provider row has no manifest arguments; its
+                // synthesized field is named "argument".
+                arguments.insert("argument".to_string(), value);
+            }
+        }
+    }
     let manifest_mode = state
         .extensions
         .installed_commands()
@@ -63,7 +91,7 @@ pub async fn run_extension_command(
         window::hide_palette(&app).map_err(|e| e.to_string())?;
     }
 
-    crate::application::extension_commands::launch(&app, &extension_id, &command_name, argument.as_deref()).await?;
+    crate::application::extension_commands::launch(&app, &extension_id, &command_name, &arguments).await?;
     Ok(mode)
 }
 

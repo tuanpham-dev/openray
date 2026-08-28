@@ -472,6 +472,7 @@
 }
 
 .openray-empty-view-title {
+  text-align: center;
   color: var(--openray-text-secondary);
   font-size: calc(14px * var(--openray-font-scale, 1));
   font-weight: 500;
@@ -480,6 +481,12 @@
 .openray-empty-view-description {
   color: var(--openray-text-tertiary);
   font-size: calc(12px * var(--openray-font-scale, 1));
+  /* Centred and bounded: the column above centres its children, so a
+     sentence-length description would otherwise run edge to edge on one
+     line. Applies to an extension's own `EmptyView` description too. */
+  max-width: 34em;
+  text-align: center;
+  line-height: 1.5;
 }
 
 /* Trailing accessories on a `List.Item` — text, a tag pill, or an icon. */
@@ -1087,37 +1094,6 @@ button.openray-tag:hover {
   opacity: 0.5;
 }
 
-.openray-argument-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: calc(52px * var(--openray-font-scale, 1));
-  border-bottom: 1px solid var(--openray-border);
-  flex-shrink: 0;
-}
-
-.openray-argument-bar-label {
-  font-size: calc(13px * var(--openray-font-scale, 1));
-  font-weight: 500;
-  color: var(--openray-text-primary);
-  white-space: nowrap;
-  flex-shrink: 0;
-  padding: 3px 8px;
-  border-radius: 5px;
-  background: var(--openray-selected-bg);
-}
-
-.openray-argument-bar input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: calc(15px * var(--openray-font-scale, 1));
-  font-family: inherit;
-  color: var(--openray-text-primary);
-}
-
 .openray-clipboard-history {
   flex: 1;
   display: flex;
@@ -1378,7 +1354,13 @@ button.openray-tag:hover {
   position: absolute;
   bottom: 48px;
   right: 8px;
-  width: 260px;
+  /* Sized to its longest row rather than fixed: at 260px a title like
+     "Create and Copy Folder Path" wrapped onto a second line, which made
+     one row twice the height of its neighbours. Past `max-width` the
+     title ellipsises instead of wrapping. */
+  width: max-content;
+  min-width: 260px;
+  max-width: 380px;
   max-height: 280px;
   overflow-y: auto;
   padding: 6px;
@@ -1414,13 +1396,30 @@ button.openray-tag:hover {
 }
 
 .openray-action-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
-  text-align: center;
   flex-shrink: 0;
+  color: var(--openray-text-secondary);
+}
+
+.openray-action-item-icon-image {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.openray-action-item-icon-text {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  line-height: 1;
 }
 
 .openray-action-item-title {
   flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .openray-footer-hint kbd,
@@ -2175,4 +2174,60 @@ button.openray-tag:hover {
   font-size: calc(13px * var(--openray-font-scale, 1));
   line-height: 1.5;
   color: var(--openray-text-primary);
+}
+
+/* A command's arguments, inline in the search bar (see ArgumentFields).
+   Each field is a chip sitting beside the query rather than a full-width
+   input — several can share the row, and the query keeps its own space. */
+.openray-argument-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Sits immediately after the query rather than being pushed to the far
+     edge: the search input shrinks to its own text when fields are
+     present (see SearchBar), and this takes only the room it needs. */
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: -2px;
+}
+
+.openray-argument-field {
+  /* Width comes from `useAutoWidth` — the field hugs its own text so the
+     row reads as `query [field] [field]`, the way the reference does. */
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: calc(15px * var(--openray-font-scale, 1));
+  outline: none;
+}
+
+.openray-argument-field::placeholder {
+  color: var(--openray-text-tertiary);
+}
+
+.openray-argument-field:focus {
+  border-color: var(--openray-accent);
+  background: var(--openray-bg-solid);
+}
+
+/* A required field reads as the thing still standing between you and
+   running the command, so it says so before you press ↵. */
+.openray-argument-field[data-required='true']:placeholder-shown {
+  border-style: dashed;
+}
+
+/* `Image.Mask` — Raycast shapes an icon with these, most often a circle
+   for an avatar. Applied alongside whichever image class the call site
+   already passed, so the size stays that class's business. */
+.openray-visual-mask--circle {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.openray-visual-mask--rounded {
+  border-radius: 25%;
+  object-fit: cover;
 }

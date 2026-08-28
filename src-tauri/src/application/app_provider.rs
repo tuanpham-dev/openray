@@ -23,7 +23,7 @@ impl CommandProvider for AppCommandProvider {
                 icon: app.icon,
                 kind: CommandKind::App,
                 keywords: vec![],
-                requires_argument: false,
+                arguments: Vec::new(),
             })
             .collect()
     }

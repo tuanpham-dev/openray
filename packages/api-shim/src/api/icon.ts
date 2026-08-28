@@ -29,6 +29,7 @@ export const Icon = {
   Info: 'info',
   Warning: 'warning',
   Terminal: 'terminal',
+  Code: 'code',
   Person: 'person',
   Clock: 'clock',
   Calendar: 'calendar',
@@ -38,6 +39,22 @@ export const Icon = {
   ArrowLeft: 'arrow-left',
   Eye: 'eye',
   EyeSlash: 'eye-slash',
+  // Referenced by `wikipedia`; a missing member is not inert — the action
+  // ends up with `icon={undefined}` and silently renders no icon at all.
+  Window: 'window',
+  AppWindowSidebarRight: 'app-window-sidebar-right',
+  Image: 'image',
+} as const
+
+/**
+ * Raycast's `Image` namespace, as far as an extension uses it at runtime:
+ * `Image.Mask` values passed to an icon prop. A missing nested enum is not
+ * cosmetic — the property access throws mid-render and takes the whole
+ * command down, the same failure `Grid.Fit` and `Action.Style` were added
+ * for.
+ */
+export const Image = {
+  Mask: { Circle: 'circle', RoundedRectangle: 'roundedRectangle' },
 } as const
 
 export const Color = {

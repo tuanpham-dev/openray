@@ -55,21 +55,36 @@ pub struct ExtensionEntry {
     /// running the extension, which is the whole point — the Settings pane
     /// lists categories without starting anything.
     pub export: Option<ExportDeclaration>,
+    /// The installed version, when the manifest declared one. `None` for
+    /// the many Raycast manifests that don't.
+    pub version: Option<String>,
+    /// The registry this came from, or `None` for anything not installed
+    /// from one. With `version`, this is what an update check needs.
+    pub source_url: Option<String>,
 }
 
 /// Resolves a manifest icon string read back out of storage. A relative
 /// image path (contains `.`, not already absolute) is joined against the
 /// extension's install directory — `SYSTEM_ICON_NAMES` keys and emoji
 /// never contain `.`, so this only ever fires for path-shaped values.
+///
+/// `assets/` is tried first, because that is where Raycast keeps them: a
+/// manifest saying `"icon": "icon.png"` means `assets/icon.png`, and every
+/// extension imported from that ecosystem is laid out this way. Resolving
+/// against the extension root alone produced a path that doesn't exist, so
+/// every such extension showed a broken image in the launcher.
 fn resolve_icon(icon: Option<String>, extension_path: Option<&str>) -> Option<String> {
     let icon = icon?;
     if !icon.contains('.') || std::path::Path::new(&icon).is_absolute() {
         return Some(icon);
     }
-    match extension_path {
-        Some(dir) => Some(std::path::Path::new(dir).join(&icon).to_string_lossy().into_owned()),
-        None => Some(icon),
+    let Some(dir) = extension_path else { return Some(icon) };
+
+    let in_assets = std::path::Path::new(dir).join("assets").join(&icon);
+    if in_assets.exists() {
+        return Some(in_assets.to_string_lossy().into_owned());
     }
+    Some(std::path::Path::new(dir).join(&icon).to_string_lossy().into_owned())
 }
 
 /// Frontend-facing shape of a manifest `arguments[]` entry — mirrors
@@ -109,6 +124,11 @@ pub struct InstalledCommand {
     /// fallback when this command has none of its own — see
     /// `ExtensionCommandProvider::commands()`.
     pub extension_icon: Option<String>,
+    /// The owning extension's title. Carried so search can match on it:
+    /// a command called "Search Page" is unfindable by typing the name of
+    /// the extension it belongs to, which is how anyone actually looks for
+    /// it ("wikipedia").
+    pub extension_title: String,
 }
 
 /// Flattened, frontend-facing shape of a manifest `preferences[]` entry.
@@ -244,7 +264,10 @@ impl ExtensionsRegistry {
     fn query_list(&self) -> Vec<ExtensionEntry> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-            .prepare("SELECT id, title, path, enabled, description, source, icon, export_json FROM extensions ORDER BY title")
+            .prepare(
+                "SELECT id, title, path, enabled, description, source, icon, export_json, version, source_url \
+                 FROM extensions ORDER BY title",
+            )
             .expect("valid query");
         let rows = stmt
             .query_map([], |row| {
@@ -265,6 +288,8 @@ impl ExtensionsRegistry {
                     source: row.get(5)?,
                     icon: resolve_icon(icon, path.as_deref()),
                     export,
+                    version: row.get(8)?,
+                    source_url: row.get(9)?,
                     path,
                 })
             })
@@ -308,6 +333,23 @@ impl ExtensionsRegistry {
         path: &str,
         source: &str,
     ) -> Result<(), Error> {
+        self.register_installed_from(id, manifest, path, source, None, None)
+    }
+
+    /// As [`Self::register_installed`], but recording where the extension
+    /// came from. Split rather than adding two parameters to every call
+    /// site: only the archive/registry install paths know a version or a
+    /// source URL, and builtins/dev/slug installs would all pass
+    /// `None, None` forever.
+    pub fn register_installed_from(
+        &self,
+        id: &str,
+        manifest: &ExtensionManifest,
+        path: &str,
+        source: &str,
+        version: Option<&str>,
+        source_url: Option<&str>,
+    ) -> Result<(), Error> {
         self.conn.with_transaction(|tx| {
             let export_json = manifest
                 .export
@@ -316,10 +358,16 @@ impl ExtensionsRegistry {
                 .transpose()
                 .map_err(|e| Error::msg(format!("extension '{id}' has an unserializable export declaration: {e}")))?;
             tx.execute(
-                "INSERT INTO extensions (id, title, path, enabled, description, source, icon, export_json)
-                 VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7)
-                 ON CONFLICT(id) DO UPDATE SET title = ?2, path = ?3, description = ?4, source = ?5, icon = ?6, export_json = ?7",
-                params![id, manifest.title, path, manifest.description, source, manifest.icon, export_json],
+                "INSERT INTO extensions (id, title, path, enabled, description, source, icon, export_json, version, source_url)
+                 VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(id) DO UPDATE SET title = ?2, path = ?3, description = ?4, source = ?5, icon = ?6,
+                     export_json = ?7,
+                     -- A re-registration that knows nothing about provenance
+                     -- (a dev-mode manifest reload, a builtin rescan) must not
+                     -- erase what an earlier registry install recorded.
+                     version = COALESCE(?8, version),
+                     source_url = COALESCE(?9, source_url)",
+                params![id, manifest.title, path, manifest.description, source, manifest.icon, export_json, version, source_url],
             )?;
 
             tx.execute("DELETE FROM extension_commands WHERE extension_id = ?1", params![id])?;
@@ -396,7 +444,7 @@ impl ExtensionsRegistry {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
             .prepare(
-                "SELECT ec.extension_id, ec.name, ec.title, ec.subtitle, ec.description, ec.mode, ec.keywords, ec.arguments, e.icon, e.path
+                "SELECT ec.extension_id, ec.name, ec.title, ec.subtitle, ec.description, ec.mode, ec.keywords, ec.arguments, e.icon, e.path, e.title
                  FROM extension_commands ec
                  JOIN extensions e ON e.id = ec.extension_id
                  WHERE e.enabled = 1",
@@ -422,6 +470,7 @@ impl ExtensionsRegistry {
                         keywords.split(',').map(String::from).collect()
                     },
                     extension_icon: resolve_icon(extension_icon, extension_path.as_deref()),
+                    extension_title: row.get(10)?,
                 })
             })
             .expect("valid query");
@@ -523,7 +572,9 @@ mod tests {
                 description TEXT,
                 source TEXT NOT NULL DEFAULT 'builtin',
                 icon TEXT,
-                export_json TEXT
+                export_json TEXT,
+                version TEXT,
+                source_url TEXT
             );
             CREATE TABLE extension_commands (
                 extension_id TEXT NOT NULL,
@@ -699,6 +750,52 @@ mod tests {
 
         let entry = registry.list().into_iter().find(|e| e.id == "demo").unwrap();
         assert_eq!(entry.icon.as_deref(), Some("/opt/icons/demo.png"));
+    }
+
+    #[test]
+    fn register_installed_from_records_version_and_source_url() {
+        let registry = test_registry();
+        registry
+            .register_installed_from(
+                "demo",
+                &fake_manifest(),
+                "/tmp/demo",
+                "installed",
+                Some("1.4.0"),
+                Some("https://example.test/registry/"),
+            )
+            .unwrap();
+
+        let entry = registry.list().into_iter().find(|e| e.id == "demo").unwrap();
+        assert_eq!(entry.version.as_deref(), Some("1.4.0"));
+        assert_eq!(entry.source_url.as_deref(), Some("https://example.test/registry/"));
+    }
+
+    #[test]
+    fn a_provenance_free_reregistration_keeps_the_recorded_source() {
+        // A dev-mode manifest reload and a builtin rescan both re-register
+        // with nothing to say about provenance. If that erased what a
+        // registry install recorded, the extension would silently stop
+        // being update-checkable.
+        let registry = test_registry();
+        registry
+            .register_installed_from(
+                "demo",
+                &fake_manifest(),
+                "/tmp/demo",
+                "installed",
+                Some("1.4.0"),
+                Some("https://example.test/registry/"),
+            )
+            .unwrap();
+        let mut renamed = fake_manifest();
+        renamed.title = "Demo Renamed".into();
+        registry.register_installed("demo", &renamed, "/tmp/demo", "installed").unwrap();
+
+        let entry = registry.list().into_iter().find(|e| e.id == "demo").unwrap();
+        assert_eq!(entry.title, "Demo Renamed");
+        assert_eq!(entry.version.as_deref(), Some("1.4.0"));
+        assert_eq!(entry.source_url.as_deref(), Some("https://example.test/registry/"));
     }
 
     #[test]

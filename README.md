@@ -8,8 +8,10 @@ extension running on that runtime: quicklinks, snippets, system commands,
 window management, switch windows, script commands, the calculator, translate,
 notes, AI (chat/Quick AI/commands/agents/MCP), clipboard history, screenshots,
 and menu-bar search all ship as built-in extensions alongside whatever a user
-installs from the [raycast/extensions](https://github.com/raycast/extensions)
-store. See `plans/refactor-extension-platform.md` for the full design and
+installs — from a registry (via the Store command), from a prebuilt `.orx`
+archive, from a local folder they are developing, or straight from the
+[raycast/extensions](https://github.com/raycast/extensions) monorepo.
+See `plans/refactor-extension-platform.md` for the full design and
 build history of this architecture (superseding the earlier
 `plans/raycast-clone-tauri.md`).
 
@@ -121,6 +123,101 @@ Three rules worth knowing:
 An extension's own data reaches the file *only* through these hooks — the
 host no longer exports `extension_storage` generically — so an extension
 without them contributes nothing to an export.
+
+### Writing an extension
+
+Extensions are ordinary folders — a `package.json` manifest and a `src/`
+directory — and OpenRay builds them where they sit, so your checkout stays
+the only copy.
+
+The quickest start is the **Create Extension** command in the launcher: name
+it, pick a template, and the folder is scaffolded, built, and *already
+running* — its command is in the launcher before the toast fades. From a
+terminal, the same scaffold:
+
+```sh
+npx openray create my-extension   # prompts for a template
+cd my-extension && npm install
+npm run dev                       # == openray develop
+```
+
+Both use the same templates (`@openray/extension-template`), named after
+Raycast's: Show List, Show Detail, Show List and Detail, Show Typeahead
+Results, Submit Form, Show Grid, and Run Script. Raycast's Menu Bar Extra
+and AI templates are deliberately absent — those APIs are still stubs here,
+so scaffolding them would hand you something that cannot run.
+
+`openray develop` asks the running app to build the folder and watch it.
+Its commands appear in the launcher immediately; every save rebuilds and
+**hot-reloads** whatever is on screen, and build errors stream to the
+terminal instead of vanishing into a log. Settings → Add Extension →
+"Choose Folder…" does the same thing without a terminal.
+
+The CLI never compiles anything itself — it drives the app over a local
+socket (`~/.config/openray/control-socket` points at it). One build
+pipeline serves dev mode, installs, and packing, which is what keeps a dev
+build and a shipped build the same artifact. Unix only for now; the
+in-app picker works everywhere.
+
+Write against `@raycast/api` (a dev dependency, for types only) or
+`@openray/api`; both are mapped onto OpenRay's own implementation at build
+time, and `@openray/extras` adds what Raycast has no equivalent for.
+
+### Packaging and registries
+
+An extension packs into a `.orx` archive — a zip carrying the manifest,
+prebuilt command bundles, and assets under a top-level `extension/`
+directory:
+
+```sh
+npx openray pack                          # dist/<name>-<version>.orx
+npx openray publish ext-a ext-b --out dist  # + dist/index.json
+```
+
+Because archives ship **prebuilt**, installing one needs no git, npm, or
+compiler on the user's machine. Packing is where things are checked
+instead: the extension must build cleanly, use only APIs this OpenRay
+provides (recorded in the archive and re-checked at install), avoid native
+binaries and install scripts, and carry a LICENSE if it inlines
+third-party code.
+
+A **registry** is nothing more than a directory like the one `publish`
+writes — `index.json` plus the archives — served from anywhere static.
+There is no backend. Add one under Settings → Add Extension → Registries,
+and browse it with the **Store** command.
+
+```yaml
+# .github/workflows/pages.yml — publish a registry from a repo of extensions
+name: Publish registry
+on: { push: { branches: [main] } }
+permissions: { contents: read, pages: write, id-token: write }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: { name: github-pages }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - run: npx openray publish */ --out dist
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+      - uses: actions/deploy-pages@v4
+```
+
+Publishing a new version is then a `git push`. `dist/` need not be
+committed — CI regenerates it.
+
+Two things to know before running your own registry. Catalog entries may
+point `file` at an absolute URL, so a registry that outgrows GitHub Pages'
+100 GB/month can keep `index.json` there and move archives to Releases
+assets without any app change. And **archives are unsigned**: the catalog's
+`sha256` is verified on download, which pins the file to the catalog but
+says nothing about who published it. Adding a registry is therefore the
+trust decision — extensions run in the extension host with your own
+privileges, and with automatic updates on (per-source, default on) new
+versions install without asking. Add registries you trust.
 
 ## Platform notes & manual QA checklist
 

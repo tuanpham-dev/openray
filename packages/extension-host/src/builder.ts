@@ -4,47 +4,12 @@ import { readFile, mkdir, cp, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createRequire } from 'node:module'
-import { build } from 'esbuild'
+import { build, type Plugin } from 'esbuild'
 import type { ExtensionManifest } from '@openray/protocol'
+import { apiShimSrcDir, REACT_SPECIFIERS } from './react-runtime'
 import { log } from './rpc'
 
 const execFileAsync = promisify(execFile)
-const requireFromHere = createRequire(__filename)
-
-// __dirname resolves to dist/ at runtime (esbuild injects a real CJS
-// __dirname for the bundled host.cjs). packages/api-shim is a sibling of
-// packages/extension-host, so this walks dist -> extension-host -> packages
-// -> api-shim/src. Dev-mode only, matching the same relative-path
-// assumption process.rs makes for host.cjs itself; T24 packaging carries
-// api-shim's source alongside the bundle for production.
-const apiShimSrcDir = join(__dirname, '..', '..', 'api-shim', 'src')
-
-/**
- * Real Raycast extensions generally don't declare `react` themselves — it
- * comes transitively from the real `@raycast/api` package (confirmed
- * against 3 real extensions in the T19b spike, none of which list `react`
- * in their own package.json). Since `@raycast/api` is aliased to our own
- * local shim rather than a real npm package, that transitive supply has to
- * come from somewhere else: alias the bare `react`/jsx-runtime specifiers
- * to api-shim's own installed copy. This also solves a second problem for
- * extensions that *do* declare their own react: aliasing forces every
- * import within one bundle (the extension's own code, react-reconciler,
- * and our component library) onto the exact same resolved file, which is
- * required for hooks to work — React's dispatcher is a module-level
- * singleton, and two separate copies of `react` in one process breaks it
- * with an "Invalid hook call" error that has nothing to do with the code
- * that's actually wrong.
- */
-function resolveApiShimReactPaths(): Record<string, string> {
-  const resolve = (specifier: string) => requireFromHere.resolve(specifier, { paths: [apiShimSrcDir] })
-  return {
-    react: resolve('react'),
-    'react/jsx-runtime': resolve('react/jsx-runtime'),
-    'react/jsx-dev-runtime': resolve('react/jsx-dev-runtime'),
-  }
-}
-
 export interface InstalledExtension {
   id: string
   manifest: ExtensionManifest
@@ -119,6 +84,109 @@ async function npmInstall(extensionDir: string): Promise<void> {
   await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: extensionDir, maxBuffer: 1024 * 1024 * 32 })
 }
 
+/** The specifiers whose named imports count as "API surface this extension
+ *  depends on" — the compat surface plus OpenRay's own extras, i.e. exactly
+ *  what `buildCommand`'s alias map redirects into the shim. */
+const API_SPECIFIERS = ['@raycast/api', '@raycast/utils', '@openray/api', '@openray/utils', '@openray/extras']
+
+/**
+ * Records which top-level API names an extension actually imports, so a
+ * packed archive can be checked against a host's shim *before* it is
+ * installed rather than crashing mid-command.
+ *
+ * This exists because the shim is CommonJS (`index.cts`): esbuild can't
+ * statically verify a named import against a CJS module, so
+ * `import { Clipboard } from '@raycast/api'` builds cleanly against a shim
+ * that has no `Clipboard` and fails at runtime as `undefined is not a
+ * function` — an error that points at the extension's code and names
+ * nothing that would help. Collecting the names at build time turns that
+ * into "requires Clipboard, which this version doesn't provide".
+ *
+ * Scanned from source text rather than esbuild's metafile, which records
+ * which *files* an import reached but not which bindings were taken from
+ * it. Static `import` and `require` destructuring are covered; a name
+ * assembled at runtime is not, which is the documented limit of the check.
+ */
+function collectUsedApis(into: Set<string>): Plugin {
+  const specifierAlternatives = API_SPECIFIERS.map((specifier) => specifier.replace(/[/@]/g, '\\$&')).join('|')
+  const importPattern = new RegExp(String.raw`import\s+([^;'"]+?)\s+from\s*['"](?:${specifierAlternatives})['"]`, 'g')
+  const requirePattern = new RegExp(String.raw`(?:const|let|var)\s*(\{[^}]*\})\s*=\s*require\(\s*['"](?:${specifierAlternatives})['"]`, 'g')
+
+  return {
+    name: 'openray-collect-used-apis',
+    setup(build) {
+      build.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, async (args) => {
+        // Only the extension's own sources: node_modules would report a
+        // dependency's imports as the extension's own requirements.
+        if (args.path.includes(`${sep}node_modules${sep}`)) return null
+        const source = await readFile(args.path, 'utf-8')
+        for (const pattern of [importPattern, requirePattern]) {
+          pattern.lastIndex = 0
+          let match: RegExpExecArray | null
+          while ((match = pattern.exec(source)) !== null) {
+            for (const name of parseImportedNames(match[1] ?? '')) into.add(name)
+          }
+        }
+        // `null` hands the file back to esbuild's own loader untouched —
+        // this plugin only observes.
+        return null
+      })
+    },
+  }
+}
+
+/**
+ * Pulls the imported *source* names out of an import clause:
+ * `{ List, Action as A }` -> List, Action; `* as api` -> the namespace
+ * marker `*`, which the install check reads as "needs the whole surface";
+ * a default import contributes nothing (the shim has no default export).
+ */
+export function parseImportedNames(clause: string): string[] {
+  const names: string[] = []
+  const namespace = /\*\s+as\s+\w+/.test(clause)
+  if (namespace) names.push('*')
+  const braces = clause.match(/\{([^}]*)\}/)
+  if (braces?.[1]) {
+    for (const part of braces[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/)[0]?.trim()
+      if (name) names.push(name)
+    }
+  }
+  return names
+}
+
+/**
+ * Keeps react out of every command bundle **under its bare specifier**,
+ * which is what makes a built bundle portable between machines.
+ *
+ * react has to stay external regardless (React's hook dispatcher is a
+ * module-level singleton, and the reconciler that mounts a command lives in
+ * the host's own bundle — two inlined copies read as the classic "two React
+ * copies" failure even when both came from the same file on disk, because
+ * bundling copies code rather than sharing the module instance). The
+ * question is only *how* it's externalized, and until T4 the answer was
+ * "by absolute path", which baked the building machine's filesystem into
+ * the output.
+ *
+ * It has to be a plugin rather than `external: ['react']`, for the reason
+ * the previous absolute-path workaround documented: esbuild matches
+ * `external` against the *original* specifier, so once react was aliased to
+ * a path, its bare name in `external` silently stopped matching and 11kb of
+ * React was inlined with no warning. An `onResolve` hook claims the
+ * specifier before any of that, and returning it unchanged with
+ * `external: true` is what leaves `require("react")` in the output.
+ *
+ * The other half of this contract is `react-runtime.ts`'s resolver hook,
+ * which decides what that bare `require` means at mount time.
+ */
+const portableReactExternals: Plugin = {
+  name: 'openray-portable-react',
+  setup(build) {
+    const filter = new RegExp(`^(${REACT_SPECIFIERS.map((specifier) => specifier.replace('/', '\\/')).join('|')})$`)
+    build.onResolve({ filter }, (args) => ({ path: args.path, external: true }))
+  },
+}
+
 /**
  * Bundles one command entry point, aliasing @raycast/api, @raycast/utils
  * (and their @openray/* equivalents),
@@ -127,15 +195,17 @@ async function npmInstall(extensionDir: string): Promise<void> {
  * unresolvable import) still gets registered so it appears in search;
  * running it surfaces the real error instead of silently vanishing.
  */
-export async function buildCommand(extensionDir: string, commandName: string): Promise<string | null> {
+export async function buildCommand(
+  extensionDir: string,
+  commandName: string,
+  usedApis?: Set<string>,
+): Promise<string | null> {
   const entryCandidates = ['tsx', 'ts', 'jsx', 'js'].map((ext) => join(extensionDir, 'src', `${commandName}.${ext}`))
   const entry = entryCandidates.find((path) => existsSync(path))
   if (!entry) return `no source file found for command "${commandName}"`
 
   const outDir = join(extensionDir, '.openray', 'build')
   await mkdir(outDir, { recursive: true })
-
-  const reactPaths = resolveApiShimReactPaths()
 
   try {
     await build({
@@ -153,9 +223,9 @@ export async function buildCommand(extensionDir: string, commandName: string): P
       // need that binding — every extension author would otherwise hit a
       // `ReferenceError: React is not defined` the moment their command
       // returns JSX (confirmed empirically: T12's own pipeline-fixture
-      // extension hit exactly this before this option was added).
-      // `reactPaths` already aliases `react/jsx-runtime`/
-      // `jsx-dev-runtime` for exactly this — this was the missing half.
+      // extension hit exactly this before this option was added). The
+      // `react/jsx-runtime` import it emits is externalized by the plugin
+      // below like any other react entry point.
       jsx: 'automatic',
       alias: {
         '@raycast/api': join(apiShimSrcDir, 'index.cts'),
@@ -169,32 +239,67 @@ export async function buildCommand(extensionDir: string, commandName: string): P
         // OpenRay's own extras (T12) — never mutates the compat surface
         // above, kept as a genuinely separate import.
         '@openray/extras': join(apiShimSrcDir, 'openray.cts'),
-        ...reactPaths,
       },
-      // react (and its jsx-runtimes) must be a real shared runtime
-      // dependency, not inlined per-bundle: T22's driver process mounts
-      // this compiled command file through react-reconciler from a
-      // *separate* bundle, and React's hook dispatcher is a module-level
-      // singleton — two inlined copies (one here, one in the driver) look
-      // exactly like the "two React copies" bug despite both ultimately
-      // reading the same source file, because bundling copies the code
-      // rather than sharing the module instance. Everything else
-      // (@raycast/api's component library, @raycast/utils) is fine to
-      // inline fresh per command — only react's singleton needs sharing.
-      //
-      // Externalizing by the bare specifier ("react") does NOT work here:
-      // esbuild's `external` matches against the *original* import
-      // specifier, not the alias target, so an aliased-to-an-absolute-path
-      // import silently stays inlined even when its bare name is listed in
-      // `external` — confirmed empirically (11kb of inlined React showed
-      // up in the output with zero warning). Listing the resolved absolute
-      // paths themselves in `external` is what actually works.
-      external: Object.values(reactPaths),
+      plugins: usedApis ? [portableReactExternals, collectUsedApis(usedApis)] : [portableReactExternals],
     })
     return null
   } catch (error) {
     return error instanceof Error ? error.message : String(error)
   }
+}
+
+/**
+ * The `dependencies`/`devDependencies` blocks of an extension's manifest,
+ * serialized — dev mode's cue for "the author added a dependency, npm
+ * install has to run again before the next rebuild can resolve it".
+ * Compared as a string rather than deep-equalled: key order changes are
+ * rare, and a false positive costs one redundant (fast, cached) install
+ * while a false negative costs an unresolvable-import build error the
+ * author can't act on.
+ */
+export function dependencySignature(manifest: Record<string, unknown>): string {
+  return JSON.stringify([manifest.dependencies ?? {}, manifest.devDependencies ?? {}])
+}
+
+/** The manifest as raw JSON, for callers that need fields `readManifest`
+ *  deliberately doesn't model (dev mode's dependency-block diffing). */
+export async function readRawManifest(extensionDir: string): Promise<Record<string, unknown>> {
+  return JSON.parse(await readFile(join(extensionDir, 'package.json'), 'utf-8')) as Record<string, unknown>
+}
+
+/**
+ * Builds an extension **where it already lives** — no copy into the
+ * extensions root, no unconditional `npm install`. This is the shape
+ * `scripts/build-builtin-extensions.mjs` has always used for first-party
+ * extensions (workspace members whose deps the root install already
+ * resolved); dev mode needs the same thing for an arbitrary folder the
+ * author owns, so the author's directory stays the single source of truth
+ * and their editor, git status, and this build all see the same files.
+ *
+ * `npm install` runs only when `node_modules` is missing or
+ * `forceInstall` says the manifest's dependency blocks changed since the
+ * last build (see {@link dependencySignature}) — an author adding a
+ * dependency mid-session would otherwise get an unresolvable-import error
+ * with no obvious cause.
+ */
+export async function buildExtensionInPlace(
+  extensionDir: string,
+  options: { forceInstall?: boolean } = {},
+): Promise<InstalledExtension> {
+  if (options.forceInstall || !existsSync(join(extensionDir, 'node_modules'))) {
+    await npmInstall(extensionDir)
+  }
+
+  const manifest = await readManifest(extensionDir)
+  const buildErrors: string[] = []
+  for (const command of manifest.commands) {
+    const error = await buildCommand(extensionDir, command.name)
+    if (error) buildErrors.push(`${command.name}: ${error}`)
+  }
+  const exportError = await buildExportEntry(extensionDir, manifest)
+  if (exportError) buildErrors.push(exportError)
+
+  return { id: manifest.name, manifest, dir: extensionDir, buildErrors }
 }
 
 async function installFromDirectory(sourceDir: string, extensionsRoot: string): Promise<InstalledExtension> {
@@ -211,18 +316,10 @@ async function installFromDirectory(sourceDir: string, extensionsRoot: string): 
     },
   })
 
-  await npmInstall(destDir)
-  const manifest = await readManifest(destDir)
-
-  const buildErrors: string[] = []
-  for (const command of manifest.commands) {
-    const error = await buildCommand(destDir, command.name)
-    if (error) buildErrors.push(`${command.name}: ${error}`)
-  }
-  const exportError = await buildExportEntry(destDir, manifest)
-  if (exportError) buildErrors.push(exportError)
-
-  return { id: manifest.name, manifest, dir: destDir, buildErrors }
+  // `forceInstall` unconditionally: the copy above deliberately excluded
+  // `node_modules`, so a fresh install is always required here — this is
+  // the install path, not dev mode's incremental rebuild.
+  return buildExtensionInPlace(destDir, { forceInstall: true })
 }
 
 export async function installLocalDirectory(sourcePath: string, extensionsRoot: string): Promise<InstalledExtension> {

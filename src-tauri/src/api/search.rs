@@ -94,13 +94,13 @@ pub fn run_command(app: AppHandle, state: State<AppState>, id: String) -> Result
 }
 
 #[tauri::command]
-pub fn run_command_with_argument(
+pub fn run_command_with_arguments(
     app: AppHandle,
     state: State<AppState>,
     id: String,
-    argument: String,
+    arguments: std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
     window::hide_palette(&app).map_err(|e| e.to_string())?;
-    state.registry.execute_with_argument(&id, &argument)?;
+    state.registry.execute_with_arguments(&id, &arguments)?;
     state.usage.record_usage(&id, now_unix()).map_err(|e| e.to_string())
 }

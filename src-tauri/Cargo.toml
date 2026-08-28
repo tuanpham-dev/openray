@@ -51,7 +51,11 @@ tauri-plugin-autostart = "2.5.1"
 tauri-plugin-shell = "2.3.5"
 # Native save/open dialogs for Import/Export's file picker.
 tauri-plugin-dialog = "2"
-tokio = { version = "1.53.1", features = ["sync", "time"] }
+# `net` + `io-util` are for the CLI control socket
+# (`infrastructure::control_socket`): a Unix domain socket speaking
+# newline-delimited JSON, so `openray develop` can drive dev mode from a
+# terminal.
+tokio = { version = "1.53.1", features = ["sync", "time", "net", "io-util"] }
 thiserror = "2.0.20"
 # For {uuid} in snippets. Already in the tree via other crates, so this
 # only makes the existing dependency explicit.

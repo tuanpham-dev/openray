@@ -2,11 +2,16 @@ import type { ComponentType } from 'react'
 import {
   AlertIcon,
   AppWindowIcon,
+  ArrowRightIcon,
   BluetoothIcon,
   CalculatorIcon,
   CameraIcon,
   ClipboardIcon,
   CodeIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  EyeOffIcon,
+  PlusIcon,
   DisplayNextIcon,
   DisplayPreviousIcon,
   DragIcon,
@@ -150,4 +155,82 @@ export const SYSTEM_ICON_NAMES: Record<string, ComponentType<IconProps>> = {
   settings: GearIcon,
   send: SendIcon,
   alert: AlertIcon,
+  'arrow-right': ArrowRightIcon,
+  copy: CopyIcon,
+  'external-link': ExternalLinkIcon,
+  'eye-slash': EyeOffIcon,
+  plus: PlusIcon,
+}
+
+/**
+ * Raycast `Icon` values mapped onto the glyphs this app actually ships.
+ *
+ * Extensions reference icons by name (`Icon.MagnifyingGlass` is the string
+ * `"magnifying-glass"`), and Raycast's set is far larger than ours. Names
+ * with a real counterpart are aliased here; the rest are handled by
+ * `looksLikeIconName` below, which is what stops an unmatched name being
+ * printed as literal text — `hacker-news` rendered "arrow-up-circle 5"
+ * beside every story instead of an upvote count.
+ */
+export const RAYCAST_ICON_ALIASES: Record<string, string> = {
+  'magnifying-glass': 'search',
+  document: 'file',
+  'save-document': 'file',
+  gear: 'settings',
+  terminal: 'code',
+  window: 'app-window',
+  'exclamation-mark': 'alert',
+  warning: 'alert',
+  info: 'alert',
+  'question-mark': 'alert',
+  upload: 'send',
+  globe: 'link',
+  // A window with its right pane picked out is the nearest thing this set
+  // has to Raycast's sidebar glyph.
+  'app-window-sidebar-right': 'window-right-half',
+  'copy-clipboard': 'copy',
+}
+
+/**
+ * The glyph for an icon name, or `undefined` when this app ships none.
+ *
+ * Tries the name as written, then its alias, then the same two again with
+ * Raycast's size and variant suffixes peeled off. Every value in the real
+ * `Icon` enum carries a `-16` (`Trash = "trash-16"`), and a family with
+ * several designs also carries a variant number (`Globe = "globe-01-16"`).
+ * Extensions that use the enum are unaffected either way — this shim's own
+ * values are unsuffixed — but the prop accepts any string, so an extension
+ * that hardcodes `icon="trash-16"` would otherwise resolve to nothing.
+ *
+ * The exact name always wins, so a first-party name that genuinely ends in
+ * a number (`volume-1`, `window-two-thirds`) is never mistaken for a
+ * suffixed one.
+ */
+export function lookupSystemIcon(name: string): ComponentType<IconProps> | undefined {
+  let candidate = name
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const direct = SYSTEM_ICON_NAMES[candidate]
+    if (direct) return direct
+    const aliased = RAYCAST_ICON_ALIASES[candidate]
+    if (aliased && SYSTEM_ICON_NAMES[aliased]) return SYSTEM_ICON_NAMES[aliased]
+    const trimmed = candidate.replace(/-\d+$/, '')
+    if (trimmed === candidate) return undefined
+    candidate = trimmed
+  }
+  return undefined
+}
+
+/**
+ * Whether a string is an *icon identifier* rather than something meant to
+ * be displayed.
+ *
+ * Icon props accept a glyph (an emoji) as well as a name, so the renderer
+ * cannot simply refuse to draw unknown strings — it has to tell the two
+ * apart. Kebab-case ASCII is a name; anything else (an emoji, a word with
+ * spaces) is content. Also catches the `[openray stub: …]` marker an
+ * unimplemented API stringifies to, which is never something to show a
+ * user.
+ */
+export function looksLikeIconName(value: string): boolean {
+  return value.startsWith('[openray stub:') || /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(value)
 }

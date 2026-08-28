@@ -24,7 +24,13 @@ pub(crate) fn environment_and_platform_json(state: &AppState, install_path: &str
     };
     let environment = json!({
         "raycastVersion": env!("CARGO_PKG_VERSION"),
-        "assetsPath": install_path,
+        // The *assets directory*, matching Raycast's own definition of
+        // `environment.assetsPath` — extensions reference their files
+        // relative to it (`icon={{ source: "../assets/x.png" }}`), and the
+        // shim resolves those against this. Sending the install root
+        // instead resolved every such icon one directory too high, so it
+        // rendered as literal text rather than an image.
+        "assetsPath": format!("{install_path}/assets"),
         "supportPath": install_path,
         "isDevelopment": cfg!(debug_assertions),
         "theme": theme,
@@ -67,14 +73,19 @@ pub fn parse_extension_command_id(id: &str) -> Option<(&str, &str)> {
 /// (the row's host `root-provider` command) and switches to
 /// `launch_root_command` instead — see `application::root_commands`'s
 /// module doc comment for the full contract.
-pub async fn launch<R: Runtime>(app: &AppHandle<R>, extension_id: &str, command_name: &str, argument: Option<&str>) -> Result<(), Error> {
+pub async fn launch<R: Runtime>(
+    app: &AppHandle<R>,
+    extension_id: &str,
+    command_name: &str,
+    arguments: &std::collections::HashMap<String, String>,
+) -> Result<(), Error> {
     let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
 
     let is_real_command = state.extensions.installed_commands().iter().any(|c| c.extension_id == extension_id && c.name == command_name);
 
     if !is_real_command {
         if let Some(host_command_name) = state.root_commands.host_command_name_for(extension_id, command_name) {
-            return launch_root_command(app, extension_id, &host_command_name, command_name, argument).await;
+            return launch_root_command(app, extension_id, &host_command_name, command_name, arguments).await;
         }
     }
 
@@ -92,16 +103,9 @@ pub async fn launch<R: Runtime>(app: &AppHandle<R>, extension_id: &str, command_
         .resolve_preferences(extension_id, command_name)
         .map_err(|missing| Error::msg(format!("missing_required_preferences:{}", missing.join(","))))?;
 
-    let arguments = argument.and_then(|value| {
-        let first_name = state
-            .extensions
-            .installed_commands()
-            .into_iter()
-            .find(|c| c.extension_id == extension_id && c.name == command_name)
-            .and_then(|c| c.arguments.into_iter().next())
-            .map(|a| a.name)?;
-        Some(json!({ first_name: value }))
-    });
+    // Already keyed by the manifest's own argument names — the palette
+    // collects them per field, so nothing has to be guessed here.
+    let arguments = if arguments.is_empty() { None } else { Some(json!(arguments)) };
 
     let (environment, platform) = environment_and_platform_json(&state, &path);
     let params = json!({
@@ -134,7 +138,13 @@ pub async fn launch<R: Runtime>(app: &AppHandle<R>, extension_id: &str, command_
 /// the host command's own name — see `App.tsx`'s `launchExtensionCommand`),
 /// so `extension.unmountCommand` needs no changes at all to tear a
 /// mounted row's view down correctly.
-async fn launch_root_command<R: Runtime>(app: &AppHandle<R>, extension_id: &str, host_command_name: &str, row_id: &str, argument: Option<&str>) -> Result<(), Error> {
+async fn launch_root_command<R: Runtime>(
+    app: &AppHandle<R>,
+    extension_id: &str,
+    host_command_name: &str,
+    row_id: &str,
+    arguments: &std::collections::HashMap<String, String>,
+) -> Result<(), Error> {
     let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
 
     let entry = state
@@ -158,7 +168,10 @@ async fn launch_root_command<R: Runtime>(app: &AppHandle<R>, extension_id: &str,
         "commandPath": command_path,
         "preferences": preferences,
         "rowId": row_id,
-        "argument": argument,
+        // A root-provider row takes a single anonymous value (see
+        // `root_commands`' synthesized argument), so hand it whichever one
+        // was collected.
+        "argument": arguments.values().next(),
         "environment": environment,
         "platform": platform,
     });
@@ -316,15 +329,47 @@ impl CommandProvider for ExtensionCommandProvider {
             .filter(|c| c.mode != "root-provider")
             .map(|c| Command {
                 id: extension_command_id(&c.extension_id, &c.name),
+                // The owning extension's name is shown beside the command
+                // and searchable through it. Both matter: an extension's
+                // commands are usually named for what they do ("Search
+                // Page"), so without this the only way to find Wikipedia's
+                // is to already know what its commands are called — and
+                // "Search Page" on its own says nothing about where it
+                // came from. Raycast shows and matches both for the same
+                // reason. A command that declares its own subtitle keeps
+                // it; the extension name still joins `keywords`.
+                subtitle: c.subtitle.or_else(|| {
+                    (c.extension_title != c.title).then(|| c.extension_title.clone())
+                }),
                 title: c.title,
-                subtitle: c.subtitle,
                 // Manifest commands don't carry a per-command icon in
                 // storage today — fall back to the owning extension's own
                 // manifest icon (see `EXTENSION_ICONS`' replacement).
                 icon: c.extension_icon,
                 kind: CommandKind::ExtensionCommand,
-                keywords: c.keywords,
-                requires_argument: !c.arguments.is_empty(),
+                keywords: {
+                    let mut keywords = c.keywords;
+                    if !keywords.iter().any(|k| k.eq_ignore_ascii_case(&c.extension_title)) {
+                        keywords.push(c.extension_title);
+                    }
+                    keywords
+                },
+                arguments: c
+                    .arguments
+                    .into_iter()
+                    .map(|a| crate::domain::command::CommandArgument {
+                        name: a.name,
+                        argument_type: a.argument_type,
+                        placeholder: a.placeholder,
+                        required: a.required,
+                        data: a.data.map(|options| {
+                            options
+                                .into_iter()
+                                .map(|o| crate::domain::command::CommandArgumentOption { title: o.title, value: o.value })
+                                .collect()
+                        }),
+                    })
+                    .collect(),
             })
             .collect()
     }
@@ -335,7 +380,7 @@ impl CommandProvider for ExtensionCommandProvider {
     /// surfaced through the toast event since there is no caller left to
     /// return them to.
     fn execute(&self, command_id: &str) -> Result<(), String> {
-        self.spawn_launch(command_id, None)
+        self.spawn_launch(command_id, std::collections::HashMap::new())
     }
 
     /// The argument-bar path (`quicklink-argument` view → `registry.
@@ -348,13 +393,17 @@ impl CommandProvider for ExtensionCommandProvider {
     /// for API consistency (any other caller of `execute_with_argument`
     /// on this provider, e.g. a future per-command hotkey) rather than
     /// being the primary path today.
-    fn execute_with_argument(&self, command_id: &str, argument: &str) -> Result<(), String> {
-        self.spawn_launch(command_id, Some(argument.to_string()))
+    fn execute_with_arguments(
+        &self,
+        command_id: &str,
+        arguments: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
+        self.spawn_launch(command_id, arguments.clone())
     }
 }
 
 impl ExtensionCommandProvider {
-    fn spawn_launch(&self, command_id: &str, argument: Option<String>) -> Result<(), String> {
+    fn spawn_launch(&self, command_id: &str, arguments: std::collections::HashMap<String, String>) -> Result<(), String> {
         let (extension_id, command_name) =
             parse_extension_command_id(command_id).ok_or_else(|| format!("'{command_id}' is not an extension command id"))?;
 
@@ -371,7 +420,7 @@ impl ExtensionCommandProvider {
         let (extension_id, command_name) = (extension_id.to_string(), command_name.to_string());
 
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = launch(&app, &extension_id, &command_name, argument.as_deref()).await {
+            if let Err(e) = launch(&app, &extension_id, &command_name, &arguments).await {
                 log::warn!("extension command '{extension_id}:{command_name}' failed: {e}");
                 let _ = app.emit(
                     EXTENSION_TOAST_EVENT,
@@ -390,20 +439,28 @@ mod tests {
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex};
 
+    /// The extension tables as `migrations/` defines them, shared by every
+    /// fixture below. Was four identical copies, which is exactly how a
+    /// column added by a migration (0032's `version`/`source_url`) can pass
+    /// `cargo check` and fail four tests at once — one definition means the
+    /// next migration touches one place.
+    const TEST_SCHEMA: &str = "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
+            enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT,
+            export_json TEXT, version TEXT, source_url TEXT);
+         CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
+            subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
+            PRIMARY KEY (extension_id, name));
+         CREATE TABLE extension_preference_definitions (extension_id TEXT NOT NULL, command_name TEXT NOT NULL DEFAULT '',
+            name TEXT NOT NULL, preference_type TEXT NOT NULL, title TEXT, label TEXT, description TEXT,
+            required INTEGER NOT NULL DEFAULT 0, default_value TEXT, placeholder TEXT, data TEXT,
+            PRIMARY KEY (extension_id, command_name, name));
+         CREATE TABLE extension_preference_values (extension_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,
+            PRIMARY KEY (extension_id, name));";
+
     fn provider_with_one_installed_command() -> ExtensionCommandProvider {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
-             CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
-                subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
-                PRIMARY KEY (extension_id, name));
-             CREATE TABLE extension_preference_definitions (extension_id TEXT NOT NULL, command_name TEXT NOT NULL DEFAULT '',
-                name TEXT NOT NULL, preference_type TEXT NOT NULL, title TEXT, label TEXT, description TEXT,
-                required INTEGER NOT NULL DEFAULT 0, default_value TEXT, placeholder TEXT, data TEXT,
-                PRIMARY KEY (extension_id, command_name, name));
-             CREATE TABLE extension_preference_values (extension_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,
-                PRIMARY KEY (extension_id, name));",
+            TEST_SCHEMA,
         )
         .unwrap();
         let registry = Arc::new(ExtensionsRegistry::new(Arc::new(Mutex::new(conn))));
@@ -443,17 +500,7 @@ mod tests {
 
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
-             CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
-                subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
-                PRIMARY KEY (extension_id, name));
-             CREATE TABLE extension_preference_definitions (extension_id TEXT NOT NULL, command_name TEXT NOT NULL DEFAULT '',
-                name TEXT NOT NULL, preference_type TEXT NOT NULL, title TEXT, label TEXT, description TEXT,
-                required INTEGER NOT NULL DEFAULT 0, default_value TEXT, placeholder TEXT, data TEXT,
-                PRIMARY KEY (extension_id, command_name, name));
-             CREATE TABLE extension_preference_values (extension_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,
-                PRIMARY KEY (extension_id, name));",
+            TEST_SCHEMA,
         )
         .unwrap();
         let registry = Arc::new(ExtensionsRegistry::new(Arc::new(Mutex::new(conn))));
@@ -497,17 +544,7 @@ mod tests {
     fn provider_with_a_root_provider_command() -> ExtensionCommandProvider {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
-             CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
-                subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
-                PRIMARY KEY (extension_id, name));
-             CREATE TABLE extension_preference_definitions (extension_id TEXT NOT NULL, command_name TEXT NOT NULL DEFAULT '',
-                name TEXT NOT NULL, preference_type TEXT NOT NULL, title TEXT, label TEXT, description TEXT,
-                required INTEGER NOT NULL DEFAULT 0, default_value TEXT, placeholder TEXT, data TEXT,
-                PRIMARY KEY (extension_id, command_name, name));
-             CREATE TABLE extension_preference_values (extension_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,
-                PRIMARY KEY (extension_id, name));",
+            TEST_SCHEMA,
         )
         .unwrap();
         let registry = Arc::new(ExtensionsRegistry::new(Arc::new(Mutex::new(conn))));
@@ -545,17 +582,7 @@ mod tests {
     fn provider_with_an_extension_icon() -> ExtensionCommandProvider {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE extensions (id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT,
-                enabled INTEGER NOT NULL DEFAULT 1, description TEXT, source TEXT NOT NULL DEFAULT 'builtin', icon TEXT, export_json TEXT);
-             CREATE TABLE extension_commands (extension_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
-                subtitle TEXT, description TEXT, mode TEXT NOT NULL, keywords TEXT, arguments TEXT,
-                PRIMARY KEY (extension_id, name));
-             CREATE TABLE extension_preference_definitions (extension_id TEXT NOT NULL, command_name TEXT NOT NULL DEFAULT '',
-                name TEXT NOT NULL, preference_type TEXT NOT NULL, title TEXT, label TEXT, description TEXT,
-                required INTEGER NOT NULL DEFAULT 0, default_value TEXT, placeholder TEXT, data TEXT,
-                PRIMARY KEY (extension_id, command_name, name));
-             CREATE TABLE extension_preference_values (extension_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,
-                PRIMARY KEY (extension_id, name));",
+            TEST_SCHEMA,
         )
         .unwrap();
         let registry = Arc::new(ExtensionsRegistry::new(Arc::new(Mutex::new(conn))));
@@ -606,7 +633,7 @@ mod tests {
         assert_eq!(demo.title, "Search Demo");
         assert_eq!(demo.kind, CommandKind::ExtensionCommand);
         assert_eq!(demo.keywords, vec!["demo".to_string()]);
-        assert!(!demo.requires_argument, "a command with no declared arguments must not require one");
+        assert!(demo.arguments.is_empty(), "a command with no declared arguments must not ask for one");
     }
 
     #[test]
@@ -624,7 +651,8 @@ mod tests {
         let provider = provider_with_an_argument_declaring_command();
         let commands = provider.commands();
         let greet = commands.iter().find(|c| c.id == "ext:demo:greet").unwrap();
-        assert!(greet.requires_argument);
+        assert_eq!(greet.arguments.len(), 1);
+        assert_eq!(greet.arguments[0].name, "name");
     }
 
     #[test]
@@ -646,11 +674,13 @@ mod tests {
         // `execute` — proves `execute_with_argument` runs through the same
         // validation path rather than silently dropping the argument and
         // succeeding differently.
-        let err = provider.execute_with_argument("ext:demo:greet", "Ada").unwrap_err();
+        let err = provider
+            .execute_with_arguments("ext:demo:greet", &std::collections::HashMap::from([("name".to_string(), "Ada".to_string())]))
+            .unwrap_err();
         assert!(err.contains("app handle"), "unexpected error: {err}");
 
         assert!(provider
-            .execute_with_argument("ext:demo:missing", "Ada")
+            .execute_with_arguments("ext:demo:missing", &std::collections::HashMap::new())
             .unwrap_err()
             .contains("unknown"));
     }

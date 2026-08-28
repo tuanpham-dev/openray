@@ -45,6 +45,9 @@ export interface GridProps {
   searchText?: string
   searchBarPlaceholder?: string
   onSearchTextChange?: (text: string) => void
+  /** Explicitly asks the host to filter, even alongside
+   *  `onSearchTextChange` — see `List`'s own `filtering`. */
+  filtering?: boolean
   searchBarAccessory?: ReactNode
   navigationTitle?: string
   actions?: ReactNode
@@ -55,6 +58,22 @@ export function Grid(props: GridProps): ReactElement {
   const { children, searchBarAccessory, actions, ...rest } = props
   return createElement(NodeType.Grid, rest, searchBarAccessory ?? null, actionsSlot(actions), children)
 }
+/**
+ * Raycast's sizing enums, which real extensions reference *while
+ * rendering* — `fit={Grid.Fit.Fill}` is evaluated during the render pass,
+ * so a missing enum is not a degraded grid but a `TypeError` that takes
+ * the whole command down before it draws anything. Found exactly that way:
+ * the `wikipedia` extension imported cleanly, built cleanly, and then
+ * rendered nothing at all because `Grid.Fit` was undefined.
+ *
+ * The values are the strings Raycast uses, so an extension that stores or
+ * compares them behaves the same here. The renderer does not vary layout
+ * on them yet; carrying them keeps such extensions running until it does.
+ */
+Grid.Fit = { Contain: 'contain', Fill: 'fill' } as const
+Grid.Inset = { Small: 'small', Medium: 'medium', Large: 'large' } as const
+Grid.ItemSize = { Small: 'small', Medium: 'medium', Large: 'large' } as const
+
 Grid.Item = GridItem
 Grid.Section = GridSection
 Grid.EmptyView = GridEmptyView

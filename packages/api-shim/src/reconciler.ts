@@ -3,6 +3,7 @@ import { DefaultEventPriority } from 'react-reconciler/constants'
 import { createContext, createElement, type ReactElement } from 'react'
 import type { JsonValue, UiDiffOp, UiNode, UiTreeCommit } from '@openray/protocol'
 import { NavigationRoot, type NavigationController } from './hooks'
+import { getCommandContext } from './api/command-context'
 
 /**
  * The mutable, in-memory host tree. Mirrors `UiNode` from the protocol but
@@ -49,6 +50,12 @@ export function unregisterCallback(callbackId: string): void {
   callbacks.delete(callbackId)
 }
 
+/** See the `createContainer` call site for why these must not re-throw. */
+function reportReconcilerError(error: unknown): void {
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
+  process.stderr.write(`[api-shim] render error: ${detail}\n`)
+}
+
 export function invokeCallback(callbackId: string, args: unknown[]): unknown {
   const fn = callbacks.get(callbackId)
   if (!fn) throw new Error(`no callback registered for id "${callbackId}"`)
@@ -78,6 +85,60 @@ function isPlainSerializable(value: unknown): boolean {
  * instead of leaking a new id each render. `children` and `actions` are
  * handled as host children by the component layer, never as props.
  */
+/**
+ * Props naming a file that belongs to the extension. Kept to an explicit
+ * list so nothing else — a markdown body, a title — is ever mistaken for a
+ * path.
+ */
+const ASSET_PROP_KEYS = new Set(['icon', 'source', 'image', 'thumbnail'])
+
+/**
+ * Turns a relative asset path into an absolute one.
+ *
+ * Extensions reference their own files the way Raycast documents it —
+ * `icon={{ source: "../assets/wikipedia.png" }}` — which is relative to the
+ * compiled command, not to anything the renderer knows about. Sent as-is it
+ * matches neither an absolute path nor a built-in icon name, so it was
+ * drawn as literal text: rows in `wikipedia` showed "../a" where the page
+ * thumbnail belonged.
+ *
+ * A *bare* name counts too: `Image.Asset` is documented as "a string
+ * denoting an asset from the `assets/` folder", and extensions write it
+ * without any prefix — `icon={{ source: "body-style/8.png" }}` in
+ * `pokedex`, whose Shape row rendered that string as literal text. A name
+ * only qualifies when it carries a file extension, so built-in icon names
+ * (`trash`, `arrow-up-circle`) are never mistaken for files.
+ *
+ * Resolved here, at the one point every prop crosses to the renderer, using
+ * the command context's own `assetsPath`.
+ */
+const RELATIVE_FILE = /^[^/\\][^:]*\.[a-z0-9]{2,4}$/i
+
+function resolveAssetPath(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const relative = value.startsWith('./') || value.startsWith('../') || RELATIVE_FILE.test(value)
+    if (!relative) return value
+    let assetsPath: string
+    try {
+      assetsPath = getCommandContext().assetsPath
+    } catch {
+      return value
+    }
+    if (!assetsPath) return value
+    // `assetsPath` *is* the assets directory, so a "../assets/x" written
+    // relative to the build output resolves to "x" within it.
+    const file = value.replace(/^\.\.?\//, '').replace(/^assets\//, '')
+    return `${assetsPath.replace(/\/$/, '')}/${file}`
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    if (typeof record.source === 'string') {
+      return { ...record, source: resolveAssetPath(record.source) }
+    }
+  }
+  return value
+}
+
 function serializeProps(nodeId: string, rawProps: Record<string, unknown>): Record<string, JsonValue> {
   const out: Record<string, JsonValue> = {}
   for (const [key, value] of Object.entries(rawProps)) {
@@ -90,7 +151,7 @@ function serializeProps(nodeId: string, rawProps: Record<string, unknown>): Reco
       continue
     }
     if (!isPlainSerializable(value)) continue
-    out[key] = value as JsonValue
+    out[key] = (ASSET_PROP_KEYS.has(key) ? resolveAssetPath(value) : value) as JsonValue
   }
   return out
 }
@@ -422,15 +483,19 @@ export function mount(element: ReactElement, onCommit: (commit: UiTreeCommit) =>
     false,
     null,
     '',
-    (error: Error) => {
-      throw error
-    },
-    (error: Error) => {
-      throw error
-    },
-    (error: Error) => {
-      throw error
-    },
+    // onUncaughtError / onCaughtError / onRecoverableError.
+    //
+    // These *report* an error React has already handled; they are called
+    // from inside render and commit. Throwing from one re-throws into the
+    // reconciler's own machinery and leaves it mid-work, so every later
+    // update dies with "Should not already be working" — one bad render
+    // permanently wedges the command instead of failing that render.
+    //
+    // Reported to stderr, which the host forwards as an extension log
+    // line, so the failure is visible without being fatal.
+    reportReconcilerError,
+    reportReconcilerError,
+    reportReconcilerError,
     () => {},
   )
 

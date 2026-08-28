@@ -111,7 +111,20 @@ impl RootCommandProvider {
                     icon: r.icon.or_else(|| extension_icon.clone()),
                     kind: CommandKind::ExtensionCommand,
                     keywords: r.keywords,
-                    requires_argument: r.requires_argument,
+                    // A root-provider row declares only *that* it wants an
+                    // argument, not a manifest entry describing one — so it
+                    // gets a single required text field.
+                    arguments: if r.requires_argument {
+                        vec![crate::domain::command::CommandArgument {
+                            name: "argument".to_string(),
+                            argument_type: "text".to_string(),
+                            placeholder: None,
+                            required: true,
+                            data: None,
+                        }]
+                    } else {
+                        Vec::new()
+                    },
                 },
                 needs_confirm: r.needs_confirm,
                 opens_view: r.opens_view,
@@ -205,11 +218,15 @@ impl CommandProvider for RootCommandProvider {
     /// which is where the real "static command vs. contributed row"
     /// resolution happens (see this module's doc comment).
     fn execute(&self, command_id: &str) -> Result<(), String> {
-        self.spawn_launch(command_id, None)
+        self.spawn_launch(command_id, std::collections::HashMap::new())
     }
 
-    fn execute_with_argument(&self, command_id: &str, argument: &str) -> Result<(), String> {
-        self.spawn_launch(command_id, Some(argument.to_string()))
+    fn execute_with_arguments(
+        &self,
+        command_id: &str,
+        arguments: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
+        self.spawn_launch(command_id, arguments.clone())
     }
 
     fn generation(&self) -> Option<u64> {
@@ -218,7 +235,7 @@ impl CommandProvider for RootCommandProvider {
 }
 
 impl RootCommandProvider {
-    fn spawn_launch(&self, command_id: &str, argument: Option<String>) -> Result<(), String> {
+    fn spawn_launch(&self, command_id: &str, arguments: std::collections::HashMap<String, String>) -> Result<(), String> {
         let (extension_id, _) =
             self.host_command_for(command_id).ok_or_else(|| format!("unknown root-provider row '{command_id}'"))?;
         let app = self.app.clone().ok_or("root-provider rows can't run without an app handle")?;
@@ -232,7 +249,7 @@ impl RootCommandProvider {
                 log::warn!("root-provider row id '{command_id}' doesn't parse as an extension command id");
                 return;
             };
-            if let Err(e) = crate::application::extension_commands::launch(&app, &extension_id, name, argument.as_deref()).await {
+            if let Err(e) = crate::application::extension_commands::launch(&app, &extension_id, name, &arguments).await {
                 log::warn!("root-provider row '{command_id}' failed: {e}");
             }
         });

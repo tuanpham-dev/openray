@@ -20,6 +20,10 @@ export function ActionPanel({ actions, onClose }: ActionPanelProps) {
 
   const { selectedIndex, setSelectedIndex } = useListNavigation(actions.length, onActivate)
 
+  // All-or-nothing per panel: a mixed panel that indented only the rows
+  // with an icon left the titles in a ragged column.
+  const reserveIcon = actions.some((action) => action.icon !== undefined && action.icon !== null)
+
   // Signals to the view underneath that Escape belongs to this panel.
   useEffect(() => registerOverlay(), [])
 
@@ -45,6 +49,7 @@ export function ActionPanel({ actions, onClose }: ActionPanelProps) {
           key={action.id}
           action={action}
           selected={index === selectedIndex}
+          reserveIcon={reserveIcon}
           onSelect={() => setSelectedIndex(index)}
           onActivate={() => onActivate(index)}
         />

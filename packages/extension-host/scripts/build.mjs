@@ -55,6 +55,25 @@ await build({
   ],
 })
 
+// A third entry point: the build/pack pipeline for tooling that runs with
+// no app present — `openray pack` and a registry repo's CI. Same modules
+// the sidecar uses, exposed as plain CJS exports.
+await build({
+  entryPoints: [join(root, 'src', 'cli-api.ts')],
+  outfile: join(root, 'dist', 'cli-api.cjs'),
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'cjs',
+  sourcemap: true,
+  logLevel: 'info',
+  jsx: 'automatic',
+  alias: {
+    react: requireFromApiShim.resolve('react'),
+  },
+  external: ['esbuild', requireFromApiShim.resolve('react')],
+})
+
 // A second, separate entry point exposing builder.ts's `buildCommand`/
 // `readManifest` as real, directly-`require`-able CJS exports — used by
 // the repo-root `scripts/build-builtin-extensions.mjs` (T12) to build

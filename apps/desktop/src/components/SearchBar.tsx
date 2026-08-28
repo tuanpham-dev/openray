@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { useAutoWidth } from './useAutoWidth'
 import { listen } from '@tauri-apps/api/event'
 import { suppressHoverSelection } from './hoverSelection'
 import { BackButton } from './BackButton'
@@ -12,6 +13,9 @@ interface SearchBarProps {
   onBack?: () => void
   /** Slot at the trailing edge, e.g. a type filter. */
   trailing?: ReactNode
+  /** A selected command's argument fields, rendered inline after the query
+   *  the way Raycast does — see `ArgumentFields`. */
+  arguments?: ReactNode
   /** A sub-view's `navigationTitle` (List/Grid), shown as a label ahead of
    *  the search field, after the back button. */
   title?: string
@@ -19,8 +23,12 @@ interface SearchBarProps {
   loading?: boolean
 }
 
-export function SearchBar({ value, onChange, placeholder, onBack, trailing, title, loading }: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder, onBack, trailing, title, loading, arguments: argumentFields }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  // With argument fields present the query shrinks to its own text so the
+  // fields sit right beside it — Raycast puts them a single gap apart, not
+  // at opposite ends of the bar.
+  const [measureRef, queryWidth] = useAutoWidth<HTMLInputElement>(value, { min: 24, max: 420, placeholder: '' })
   // Latest props for listeners that subscribe once.
   const latest = useRef({ value, onChange })
   latest.current = { value, onChange }
@@ -109,7 +117,10 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, titl
       )}
       {title && <span className="openray-search-title">{title}</span>}
       <input
-        ref={inputRef}
+        ref={(element) => {
+          inputRef.current = element
+          measureRef.current = element
+        }}
         className="openray-search-input"
         type="text"
         value={value}
@@ -121,9 +132,11 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, titl
           onChange(event.target.value)
         }}
         placeholder={placeholder ?? 'Search for apps and commands…'}
+        style={argumentFields ? { flex: '0 0 auto', width: queryWidth } : undefined}
         autoFocus
         spellCheck={false}
       />
+      {argumentFields}
       {loading && <span className="openray-toast-spinner" aria-label="Loading" />}
       {trailing}
     </div>

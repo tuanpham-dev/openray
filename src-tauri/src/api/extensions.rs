@@ -1,9 +1,10 @@
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State};
 
+use crate::application::dev_extensions;
 use crate::application::extensions_registry::{ExtensionEntry, PreferenceDefinition, CLIPBOARD_HISTORY_ID};
 use crate::application::state::AppState;
-use crate::infrastructure::extension_host::protocol::{CommandMode, ExtensionManifest};
+use crate::infrastructure::extension_host::protocol::{CommandMode, HostBuildResult};
 
 #[tauri::command]
 pub fn list_extensions(state: State<AppState>) -> Vec<ExtensionEntry> {
@@ -55,22 +56,51 @@ fn extensions_root(app: &AppHandle) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct InstallResult {
-    id: String,
-    manifest: ExtensionManifest,
-    dir: String,
-    #[serde(default)]
-    build_errors: Vec<String>,
+/// Registers a freshly built extension and returns its settings-facing
+/// entry. `source` distinguishes the install paths that land here —
+/// `"installed"` for a copy under the app's extensions root, `"dev"` for a
+/// folder the author owns and is actively editing (see
+/// `application::dev_extensions`) — since everything downstream of
+/// registration is identical for both.
+fn finish_install(app: &AppHandle, state: &State<AppState>, result: HostBuildResult, source: &str) -> Result<ExtensionEntry, String> {
+    register_installed_extension(app, state, result, source, None)
 }
 
-fn finish_install(app: &AppHandle, state: &State<AppState>, result: InstallResult) -> Result<ExtensionEntry, String> {
+/// As [`finish_install`], recording which registry the extension came from
+/// (and the version that registry advertised). Only the archive path has
+/// either to record. `pub(crate)` under a descriptive name because
+/// `api::registry` finishes its own installs through it — the registry path
+/// downloads and verifies before it gets here, but everything from
+/// registration onward is identical.
+pub(crate) fn register_installed_extension(
+    app: &AppHandle,
+    state: &State<AppState>,
+    result: HostBuildResult,
+    source: &str,
+    source_url: Option<&str>,
+) -> Result<ExtensionEntry, String> {
     if !result.build_errors.is_empty() {
-        log::warn!("extension '{}' installed with build errors: {:?}", result.id, result.build_errors);
+        log::warn!("extension '{}' registered with build errors: {:?}", result.id, result.build_errors);
     }
 
-    state.extensions.register_installed(&result.id, &result.manifest, &result.dir, "installed")?;
+    state.extensions.register_installed_from(
+        &result.id,
+        &result.manifest,
+        &result.dir,
+        source,
+        result.version.as_deref(),
+        source_url,
+    )?;
+
+    // Icons are loaded through Tauri's asset protocol, which serves only
+    // scoped paths. `tauri.conf.json` covers `$APPDATA/extensions/**`, but
+    // an extension being developed lives wherever its author keeps it — so
+    // without this every dev extension shows a broken image instead of its
+    // icon. Widening the scope to the directory we just registered is the
+    // same thing `host.system.allowAssetDirectory` does for an extension
+    // that asks; this does it for the extension's own icon, which it never
+    // gets a chance to ask about.
+    let _ = app.asset_protocol_scope().allow_directory(&result.dir, true);
 
     // Root-provider rows are push-based (see `application::root_commands`'s
     // doc comment): they populate at extension-host startup, or when the
@@ -110,8 +140,8 @@ pub async fn install_extension_from_path(app: AppHandle, state: State<'_, AppSta
         .call("extension.installLocal", Some(json!({ "path": path, "extensionsRoot": root })))
         .await
         .map_err(|e| e.to_string())?;
-    let result: InstallResult = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    finish_install(&app, &state, result)
+    let result: HostBuildResult = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    finish_install(&app, &state, result, "installed")
 }
 
 #[tauri::command]
@@ -122,12 +152,23 @@ pub async fn install_extension_from_slug(app: AppHandle, state: State<'_, AppSta
         .call("extension.installStoreSlug", Some(json!({ "slug": slug, "extensionsRoot": root })))
         .await
         .map_err(|e| e.to_string())?;
-    let result: InstallResult = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    finish_install(&app, &state, result)
+    let result: HostBuildResult = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    finish_install(&app, &state, result, "installed")
 }
 
 #[tauri::command]
 pub async fn uninstall_extension(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
+    // Uninstall deletes `<extensionsRoot>/<id>` from disk. A dev extension
+    // is registered against the *author's* directory, and nothing stops
+    // that directory from being the very path this would delete (an author
+    // who points dev mode at a folder they put under the app's extensions
+    // root). Refusing here keeps "uninstall" from ever being the command
+    // that eats someone's source tree — `remove_dev_extension` is the
+    // deliberate, file-touching-free way out.
+    if state.extensions.list().iter().any(|e| e.id == id && e.source == dev_extensions::DEV_SOURCE) {
+        return Err(format!("'{id}' is being developed locally — remove it from its extension page instead."));
+    }
+
     let root = extensions_root(&app)?;
     state
         .extension_host
@@ -153,4 +194,100 @@ pub fn extension_preference_values(state: State<AppState>, id: String) -> std::c
 #[tauri::command]
 pub fn set_extension_preference_value(state: State<AppState>, id: String, name: String, value: Value) -> Result<(), String> {
     Ok(state.extensions.set_preference_value(&id, &name, &value)?)
+}
+
+/// Installs a prebuilt `.orx` archive: unzip, validate, swap into place.
+///
+/// The one install path that needs nothing on the user's machine — no git,
+/// no npm, no compiler — because the archive already carries built command
+/// bundles. `source_url` is recorded when the archive came from a registry,
+/// which is what later makes an update check possible; a hand-picked file
+/// passes `None` and simply never reports updates.
+#[tauri::command]
+pub async fn install_extension_from_archive(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    source_url: Option<String>,
+) -> Result<ExtensionEntry, String> {
+    let root = extensions_root(&app)?;
+    let value = state
+        .extension_host
+        .call("extension.installArchive", Some(json!({ "path": path, "extensionsRoot": root })))
+        .await
+        .map_err(|e| e.to_string())?;
+    let result: HostBuildResult = serde_json::from_value(value).map_err(|e| e.to_string())?;
+
+    // Refusing to let an archive replace a built-in: built-ins version with
+    // the app, and a registry that could overwrite one would be able to
+    // take over Notes or Clipboard History wholesale.
+    if let Some(existing) = state.extensions.list().into_iter().find(|e| e.id == result.id) {
+        if existing.source == "builtin" {
+            return Err(format!("'{}' is a built-in extension and can't be replaced", result.id));
+        }
+    }
+
+    register_installed_extension(&app, &state, result, "installed", source_url.as_deref())
+}
+
+/// Starts dev mode for an extension directory the author owns: the host
+/// builds it **in place** and watches it, and every rebuild arrives back as
+/// an `extension.devBuild` notification (see
+/// `application::extension_bridge::dispatch_notification`).
+///
+/// Unlike the install commands above, nothing is copied anywhere — the
+/// registered `path` is the author's own folder, which is what makes their
+/// editor, their git checkout, and the running app all the same files.
+#[tauri::command]
+pub async fn develop_extension(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<ExtensionEntry, String> {
+    develop_extension_at(&app, &state, &path).await
+}
+
+/// The develop flow itself, callable from outside the Tauri command layer —
+/// the CLI control socket drives exactly this, so `openray develop` and the
+/// Settings picker cannot drift apart.
+pub(crate) async fn develop_extension_at(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    path: &str,
+) -> Result<ExtensionEntry, String> {
+    let result = dev_extensions::start(state, path).await?;
+    let entry = finish_install(app, state, result, dev_extensions::DEV_SOURCE)?;
+    state.dev_extensions.record(&entry.id, path);
+    state.sync_hotkey_bindings(app);
+    Ok(entry)
+}
+
+/// Stops watching, keeping the registration: the extension goes on working
+/// from the bundles already built in its folder, it just no longer picks
+/// up edits. This is the "I'm done editing for now" exit, distinct from
+/// `remove_dev_extension`'s "forget this folder entirely".
+#[tauri::command]
+pub async fn stop_developing(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    dev_extensions::stop(&state, &id).await;
+    Ok(())
+}
+
+/// Unregisters a dev extension without touching a single file on disk —
+/// the directory belongs to the author, not to us. (`uninstall_extension`
+/// would delete `<extensionsRoot>/<id>`, which for a dev extension is not
+/// even where its code lives.)
+#[tauri::command]
+pub async fn remove_dev_extension(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
+    dev_extensions::stop(&state, &id).await;
+    state.extensions.unregister(&id)?;
+    state.command_settings.delete_for_extension(&id)?;
+    state.root_commands.clear_extension(&id);
+    state.sync_hotkey_bindings(&app);
+    Ok(())
+}
+
+/// The directories currently being watched, keyed by extension id — the
+/// Settings pane's source of truth for which dev extensions are *live*
+/// versus merely registered (a registered dev extension whose watcher
+/// isn't running after a restart still appears in `list_extensions` with
+/// `source = "dev"`).
+#[tauri::command]
+pub fn list_dev_extensions(state: State<AppState>) -> Vec<dev_extensions::DevSession> {
+    state.dev_extensions.list()
 }

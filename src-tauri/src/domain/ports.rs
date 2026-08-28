@@ -4,8 +4,15 @@ pub trait CommandProvider: Send + Sync {
     fn commands(&self) -> Vec<Command>;
     fn execute(&self, command_id: &str) -> Result<(), String>;
 
-    fn execute_with_argument(&self, command_id: &str, argument: &str) -> Result<(), String> {
-        let _ = argument;
+    /// Runs a command with the arguments its manifest declares, keyed by
+    /// name. A command may declare several (Raycast allows up to three), so
+    /// a single anonymous string can't express what was collected.
+    fn execute_with_arguments(
+        &self,
+        command_id: &str,
+        arguments: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
+        let _ = arguments;
         self.execute(command_id)
     }
 

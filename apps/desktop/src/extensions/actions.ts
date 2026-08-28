@@ -1,6 +1,7 @@
 import type { UiNode } from '@openray/protocol'
 import type { PaletteAction } from '../state/actions'
 import { invokeExtensionCallback } from '../ipc/extensionHost'
+import { resolveVisual } from './resolveVisual'
 
 function callbackIdFrom(prop: unknown): string | null {
   if (prop && typeof prop === 'object' && '__callback' in (prop as Record<string, unknown>)) {
@@ -20,12 +21,76 @@ const MODIFIER_SYMBOLS: Record<string, string> = {
   option: '⌥',
 }
 
+/** Keys with a conventional symbol; anything else shows its own letter. */
+const KEY_SYMBOLS: Record<string, string> = {
+  enter: '↵',
+  return: '↵',
+  arrowup: '↑',
+  arrowdown: '↓',
+  arrowleft: '←',
+  arrowright: '→',
+  backspace: '⌫',
+  delete: '⌦',
+  escape: '⎋',
+  tab: '⇥',
+  space: '␣',
+}
+
 function shortcutLabel(shortcut: unknown): string | undefined {
-  if (!shortcut || typeof shortcut !== 'object') return undefined
-  const { modifiers, key } = shortcut as { modifiers?: string[]; key?: string }
-  if (!key) return undefined
-  const mods = (modifiers ?? []).map((m) => MODIFIER_SYMBOLS[m] ?? m).join('')
-  return `${mods}${key.toUpperCase()}`
+  const parsed = parseShortcut(shortcut)
+  if (!parsed) return undefined
+  const mods = parsed.modifiers.map((m) => MODIFIER_SYMBOLS[m] ?? m).join('')
+  return `${mods}${KEY_SYMBOLS[parsed.key] ?? parsed.key.toUpperCase()}`
+}
+
+export interface ParsedShortcut {
+  modifiers: string[]
+  /** Lower-cased, so callers can compare against `KeyboardEvent.key`. */
+  key: string
+}
+
+/** The `{ modifiers, key }` an extension declares, normalized. Exported so
+ *  a view can match a real keypress against it, not just print it. */
+export function parseShortcut(shortcut: unknown): ParsedShortcut | null {
+  if (!shortcut || typeof shortcut !== 'object') return null
+  const { modifiers, key } = shortcut as { modifiers?: unknown; key?: unknown }
+  if (typeof key !== 'string' || !key) return null
+  const list = Array.isArray(modifiers) ? modifiers.filter((m): m is string => typeof m === 'string') : []
+  return { modifiers: list, key: key.toLowerCase() }
+}
+
+/**
+ * Whether a keypress is the one this shortcut names.
+ *
+ * Extensions are written on macOS, where the primary accelerator is ⌘ and
+ * Control is a *separate* modifier — Raycast's own Create Extension uses
+ * ⌘↵, ⌘⇧↵, ⌘⌃↵ and ⌘⌥↵ as four distinct shortcuts. Linux has no ⌘, so:
+ *
+ * - `cmd` alone matches Ctrl (or Meta, for anyone whose muscle memory
+ *   says so), but *not* both at once;
+ * - `cmd` + `ctrl` together needs both — Ctrl and Super. Folding them onto
+ *   plain Ctrl instead made ⌘⌃↵ indistinguishable from ⌘↵, so whichever
+ *   action came first in the panel swallowed the other's keypress.
+ */
+export function matchesShortcut(event: KeyboardEvent, shortcut: ParsedShortcut): boolean {
+  if (event.key.toLowerCase() !== shortcut.key) return false
+  const wanted = new Set(shortcut.modifiers)
+
+  const wantsPrimary = wanted.has('cmd') || wanted.has('meta')
+  const wantsControl = wanted.has('ctrl') || wanted.has('control')
+  const both = event.ctrlKey && event.metaKey
+  const either = event.ctrlKey || event.metaKey
+  if (wantsPrimary && wantsControl) {
+    if (!both) return false
+  } else if (wantsPrimary || wantsControl) {
+    if (!either || both) return false
+  } else if (either) {
+    return false
+  }
+
+  if (wanted.has('shift') !== event.shiftKey) return false
+  if ((wanted.has('opt') || wanted.has('alt') || wanted.has('option')) !== event.altKey) return false
+  return true
 }
 
 /** The `__actions` node wraps a component's `actions` prop — see reconciler.ts. */
@@ -57,7 +122,11 @@ export function actionsFromSlot(slot: UiNode | undefined, nodes: Record<string, 
       actions.push({
         id: node.id,
         title: typeof node.props.title === 'string' ? node.props.title : 'Action',
-        icon: typeof node.props.icon === 'string' ? node.props.icon : undefined,
+        // An action's icon takes the same `Image.ImageLike` union a list
+        // row's does, so `{ source }` / `{ source: { light, dark } }` has
+        // to be flattened here — reading only the string form dropped
+        // those icons silently.
+        icon: resolveVisual(node.props.icon).source || undefined,
         shortcut: shortcutLabel(node.props.shortcut),
         onAction: () => (callbackId ? invokeExtensionCallback(callbackId) : Promise.resolve()),
       })

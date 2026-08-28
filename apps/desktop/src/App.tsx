@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArgumentFields, type ArgumentFieldsHandle } from './components/ArgumentFields'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { listen } from '@tauri-apps/api/event'
 import { hidePalette } from './ipc/window'
-import { search, runCommand, runCommandWithArgument, type InlineRow } from './ipc/search'
+import { search, runCommand, runCommandWithArguments, type InlineRow } from './ipc/search'
 import { openSettings } from './ipc/settings'
 import { SearchBar } from './components/SearchBar'
 import { ResultList } from './components/ResultList'
@@ -10,7 +11,6 @@ import { ListItem } from './components/ListItem'
 import { InlineCard } from './components/InlineCard'
 import { Footer } from './components/Footer'
 import { ActionPanel } from './components/ActionPanel'
-import { QuicklinkArgumentBar } from './features/quicklinks/QuicklinkArgumentBar'
 import { ConfirmView } from './features/system/ConfirmView'
 import { needsConfirmation } from './state/systemCommands'
 import { useListNavigation } from './components/useListNavigation'
@@ -26,6 +26,7 @@ import { startExtensionEventBridge, type ExtensionConfirmAlertPayload, type Exte
 import { ExtensionConfirmAlert, Hud, Toast } from './extensions/Toast'
 import { parseExtensionCommandId } from './extensions/commandId'
 import { popExtensionView, runExtensionCommand, unmountExtensionCommand } from './ipc/extensionHost'
+import type { DevBuildEvent } from './ipc/extensions'
 import { useAppSettings } from './state/appSettings'
 import './theme/tokens.css'
 import './components/palette.css'
@@ -39,7 +40,17 @@ function Palette() {
   const [inlineRows, setInlineRows] = useState<InlineRow[]>([])
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
   const [view, setView] = useState<PaletteView>({ type: 'search' })
-  const [argumentValue, setArgumentValue] = useState('')
+  // Read by the dev-build listener below, which must see the *current*
+  // view without re-subscribing its Tauri listener on every navigation
+  // (each resubscribe is an async listen/unlisten pair with a window where
+  // an event lands on neither).
+  const viewRef = useRef(view)
+  viewRef.current = view
+  // One value per declared argument, keyed by name. Cleared whenever the
+  // selection moves to a different command, so a value typed for one
+  // command never leaks into the next.
+  const [argumentValues, setArgumentValues] = useState<Record<string, string>>({})
+  const argumentFieldsRef = useRef<ArgumentFieldsHandle>(null)
   const [toast, setToast] = useState<ExtensionToastPayload | null>(null)
   const [hud, setHud] = useState<string | null>(null)
   const [confirmAlert, setConfirmAlert] = useState<ExtensionConfirmAlertPayload | null>(null)
@@ -122,11 +133,18 @@ function Palette() {
    * comment). Shares the same missing-preferences/toast failure handling
    * either call site would otherwise duplicate.
    */
-  const launchExtensionCommand = useCallback((extensionId: string, commandName: string, title: string, icon?: string | null, argument?: string) => {
+  const launchExtensionCommand = useCallback((
+    extensionId: string,
+    commandName: string,
+    title: string,
+    icon?: string | null,
+    args?: Record<string, string>,
+    positionalArgument?: string,
+  ) => {
     extensionTreeStore.reset()
-    void runExtensionCommand(extensionId, commandName, argument)
+    void runExtensionCommand(extensionId, commandName, args, positionalArgument)
       .then((mode) => {
-        if (mode === 'view') setView({ type: 'extension', extensionId, commandName, title, icon })
+        if (mode === 'view') setView({ type: 'extension', extensionId, commandName, title, icon, args, positionalArgument })
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
@@ -154,10 +172,16 @@ function Palette() {
    * means the caller should fall through to the item's default action.
    */
   const launchItem = useCallback((item: PaletteItem): boolean => {
-    if (item.requiresArgument) {
-      setArgumentValue('')
-      setView({ type: 'quicklink-argument', item })
-      return true
+    // A command with declared arguments is launched with whatever its
+    // inline fields hold. A *required* field left empty isn't an error to
+    // report — Raycast simply doesn't run yet — so focus it instead.
+    const declared = item.arguments ?? []
+    if (declared.length > 0) {
+      const missing = declared.findIndex((argument) => argument.required && !(argumentValues[argument.name] ?? '').trim())
+      if (missing >= 0) {
+        argumentFieldsRef.current?.focus(missing)
+        return true
+      }
     }
 
     // Must run before the `extensionCommand` branch below: a T14
@@ -171,12 +195,17 @@ function Palette() {
 
     if (item.kind === 'extensionCommand') {
       const parsed = parseExtensionCommandId(item.id)
-      if (parsed) launchExtensionCommand(parsed.extensionId, parsed.commandName, item.title, item.icon)
+      if (parsed) launchExtensionCommand(parsed.extensionId, parsed.commandName, item.title, item.icon, argumentValues)
+      return true
+    }
+
+    if (declared.length > 0) {
+      void runCommandWithArguments(item.id, argumentValues)
       return true
     }
 
     return false
-  }, [launchExtensionCommand])
+  }, [launchExtensionCommand, argumentValues])
 
   /**
    * The primary action for a command that isn't a view (an app launch, a
@@ -217,6 +246,38 @@ function Palette() {
     }
   }, [view])
 
+  // Hot reload: a dev-mode rebuild of the extension whose command is on
+  // screen re-launches that command in place. Nothing about the *view*
+  // changes — `setView` is deliberately not called — so the unmount effect
+  // above doesn't fire and the user stays exactly where they were; the
+  // host's own `runCommand` unmounts the previous instance and re-requires
+  // the freshly built bundle, which is what makes this a real reload
+  // rather than a second mount of stale code.
+  //
+  // A failed build re-launches nothing (there's no new bundle to run) and
+  // surfaces as a toast instead, leaving the last working version mounted.
+  useEffect(() => {
+    const unlisten = listen<DevBuildEvent>('extension-dev-build', (event) => {
+      const build = event.payload
+      if (build.errors.length > 0) {
+        setToast({
+          id: `dev-build-${build.extensionId}`,
+          style: 'FAILURE',
+          title: `${build.extensionId} failed to build`,
+          message: build.errors[0],
+        })
+        return
+      }
+      const current = viewRef.current
+      if (current.type !== 'extension' || current.extensionId !== build.extensionId) return
+      extensionTreeStore.reset()
+      void runExtensionCommand(current.extensionId, current.commandName, current.args, current.positionalArgument)
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [])
+
   // popToRoot()/closeMainWindow() from an extension: back to the root
   // search view, optionally clearing the query (Raycast's default for
   // popToRoot).
@@ -249,7 +310,7 @@ function Palette() {
       if (elapsedMs >= dueMs) {
         setView({ type: 'search' })
         setQuery('')
-        setArgumentValue('')
+        setArgumentValues({})
       }
     })
     return () => {
@@ -276,7 +337,7 @@ function Palette() {
           // (disclosed simplification vs. native's separate ⌘↵ "create
           // silently" behavior — see plans/refactor-extension-platform.md's
           // T26 notes).
-          launchExtensionCommand(row.extensionId, row.commandName, row.title, row.icon, row.argument)
+          launchExtensionCommand(row.extensionId, row.commandName, row.title, row.icon, undefined, row.argument)
           void hidePalette()
           return
         }
@@ -315,6 +376,16 @@ function Palette() {
   )
 
   const selectedItem = selectedIndex >= inlineRows.length ? items[selectedIndex - inlineRows.length] : undefined
+
+  // Argument values belong to the command they were typed for. Moving the
+  // selection to a different command clears them, so a title typed for
+  // "Search Page" is never silently submitted to something else.
+  const argumentsOwner = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (argumentsOwner.current === selectedItem?.id) return
+    argumentsOwner.current = selectedItem?.id
+    setArgumentValues({})
+  }, [selectedItem?.id])
 
   // An inline row (calculator, translate, …) isn't a PaletteItem, so it
   // has no entry in getActionsForItem — it gets its own action set,
@@ -386,12 +457,12 @@ function Palette() {
     if (isOverlayOpen()) return
     if (view.type === 'extension') {
       leaveExtensionView(view.extensionId, view.commandName)
-      setArgumentValue('')
+      setArgumentValues({})
       return
     }
     if (!inSearchView) {
       setView({ type: 'search' })
-      setArgumentValue('')
+      setArgumentValues({})
     } else {
       void hidePalette()
     }
@@ -414,29 +485,9 @@ function Palette() {
         return
       }
 
-      if (view.type === 'quicklink-argument' && event.key === 'Enter') {
-        event.preventDefault()
-        // Extension commands go through the mode-aware launch path (not
-        // the generic runCommandWithArgument) so a *view*-mode command
-        // still opens its view once mounted — see launchExtensionCommand's
-        // doc comment.
-        const parsed = view.item.kind === 'extensionCommand' ? parseExtensionCommandId(view.item.id) : null
-        if (parsed) {
-          launchExtensionCommand(parsed.extensionId, parsed.commandName, view.item.title, view.item.icon, argumentValue)
-        } else {
-          void runCommandWithArgument(view.item.id, argumentValue)
-        }
-        // Back to root: most no-view commands (a headless quicklink open,
-        // for instance) are about to hide the palette anyway, but a compact
-        // script command keeps it open to show its toast, and the spent
-        // argument bar shouldn't still be there behind it. A fullOutput
-        // script's started event immediately routes to its view. An
-        // extension command's own resolved mode overrides this to
-        // 'extension' asynchronously, once the launch call returns.
-        setView({ type: 'search' })
-        setArgumentValue('')
-        return
-      }
+      // (The separate argument screen is gone — a command's fields are
+      // filled in inline in the search bar and run with the same ↵ that
+      // launches any other command. See `ArgumentFields`.)
 
       if (view.type === 'confirm' && event.key === 'Enter') {
         event.preventDefault()
@@ -447,7 +498,15 @@ function Palette() {
 
       if (inSearchView && event.key === 'Tab' && query.trim().length > 0) {
         event.preventDefault()
-        launchExtensionCommand('ai', 'quick-ai-command', 'Quick AI', 'sparkles', query.trim())
+        // Tab moves into a selected command's argument fields when it has
+        // any — that is what Tab means once fields are on screen, and it
+        // is how Raycast moves between them. Quick AI keeps Tab only when
+        // there is nothing to move into.
+        if (selectedItem?.arguments?.length) {
+          argumentFieldsRef.current?.focus(0)
+          return
+        }
+        launchExtensionCommand('ai', 'quick-ai-command', 'Quick AI', 'sparkles', undefined, query.trim())
         return
       }
 
@@ -467,7 +526,7 @@ function Palette() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [actionPanelOpen, inSearchView, view, argumentValue, items.length, selectedIndex, panelActions, handleEscape, query, launchExtensionCommand])
+  }, [actionPanelOpen, inSearchView, view, argumentValues, items.length, selectedIndex, panelActions, handleEscape, query, launchExtensionCommand, selectedItem])
 
   if (view.type === 'extension') {
     return (
@@ -500,19 +559,25 @@ function Palette() {
     )
   }
 
-  if (view.type === 'quicklink-argument') {
-    return (
-      <div className="palette">
-        <QuicklinkArgumentBar title={view.item.title} value={argumentValue} onChange={setArgumentValue} />
-        <div className="openray-flex-spacer" />
-        <Footer primaryActionLabel="Open" />
-      </div>
-    )
-  }
 
   return (
     <div className="palette">
-      <SearchBar value={query} onChange={setQuery} />
+      <SearchBar
+        value={query}
+        onChange={setQuery}
+        arguments={
+          selectedItem?.arguments?.length ? (
+            <ArgumentFields
+              ref={argumentFieldsRef}
+              args={selectedItem.arguments}
+              values={argumentValues}
+              onChange={(name, value) => setArgumentValues((current) => ({ ...current, [name]: value }))}
+              onSubmit={() => launchItem(selectedItem)}
+              onExit={() => document.querySelector<HTMLInputElement>('.openray-search-input')?.focus()}
+            />
+          ) : undefined
+        }
+      />
       {inlineRows.map((row, i) =>
         row.display === 'card' ? (
           <InlineCard

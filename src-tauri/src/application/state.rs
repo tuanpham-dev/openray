@@ -44,6 +44,22 @@ pub struct AppState {
     /// counter (not per-extension) is the correct staleness gate.
     pub inline_queries: InlineQueryDispatcher,
     pub extension_host: ExtensionHost<tauri::Wry>,
+    /// Which extension directories are being developed in place right now
+    /// — in-memory only, so watchers can be restored after a host respawn
+    /// without dev mode silently resuming across an app restart. See
+    /// `application::dev_extensions`.
+    pub dev_extensions: crate::application::dev_extensions::DevExtensions,
+    /// The registries extensions may be installed from — see
+    /// `application::registry_sources`.
+    pub registry_sources: crate::application::registry_sources::RegistrySources,
+    /// The concrete `Wry` handle, for the few paths that need a
+    /// runtime-specific API from a context that is generic over `Runtime`.
+    /// `extension_bridge::dispatch_request` is generic (it serves any
+    /// runtime), but starting dev mode reaches `hotkey::sync_bindings`,
+    /// which branches on X11/Wayland and cannot be. Same shape as
+    /// `extension_windows`, which has captured a concrete handle for the
+    /// same reason since T24 — just named rather than buried.
+    pub app: tauri::AppHandle,
     pub command_settings: CommandSettingsStore,
     pub extension_storage: ExtensionStorage,
     /// T24: creates/closes/focuses extension-owned windows on behalf of

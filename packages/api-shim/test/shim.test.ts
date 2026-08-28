@@ -89,3 +89,42 @@ describe('api-shim under real esbuild ESM->CJS interop (regression for both fixe
     expect(typeof result.default.getPreferenceValues).toBe('function')
   })
 })
+
+describe('unimplemented API stubs', () => {
+  it('coerce to a primitive instead of throwing', () => {
+    // React stringifies props in dev. A stub handed straight to a component
+    // (`shortcut={Keyboard.Shortcut.Common.Open}`) used to return another
+    // stub for `toString`/`valueOf`, so coercion threw "Cannot convert
+    // object to primitive value" — mid-commit, which left the reconciler
+    // wedged and killed every later update. One unimplemented API used as a
+    // prop took down the whole command (found with the real `wikipedia`
+    // extension).
+    const shim = require(bundledShimPath) as Record<string, unknown>
+    const stub = (shim.Keyboard as { Shortcut: { Common: { Open: unknown } } }).Shortcut.Common.Open
+
+    expect(() => `${stub}`).not.toThrow()
+    expect(() => String(stub)).not.toThrow()
+    expect(`${stub}`).toContain('openray stub')
+  })
+
+  it('still resolve nested access to further stubs', () => {
+    const shim = require(bundledShimPath) as Record<string, unknown>
+    const deep = (shim.Keyboard as Record<string, unknown>).Shortcut as Record<string, unknown>
+    expect(deep).toBeDefined()
+    expect(() => `${deep.Anything}`).not.toThrow()
+  })
+})
+
+describe('Image', () => {
+  it('exposes real Mask values rather than the stub proxy', () => {
+    // `Image` used to be unimplemented, so `Image.Mask.Circle` resolved to
+    // a stub marker and an extension masking an avatar passed that string
+    // through as its mask. Same class as `Grid.Fit` and `Action.Style`:
+    // a nested enum read *while rendering*.
+    const shim = require(bundledShimPath) as Record<string, unknown>
+    const image = shim.Image as { Mask: Record<string, string> }
+
+    expect(image.Mask.Circle).toBe('circle')
+    expect(image.Mask.RoundedRectangle).toBe('roundedRectangle')
+  })
+})

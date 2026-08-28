@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    // `capabilities.ts` imports the shim's own entry points to read their
+    // export list, and those pull in its .tsx component modules — the same
+    // JSX transform builder.ts compiles every extension command with.
+    "jsx": "react-jsx"
   },
   "include": ["src", "test", "scripts"],
   "exclude": ["test/fixtures"]

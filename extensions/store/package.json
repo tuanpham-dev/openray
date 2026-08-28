@@ -1,0 +1,15 @@
+{
+  "name": "store",
+  "title": "Store",
+  "description": "Browse and install extensions from the registries you trust.",
+  "icon": "app-window",
+  "commands": [
+    {
+      "name": "store",
+      "title": "Store",
+      "description": "Browse, install, and update extensions from your registries.",
+      "mode": "view",
+      "keywords": ["store", "extensions", "install", "browse", "registry", "update"]
+    }
+  ]
+}

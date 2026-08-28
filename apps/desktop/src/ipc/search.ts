@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { PaletteItem, PaletteItemKind } from '../components/types'
+import type { CommandArgument, PaletteItem, PaletteItemKind } from '../components/types'
 
 interface CommandDto {
   id: string
@@ -9,7 +9,7 @@ interface CommandDto {
   alias?: string | null
   kind: PaletteItemKind
   keywords: string[]
-  requiresArgument: boolean
+  arguments: CommandArgument[]
   needsConfirm: boolean
 }
 
@@ -73,7 +73,7 @@ export async function search(query: string): Promise<SearchResult> {
       icon: command.icon,
       alias: command.alias ?? undefined,
       kind: command.kind,
-      requiresArgument: command.requiresArgument,
+      arguments: command.arguments?.length ? command.arguments : undefined,
       needsConfirm: command.needsConfirm || undefined,
     })),
   }
@@ -83,6 +83,6 @@ export function runCommand(id: string): Promise<void> {
   return invoke('run_command', { id })
 }
 
-export function runCommandWithArgument(id: string, argument: string): Promise<void> {
-  return invoke('run_command_with_argument', { id, argument })
+export function runCommandWithArguments(id: string, args: Record<string, string>): Promise<void> {
+  return invoke('run_command_with_arguments', { id, arguments: args })
 }

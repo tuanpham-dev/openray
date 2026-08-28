@@ -48,11 +48,22 @@ import {
   PopToRootType,
 } from './api/system'
 import { AI, OAuth, UnsupportedError } from './api/unsupported'
-import { Icon, Color } from './api/icon'
+import { Icon, Color, Image } from './api/icon'
 
 const KNOWN_EXPORTS = ['MenuBarExtra', 'Keyboard']
 
+/**
+ * Stub diagnostics go to stderr, where the extension host picks them up as
+ * log lines — that is how an extension touching an unimplemented API
+ * becomes visible instead of silently getting `undefined`.
+ *
+ * `OPENRAY_SHIM_QUIET` exists for tooling that loads this module to
+ * *inspect* it rather than run an extension against it (`openray pack`
+ * reads the export list for its capability check, and would otherwise
+ * print a screenful of import warnings for APIs nobody called).
+ */
 function shimLog(message: string): void {
+  if (process.env.OPENRAY_SHIM_QUIET) return
   process.stderr.write(`[api-shim] ${message}\n`)
 }
 
@@ -62,6 +73,20 @@ function makeApiStub(path: string): unknown {
     get(_t, prop) {
       if (typeof prop === 'symbol') return undefined
       if (prop === 'then' || prop === 'toJSON' || prop === '$$typeof') return undefined
+      // A stub is routinely handed straight to React as a prop
+      // (`shortcut={Keyboard.Shortcut.Common.Open}`), and React's own dev
+      // logging stringifies props. Returning a nested stub for `toString`
+      // and `valueOf` makes the object impossible to coerce — JS throws
+      // "Cannot convert object to primitive value", and because that lands
+      // *during the commit phase* it leaves the reconciler mid-work, so
+      // every later update dies with "Should not already be working". One
+      // unimplemented API used as a prop took the whole command down.
+      // Found with the real `wikipedia` extension.
+      // (`Symbol.toPrimitive` is already handled by the symbol check above,
+      // which returns undefined and so falls back to these two.)
+      if (prop === 'toString' || prop === 'valueOf') {
+        return () => `[openray stub: ${path}]`
+      }
       shimLog(`access ${path}.${String(prop)}`)
       return makeApiStub(`${path}.${String(prop)}`)
     },
@@ -140,4 +165,5 @@ module.exports = {
   UnsupportedError,
   Icon,
   Color,
+  Image,
 }

@@ -49,6 +49,15 @@ import {
   setScreenshotPinned,
 } from './api/screenshots'
 import { getFileSearchSettings, queryFileSearch } from './api/file-search'
+import { developExtension } from './api/dev'
+import {
+  listRegistrySources,
+  fetchCatalog,
+  listInstalledExtensions,
+  classifyInstall,
+  installFromRegistry,
+  uninstallExtension,
+} from './api/registry'
 import { listMenuBarItems, activateMenuBarItem } from './api/menuBar'
 import { openExtensionWindow } from './window-mounter'
 import { MarkdownEditor } from './components/MarkdownEditor'
@@ -95,6 +104,13 @@ module.exports = {
   setScreenshotPinned,
   getFileSearchSettings,
   queryFileSearch,
+  developExtension,
+  listRegistrySources,
+  fetchCatalog,
+  listInstalledExtensions,
+  classifyInstall,
+  installFromRegistry,
+  uninstallExtension,
   listMenuBarItems,
   activateMenuBarItem,
 }

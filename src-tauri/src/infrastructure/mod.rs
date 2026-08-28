@@ -1,4 +1,5 @@
 pub mod clipboard_watcher;
+pub mod control_socket;
 pub mod db;
 pub mod extension_host;
 pub mod frontmost_app;

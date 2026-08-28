@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { ThemeProvider } from '../../theme/ThemeProvider'
 import { SettingsSidebar, type SettingsSelection } from './SettingsSidebar'
 import { GeneralPane } from './GeneralPane'
@@ -7,7 +8,19 @@ import { AdvancedPane } from './AdvancedPane'
 import { ApplicationsView, InstallExtensionView } from './ApplicationsView'
 import { ExtensionSettingsView } from './ExtensionSettingsView'
 import { getSettings, type Settings } from '../../ipc/settings'
-import { listExtensions, setExtensionEnabled, uninstallExtension, type ExtensionEntry } from '../../ipc/extensions'
+import {
+  developExtension,
+  listDevExtensions,
+  listExtensions,
+  removeDevExtension,
+  setExtensionEnabled,
+  stopDeveloping,
+  uninstallExtension,
+  type DevBuildEvent,
+  type DevSession,
+  type ExtensionEntry,
+} from '../../ipc/extensions'
+import type { UpdateReport } from '../../ipc/registry'
 import {
   listCommandSettings,
   listSettingsCommands,
@@ -26,17 +39,50 @@ export function SettingsWindow() {
   const [extensions, setExtensions] = useState<ExtensionEntry[]>([])
   const [commands, setCommands] = useState<SettingsCommand[]>([])
   const [commandSettings, setCommandSettingsState] = useState<Record<string, CommandSettingsEntry>>({})
+  const [devSessions, setDevSessions] = useState<DevSession[]>([])
+  const [devBuild, setDevBuild] = useState<DevBuildEvent | null>(null)
 
   const refresh = () =>
-    Promise.all([listExtensions(), listSettingsCommands(), listCommandSettings()]).then(([exts, cmds, cmdSettings]) => {
-      setExtensions(exts)
-      setCommands(cmds)
-      setCommandSettingsState(cmdSettings)
-    })
+    Promise.all([listExtensions(), listSettingsCommands(), listCommandSettings(), listDevExtensions()]).then(
+      ([exts, cmds, cmdSettings, sessions]) => {
+        setExtensions(exts)
+        setCommands(cmds)
+        setCommandSettingsState(cmdSettings)
+        setDevSessions(sessions)
+      },
+    )
 
   useEffect(() => {
     void getSettings().then(setSettings)
     void refresh()
+  }, [])
+
+  // An automatic update installs a new version underneath whatever is on
+  // screen (see `application::auto_update`), so the list has to re-read or
+  // it keeps showing the version that was just replaced.
+  useEffect(() => {
+    const unlisten = listen<UpdateReport>('extension-updates', (event) => {
+      if (event.payload.applied.some((outcome) => !outcome.error)) void refresh()
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  // A dev rebuild can change the manifest (new commands, renamed title,
+  // added preferences) — the platform re-registers before emitting, so
+  // re-reading here is what makes those appear without reopening Settings.
+  // The build itself is kept so the extension's own page can show whether
+  // the last one failed, which is otherwise invisible outside the palette's
+  // transient toast.
+  useEffect(() => {
+    const unlisten = listen<DevBuildEvent>('extension-dev-build', (event) => {
+      setDevBuild(event.payload)
+      if (event.payload.manifestChanged) void refresh()
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
   }, [])
 
   const toggleExtension = (id: string, enabled: boolean) => {
@@ -72,6 +118,22 @@ export function SettingsWindow() {
       [commandId]: { alias: current[commandId]?.alias ?? null, hotkey: current[commandId]?.hotkey ?? null, enabled },
     }))
     void setCommandEnabled(commandId, enabled)
+  }
+
+  const stopDev = async (id: string) => {
+    await stopDeveloping(id)
+    await refresh()
+  }
+
+  const resumeDev = async (dir: string) => {
+    await developExtension(dir)
+    await refresh()
+  }
+
+  const removeDev = async (id: string) => {
+    await removeDevExtension(id)
+    setSelection((current) => (current.kind === 'extension' && current.id === id ? { kind: 'general' } : current))
+    await refresh()
   }
 
   const selectedExtension = selection.kind === 'extension' ? extensions.find((ext) => ext.id === selection.id) : undefined
@@ -113,6 +175,11 @@ export function SettingsWindow() {
               onHotkey={updateHotkey}
               onEnabled={updateEnabled}
               onUninstall={(id) => void uninstall(id)}
+              devDir={devSessions.find((session) => session.id === selectedExtension.id)?.dir}
+              lastDevBuild={devBuild?.extensionId === selectedExtension.id ? devBuild : undefined}
+              onStopDeveloping={(id) => void stopDev(id)}
+              onResumeDeveloping={(dir) => void resumeDev(dir)}
+              onRemoveDev={(id) => void removeDev(id)}
             />
           ) : (
             <div className="openray-empty-view">Extension not found.</div>

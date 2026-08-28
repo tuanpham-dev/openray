@@ -2,6 +2,7 @@ import { createElement, useState } from 'react'
 import { describe, expect, it, beforeEach } from 'vitest'
 import type { UiTreeCommit } from '@openray/protocol'
 import { _resetNodeIdsForTests, invokeCallback, mount } from '../src/reconciler'
+import { getCommandContext, setCommandContext } from '../src/api/command-context'
 
 function collect(): { commits: UiTreeCommit[]; onCommit: (c: UiTreeCommit) => void } {
   const commits: UiTreeCommit[] = []
@@ -156,5 +157,69 @@ describe('reconciler mount', () => {
 
     invokeCallback(callbackMarker.__callback, [])
     expect(called).toBe(true)
+  })
+})
+
+describe('extension asset paths', () => {
+  it('resolves a relative icon path against the extension assets directory', async () => {
+    // Extensions reference their own files the way Raycast documents it:
+    // `icon={{ source: "../assets/wikipedia.png" }}`, relative to the
+    // compiled command. Sent as-is it matches neither an absolute path nor
+    // a built-in icon name, and the renderer drew it as literal text —
+    // rows showed "../a" where the thumbnail belonged.
+    setCommandContext({ ...getCommandContext(), assetsPath: '/ext/wikipedia/assets' })
+    const { commits, onCommit } = collect()
+    mount(createElement('list' as never, { icon: { source: '../assets/wikipedia.png' } }), onCommit)
+    await flush()
+
+    const snapshot = commits.find((c) => c.kind === 'snapshot')
+    const node = Object.values(snapshot?.snapshot.nodes ?? {}).find((n) => n.props?.icon)
+    expect((node?.props.icon as { source: string }).source).toBe('/ext/wikipedia/assets/wikipedia.png')
+  })
+
+  it('resolves a bare asset name, which is how extensions usually write it', async () => {
+    // `Image.Asset` is documented as "a string denoting an asset from the
+    // `assets/` folder", with no prefix — `pokedex` writes
+    // `icon={{ source: "body-style/8.png" }}`, and its Shape row rendered
+    // that string as literal text.
+    setCommandContext({ ...getCommandContext(), assetsPath: '/ext/pokedex/assets' })
+    const { commits, onCommit } = collect()
+    mount(createElement('list' as never, { icon: { source: 'body-style/8.png' } }), onCommit)
+    await flush()
+
+    const snapshot = commits.find((c) => c.kind === 'snapshot')
+    const node = Object.values(snapshot?.snapshot.nodes ?? {}).find((n) => n.props?.icon)
+    expect((node?.props.icon as { source: string }).source).toBe('/ext/pokedex/assets/body-style/8.png')
+  })
+
+  it('does not mistake a built-in icon name for a file', async () => {
+    // The names are the risk of accepting bare paths: `arrow-up-circle`
+    // must stay a name, and only something carrying a file extension is
+    // treated as an asset.
+    setCommandContext({ ...getCommandContext(), assetsPath: '/ext/pokedex/assets' })
+    const { commits, onCommit } = collect()
+    mount(createElement('list' as never, { icon: 'arrow-up-circle', source: 'trash' }), onCommit)
+    await flush()
+
+    const snapshot = commits.find((c) => c.kind === 'snapshot')
+    const node = Object.values(snapshot?.snapshot.nodes ?? {}).find((n) => n.props?.icon)
+    expect(node?.props.icon).toBe('arrow-up-circle')
+    expect(node?.props.source).toBe('trash')
+  })
+
+  it('leaves absolute paths, URLs and icon names alone', async () => {
+    setCommandContext({ ...getCommandContext(), assetsPath: '/ext/wikipedia/assets' })
+    const { commits, onCommit } = collect()
+    mount(
+      createElement('list' as never, { icon: 'trash', source: 'https://example.test/a.png', image: '/already/absolute.png' }),
+      onCommit,
+    )
+    await flush()
+
+    const snapshot = commits.find((c) => c.kind === 'snapshot')
+    const node = Object.values(snapshot?.snapshot.nodes ?? {}).find((n) => n.props?.icon)
+    expect(node?.props.icon).toBe('trash')
+    expect(node?.props.source).toBe('https://example.test/a.png')
+    expect(node?.props.image).toBe('/already/absolute.png')
   })
 })

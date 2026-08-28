@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { UiNode } from '@openray/protocol'
 import { SearchBar } from '../components/SearchBar'
 import { Footer } from '../components/Footer'
@@ -10,11 +12,12 @@ import { ChevronDownIcon } from '../components/icons'
 import { BackButton } from '../components/BackButton'
 import { altHorizontalDirection, altNavigationDirection, useListNavigation, useScrollIntoViewWhenSelected } from '../components/useListNavigation'
 import { useAppSettings } from '../state/appSettings'
+import { resolveVisual } from './resolveVisual'
 import { isHoverSelectionEnabled, suppressHoverSelection } from '../components/hoverSelection'
 import { useExtensionRootNode, useExtensionTree } from './registry'
-import { SYSTEM_ICON_NAMES } from '../components/systemIconNames'
+import { looksLikeIconName, lookupSystemIcon } from '../components/systemIconNames'
 import { useVirtualizedGrid } from './useVirtualizedGrid'
-import { actionsFromSlot, findActionsSlot } from './actions'
+import { actionsFromSlot, findActionsSlot, matchesShortcut, parseShortcut } from './actions'
 import { fuzzyScore } from './fuzzyMatch'
 import { invokeExtensionCallback } from '../ipc/extensionHost'
 import { openUrl } from '../ipc/window'
@@ -65,49 +68,80 @@ function isAbsolutePath(source: string): boolean {
  *  local-file visual (`VisualContent`) already uses; anything else keeps
  *  react-markdown's own default sanitization (http(s), mailto, etc). */
 function markdownUrlTransform(url: string): string {
-  return isAbsolutePath(url) ? convertFileSrc(url) : defaultUrlTransform(url)
+  if (isAbsolutePath(url)) return convertFileSrc(url)
+  // `file://` reaches here from the inline HTML `rehype-raw` parses —
+  // `world-clock` builds one for the SVG of the current hour. react-markdown's
+  // own default transform drops any protocol outside http/https/mailto/tel,
+  // so without this the `src` was emptied before the sanitizer or anything
+  // else got a say, and the pane showed a broken-image box.
+  if (url.startsWith('file://')) return convertFileSrc(decodeURI(url.slice('file://'.length)))
+  return defaultUrlTransform(url)
 }
 
-interface VisualSource {
-  source: string
-  tint?: string
-}
-
-/** `List.Item.icon` and `Grid.Item.content` share this exact shape — a bare
- * string (emoji, hex swatch, URL, absolute path) or `{source, tintColor}`. */
-function resolveVisual(raw: unknown): VisualSource {
-  if (typeof raw === 'string') return { source: raw }
-  if (raw && typeof raw === 'object') {
-    const obj = raw as { source?: string; tintColor?: string }
-    return { source: obj.source ?? '', tint: obj.tintColor }
-  }
-  return { source: '' }
-}
 
 /** Renders a resolved `VisualSource` as an image (URL or absolute path), a
  * colour swatch (hex string), a first-party SVG (a `SYSTEM_ICON_NAMES`
  * key — see that map's doc comment), or a bare glyph (typically an
  * emoji) — the same three-way classification `GridCellContent` already
  * used, now shared with `List.Item`'s icon so both resolve identically. */
+/**
+ * Makes an inline-SVG data URI actually loadable.
+ *
+ * Extensions build these by interpolating markup straight into
+ * `data:image/svg+xml,...` — `hacker-news` draws each story's rank that way.
+ * The markup is unencoded, so the first `#` (in `fill="#DD7949"`) is read as
+ * the start of a URL fragment and the image is truncated to nothing: every
+ * row showed a broken-image placeholder. Re-encoding as base64 sidesteps
+ * every such character at once.
+ */
+function normalizeSvgDataUri(source: string): string {
+  const prefix = 'data:image/svg+xml,'
+  if (!source.startsWith(prefix)) return source
+  const payload = source.slice(prefix.length)
+  let markup = payload
+  try {
+    // A properly percent-encoded payload decodes cleanly; raw markup
+    // usually throws, in which case it is already what we want.
+    markup = decodeURIComponent(payload)
+  } catch {
+    markup = payload
+  }
+  try {
+    const bytes = new TextEncoder().encode(markup)
+    let binary = ''
+    for (const byte of bytes) binary += String.fromCharCode(byte)
+    return `data:image/svg+xml;base64,${btoa(binary)}`
+  } catch {
+    return source
+  }
+}
+
 function VisualContent({ raw, imageClassName, glyphClassName, swatchClassName }: { raw: unknown; imageClassName: string; glyphClassName: string; swatchClassName: string }) {
-  const { source, tint } = resolveVisual(raw)
+  const { source: rawSource, tint, mask } = resolveVisual(raw)
+  // `Image.Mask` shapes the rendered image (Raycast's circle is what makes
+  // avatars round). Applied as a class rather than an inline radius so the
+  // two shapes stay defined next to every other visual style.
+  const masked = mask ? `${imageClassName} openray-visual-mask--${mask === 'circle' ? 'circle' : 'rounded'}` : imageClassName
+  // Normalized up front: an inline-SVG data URI is unusable as written by
+  // most extensions (see `normalizeSvgDataUri`).
+  const source = rawSource.startsWith('data:') ? normalizeSvgDataUri(rawSource) : rawSource
   if (!source) return null
   if (HEX_COLOR.test(source)) {
     return <span className={swatchClassName} style={{ background: source }} />
   }
   if (/^https?:\/\//.test(source)) {
-    return <img className={imageClassName} src={source} alt="" style={tint ? { backgroundColor: tint } : undefined} />
+    return <img className={masked} src={source} alt="" style={tint ? { backgroundColor: tint } : undefined} />
   }
   if (source.startsWith('data:')) {
     // A window's own self-extracted icon (e.g. X11 _NET_WM_ICON) has no
     // backing file to resolve via convertFileSrc — the backend already
     // PNG-encodes and base64s it (extensions/switch-windows, T19).
-    return <img className={imageClassName} src={source} alt="" style={tint ? { backgroundColor: tint } : undefined} />
+    return <img className={masked} src={source} alt="" style={tint ? { backgroundColor: tint } : undefined} />
   }
   if (isAbsolutePath(source)) {
-    return <img className={imageClassName} src={convertFileSrc(source)} alt="" style={tint ? { backgroundColor: tint } : undefined} />
+    return <img className={masked} src={convertFileSrc(source)} alt="" style={tint ? { backgroundColor: tint } : undefined} />
   }
-  const SystemIcon = SYSTEM_ICON_NAMES[source]
+  const SystemIcon = lookupSystemIcon(source)
   if (SystemIcon) {
     // Wrapped, not `className={glyphClassName}` directly on the SVG:
     // that class's own width/height (sized for a text glyph) would win
@@ -118,6 +152,10 @@ function VisualContent({ raw, imageClassName, glyphClassName, swatchClassName }:
       </span>
     )
   }
+  // An icon name we have no glyph for renders as nothing, not as its own
+  // name: printing "arrow-up-circle" beside a story's score is worse than
+  // showing the score alone. Emoji and other real glyphs still render.
+  if (looksLikeIconName(source)) return null
   return <span className={glyphClassName}>{source}</span>
 }
 
@@ -167,20 +205,52 @@ interface ListEntry {
   sectionTitle?: string
 }
 
-/** The host's own default List/Grid filtering — what an extension gets for
- *  free when it doesn't wire `onSearchTextChange` and filter itself. Fuzzy
- *  subsequence match against title/subtitle (best of the two), sorted by
- *  descending score — see `fuzzyMatch.ts` for why this replaced a plain
- *  `.includes()` filter that never scored or reordered results. */
+/**
+ * Whether the *host* filters this List/Grid, or the extension does.
+ *
+ * Raycast's rule, which the `filtering` prop exists to state explicitly:
+ * it defaults to false when `onSearchTextChange` is wired (the extension
+ * is re-rendering its own rows in response) and true otherwise — but an
+ * explicit `filtering={true}` means "notify me, and filter anyway".
+ *
+ * The prop used to be ignored entirely, so wiring the callback silently
+ * disabled filtering: `devdocs` renders
+ * `<List filtering={true} onSearchTextChange={setSearchText}>` — using the
+ * text only to match an alias — and typing in it matched nothing at all.
+ */
+function hostShouldFilter(node: UiNode, hasSearchCallback: boolean): boolean {
+  const filtering = node.props.filtering
+  if (filtering === undefined || filtering === null) return !hasSearchCallback
+  // `filtering` also takes `{ keepSectionOrder }`, which is still "yes".
+  return filtering !== false
+}
+
+/**
+ * The host's own List/Grid filtering. Fuzzy subsequence match against the
+ * item's title, subtitle and `keywords`, best of them all, sorted by
+ * descending score — see `fuzzyMatch.ts` for why this replaced a plain
+ * `.includes()` filter that never scored or reordered results.
+ *
+ * `keywords` is not decoration: Raycast matches it and it is the only way
+ * an item can be found by something it doesn't display. `devdocs` tags its
+ * docsets with their alias (`keywords={["java"]}` on rows titled
+ * "OpenJDK"), so searching "java" found nothing at all while "css" — which
+ * happens to be in its own title — worked.
+ */
 function filterEntriesByQuery(entries: ListEntry[], searchText: string): ListEntry[] {
   if (!searchText) return entries
   const scored: { entry: ListEntry; score: number }[] = []
   for (const entry of entries) {
-    const title = propString(entry.item, 'title') ?? ''
-    const subtitle = propString(entry.item, 'subtitle') ?? ''
-    const titleScore = fuzzyScore(title, searchText)
-    const subtitleScore = fuzzyScore(subtitle, searchText)
-    const best = titleScore === null ? subtitleScore : subtitleScore === null ? titleScore : Math.max(titleScore, subtitleScore)
+    const keywords = entry.item.props.keywords
+    const haystacks = [propString(entry.item, 'title') ?? '', propString(entry.item, 'subtitle') ?? '']
+    if (Array.isArray(keywords)) {
+      for (const keyword of keywords) if (typeof keyword === 'string') haystacks.push(keyword)
+    }
+    let best: number | null = null
+    for (const haystack of haystacks) {
+      const score = fuzzyScore(haystack, searchText)
+      if (score !== null && (best === null || score > best)) best = score
+    }
     if (best !== null) scored.push({ entry, score: best })
   }
   scored.sort((a, b) => b.score - a.score)
@@ -317,6 +387,32 @@ function ListDropdownAccessory({
   }
   collectOptions(node)
 
+  /**
+   * Announce the initial selection to the extension exactly once.
+   *
+   * Raycast calls `onChange` with the dropdown's starting value — the
+   * `defaultValue`, or the first item when none is given — so a command can
+   * drive its first fetch off the selection. Rendering the default without
+   * announcing it leaves the extension's own state unset, and a command
+   * written the ordinary way (`usePromise(load, [topic], { execute: !!topic })`)
+   * then shows "No results" forever while the dropdown visibly displays a
+   * selection. Found running the real `hacker-news` extension in the
+   * launcher, where nothing in the tree looked wrong.
+   *
+   * Skipped when the extension passes `value` itself: it is controlling the
+   * selection, so it already knows what it is.
+   */
+  const announcedInitial = useRef(false)
+  const initialValue = propValue ?? (defaultValue || (options[0] ? (propString(options[0], 'value') ?? '') : ''))
+  useEffect(() => {
+    if (announcedInitial.current || propValue !== undefined || !initialValue) return
+    announcedInitial.current = true
+    if (value !== initialValue) setValue(initialValue)
+    if (onChangeCallback) void invokeExtensionCallback(onChangeCallback, [initialValue])
+    // Fires once per mount; `value`/`setValue` are deliberately not deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValue, onChangeCallback, propValue])
+
   return (
     <FilterSelect
       label={propString(node, 'tooltip') ?? 'Filter'}
@@ -355,14 +451,11 @@ function ExtensionList({
   const emptyView = findChildByType(node, nodes, 'List.EmptyView')
   const dropdownAccessory = findChildByType(node, nodes, 'List.Dropdown')
 
-  // If the extension wired onSearchTextChange, it's re-rendering `entries`
-  // itself in response — trust it and skip local filtering. Otherwise fall
-  // back to the host's own default fuzzy title/subtitle filtering
-  // (filterEntriesByQuery, above).
+  const shouldFilter = hostShouldFilter(node, Boolean(searchCallback))
   const filtered = useMemo(() => {
-    if (searchCallback) return entries
+    if (!shouldFilter) return entries
     return filterEntriesByQuery(entries, searchText)
-  }, [entries, searchText, searchCallback])
+  }, [entries, searchText, shouldFilter])
 
   useEffect(() => {
     if (searchCallback) void invokeExtensionCallback(searchCallback, [searchText])
@@ -385,6 +478,22 @@ function ExtensionList({
     !actionPanelOpen && !dropdownOpen,
     `${searchText}\u0000${accessoryValue}`,
   )
+
+  // Raycast's master-detail pattern: the extension keeps the selected id
+  // in its own state and renders the right-hand pane from it. The prop was
+  // declared but never fired, so such an extension stayed on whatever it
+  // started with — `world-clock` requested the time for an empty timezone
+  // on every row and got HTTP 400 back, then rendered `NaN` where the
+  // clock face belonged.
+  const selectionCallback = callbackId(node.props.onSelectionChange)
+  const selectedItemId = filtered[selectedIndex] && propString(filtered[selectedIndex].item, 'id')
+  useEffect(() => {
+    if (!selectionCallback) return
+    // `null` is Raycast's "nothing is selected", which is what an empty
+    // list means — an item with no `id` of its own is also reported that
+    // way rather than as a node id the extension has never seen.
+    void invokeExtensionCallback(selectionCallback, [selectedItemId ?? null])
+  }, [selectionCallback, selectedItemId])
 
   const actions = useMemo(() => {
     if (filtered.length === 0) return actionsFromSlot(emptyView && findActionsSlot(emptyView, nodes), nodes)
@@ -555,10 +664,11 @@ function ExtensionGrid({
   const emptyView = findChildByType(node, nodes, 'Grid.EmptyView')
   const dropdownAccessory = findChildByType(node, nodes, 'List.Dropdown')
 
+  const shouldFilter = hostShouldFilter(node, Boolean(searchCallback))
   const filtered = useMemo(() => {
-    if (searchCallback) return entries
+    if (!shouldFilter) return entries
     return filterEntriesByQuery(entries, searchText)
-  }, [entries, searchText, searchCallback])
+  }, [entries, searchText, shouldFilter])
 
   // Windowing only kicks in for a flat grid (T29's actual need,
   // screenshots) — a sectioned grid (emoji's category groups, the only
@@ -600,6 +710,22 @@ function ExtensionGrid({
     },
     [filtered, nodes],
   )
+
+  // Raycast's master-detail pattern: the extension keeps the selected id
+  // in its own state and renders the right-hand pane from it. The prop was
+  // declared but never fired, so such an extension stayed on whatever it
+  // started with — `world-clock` requested the time for an empty timezone
+  // on every row and got HTTP 400 back, then rendered `NaN` where the
+  // clock face belonged.
+  const selectionCallback = callbackId(node.props.onSelectionChange)
+  const selectedItemId = filtered[selectedIndex] && propString(filtered[selectedIndex].item, 'id')
+  useEffect(() => {
+    if (!selectionCallback) return
+    // `null` is Raycast's "nothing is selected", which is what an empty
+    // list means — an item with no `id` of its own is also reported that
+    // way rather than as a node id the extension has never seen.
+    void invokeExtensionCallback(selectionCallback, [selectedItemId ?? null])
+  }, [selectionCallback, selectedItemId])
 
   const actions = useMemo(() => {
     if (filtered.length === 0) return actionsFromSlot(emptyView && findActionsSlot(emptyView, nodes), nodes)
@@ -818,6 +944,34 @@ function ExtensionDetailMetadata({ node, nodes }: { node: UiNode; nodes: Record<
  *  (no `ActionPanel`/`Footer`) — shared between `ExtensionDetail` (a
  *  full-window `Detail` view) and `ExtensionList`'s split-pane
  *  `List.Item.detail` (T28), which reuses the exact same node type. */
+/**
+ * Raycast's `Detail.markdown` renders inline HTML, and extensions rely on
+ * it — `world-clock` draws its clock face as a bare
+ * `<img src="file://…/9.svg" height="180" />`, which react-markdown
+ * escapes by default, so the tag was printed as literal text across the
+ * detail pane.
+ *
+ * `rehype-raw` parses it; `rehype-sanitize` is what makes that safe to do.
+ * Markdown here is not always the extension's own text — plenty of
+ * commands render a fetched README or API response — so raw HTML from the
+ * network would otherwise land in the webview verbatim. The schema is
+ * rehype's default (no script, no event handlers) plus the width/height
+ * attributes an `<img>` needs to be laid out at all.
+ */
+const MARKDOWN_HTML_SCHEMA = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    img: [...(defaultSchema.attributes?.img ?? []), 'width', 'height'],
+  },
+  // `file:` for an extension's own bundled assets, which is the whole
+  // reason these tags are being written.
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [...(defaultSchema.protocols?.src ?? []), 'file'],
+  },
+}
+
 function DetailBody({ node, nodes }: { node: UiNode; nodes: Record<string, UiNode> }) {
   const markdown = propString(node, 'markdown') ?? ''
   const metadataNode = node.children.map((id) => nodes[id]).find((n) => n?.type === 'Detail.Metadata')
@@ -827,7 +981,12 @@ function DetailBody({ node, nodes }: { node: UiNode; nodes: Record<string, UiNod
   return (
     <>
       <div className="openray-detail-markdown">
-        <Markdown urlTransform={markdownUrlTransform}>{markdown}</Markdown>
+        <Markdown
+          urlTransform={markdownUrlTransform}
+          rehypePlugins={[rehypeRaw, [rehypeSanitize, MARKDOWN_HTML_SCHEMA]]}
+        >
+          {markdown}
+        </Markdown>
       </div>
       {metadataNode && (
         <div className="openray-detail-info">
@@ -930,6 +1089,21 @@ function ExtensionMarkdownEditor({ node, nodes }: { node: UiNode; nodes: Record<
   )
 }
 
+/** The value of a dropdown's first option — what it displays, and
+ *  therefore what submitting it untouched means. */
+function firstDropdownValue(field: UiNode, nodes: Record<string, UiNode>): string | undefined {
+  for (const childId of field.children) {
+    const child = nodes[childId]
+    if (!child) continue
+    if (child.type === 'Form.Dropdown.Item') return propString(child, 'value') ?? ''
+    if (child.type === 'Form.Dropdown.Section') {
+      const nested = firstDropdownValue(child, nodes)
+      if (nested !== undefined) return nested
+    }
+  }
+  return undefined
+}
+
 function ExtensionForm({
   node,
   nodes,
@@ -945,44 +1119,114 @@ function ExtensionForm({
 }) {
   const [values, setValues] = useState<Record<string, string | boolean>>({})
   const actionsSlot = findActionsSlot(node, nodes)
-  const actions = actionsFromSlot(actionsSlot, nodes)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
 
-  // Action.SubmitForm's onSubmit isn't reachable via actionsFromSlot's
-  // generic PaletteAction shape (it needs the collected values as an
-  // argument) — find it directly.
-  const submitNode = useMemo(() => {
-    function find(id: string): UiNode | undefined {
-      const n = nodes[id]
-      if (!n) return undefined
-      if (n.props.__variant === 'submit-form') return n
-      for (const childId of n.children) {
-        const found = find(childId)
-        if (found) return found
+  // `values` reaches the keydown listener and the panel's callbacks
+  // through a ref, so neither has to be rebuilt on every keystroke.
+  const valuesRef = useRef(values)
+  valuesRef.current = values
+
+  /**
+   * Every field's *effective* value, not only the ones that were edited.
+   *
+   * A field renders `value` / `defaultValue` when the user hasn't typed
+   * anything, but only an edit used to put a value in this map — so
+   * submitting a form without touching a prefilled field sent nothing for
+   * it. `Create Extension` showed the symptom: its Location field is
+   * prefilled, and submitting straight away failed with "Enter an
+   * absolute folder path" against a box that visibly held one.
+   */
+  const collectValues = useCallback((): Record<string, string | boolean> => {
+    const collected: Record<string, string | boolean> = {}
+    for (const childId of node.children) {
+      const field = nodes[childId]
+      if (!field?.type.startsWith('Form.')) continue
+      if (field.type === 'Form.Separator' || field.type === 'Form.Description') continue
+      const fieldId = propString(field, 'id') ?? field.id
+      const declared = field.props.value ?? field.props.defaultValue
+      if (typeof declared === 'string' || typeof declared === 'boolean') {
+        collected[fieldId] = declared
+      } else if (field.type === 'Form.Checkbox') {
+        collected[fieldId] = false
+      } else if (field.type === 'Form.Dropdown') {
+        // A dropdown with no declared value shows its first option, so
+        // that is what submitting it means.
+        collected[fieldId] = firstDropdownValue(field, nodes) ?? ''
+      } else {
+        collected[fieldId] = ''
       }
-      return undefined
     }
-    return actionsSlot && find(actionsSlot.id)
+    return { ...collected, ...valuesRef.current }
+  }, [node.children, nodes])
+
+  const submitValues = useCallback(
+    (submitNode: UiNode) => {
+      const id = callbackId(submitNode.props.onSubmit)
+      if (id) void invokeExtensionCallback(id, [collectValues()])
+    },
+    [collectValues],
+  )
+
+  /** Every `Action.SubmitForm` in the panel, in the order it was declared.
+   *  Raycast forms routinely offer several ("Create", "Create and Open
+   *  Folder", …); only the first used to be reachable. */
+  const submitNodes = useMemo(() => {
+    const found: UiNode[] = []
+    function walk(id: string): void {
+      const n = nodes[id]
+      if (!n) return
+      if (n.props.__variant === 'submit-form') found.push(n)
+      for (const childId of n.children) walk(childId)
+    }
+    if (actionsSlot) walk(actionsSlot.id)
+    return found
   }, [actionsSlot, nodes])
 
-  const submit = useCallback(() => {
-    const id = submitNode && callbackId(submitNode.props.onSubmit)
-    if (id) void invokeExtensionCallback(id, [values])
-  }, [submitNode, values])
+  // `Action.SubmitForm`'s `onSubmit` takes the collected values, which
+  // `actionsFromSlot` — built for the generic `onAction` shape — has no
+  // way to supply. Picking one of those from the ⌘K menu did nothing at
+  // all; rebind them here, where the values live.
+  const actions = useMemo(
+    () =>
+      actionsFromSlot(actionsSlot, nodes).map((action) => {
+        const actionNode = nodes[action.id]
+        if (actionNode?.props.__variant !== 'submit-form') return action
+        return { ...action, onAction: () => submitValues(actionNode) }
+      }),
+    [actionsSlot, nodes, submitValues],
+  )
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault()
-        submit()
-      } else if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
+      if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault()
         setActionPanelOpen((open) => !open)
+        return
+      }
+      if (event.key !== 'Enter') return
+
+      // A submit action that declares its own shortcut owns that exact
+      // combination — otherwise the menu would advertise ⌘⇧↵ next to an
+      // action that never fires.
+      const explicit = submitNodes.find((submitNode) => {
+        const shortcut = parseShortcut(submitNode.props.shortcut)
+        return shortcut ? matchesShortcut(event, shortcut) : false
+      })
+      if (explicit) {
+        event.preventDefault()
+        submitValues(explicit)
+        return
+      }
+
+      // Plain ⌘↵ stays the primary action, as everywhere else in the app.
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && submitNodes[0]) {
+        event.preventDefault()
+        submitValues(submitNodes[0])
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [submit])
+  }, [submitNodes, submitValues])
 
   return (
     <div className="palette">

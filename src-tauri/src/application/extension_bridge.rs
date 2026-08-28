@@ -23,6 +23,12 @@ pub const EXTENSION_POP_TO_ROOT_EVENT: &str = "extension-pop-to-root";
 /// via the `resolve_confirm_alert` Tauri command, keyed by `requestId`.
 pub const EXTENSION_CONFIRM_ALERT_EVENT: &str = "extension-confirm-alert";
 
+/// A dev-mode rebuild finished (see `application::dev_extensions`).
+/// Broadcast to every window rather than routed to one: the palette needs
+/// it to hot-reload a mounted command, and the Settings window needs it to
+/// show the build's errors — both at once, for the same rebuild.
+pub const EXTENSION_DEV_BUILD_EVENT: &str = "extension-dev-build";
+
 static NEXT_TOAST_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Tracks in-flight `confirmAlert` requests: `host.system.confirmAlert`'s
@@ -133,6 +139,13 @@ pub async fn dispatch_request<R: Runtime>(app: AppHandle<R>, method: String, par
         "host.screenshots.pasteLatest" => screenshots_paste_latest(&app),
         "host.screenshots.dropLatest" => screenshots_drop_latest(&app),
         "host.screenshots.setPinned" => screenshots_set_pinned(&app, params),
+        "host.dev.develop" => dev_develop(&app, params).await,
+        "host.registry.sources" => registry_sources(&app),
+        "host.registry.catalog" => registry_catalog(&app, params).await,
+        "host.registry.installed" => registry_installed(&app),
+        "host.registry.classify" => registry_classify(&app, params),
+        "host.registry.install" => registry_install(&app, params).await,
+        "host.registry.uninstall" => registry_uninstall(&app, params).await,
         "host.fileSearch.getSettings" => file_search_get_settings(&app),
         "host.fileSearch.query" => file_search_query(&app, params),
         "host.menuBar.list" => menu_bar_list(),
@@ -172,6 +185,8 @@ pub fn dispatch_notification<R: Runtime>(app: AppHandle<R>, method: String, para
             }
         }
         "extension.rootCommands" => root_commands_pushed(&app, params),
+        "extension.devBuild" => dev_build_finished(&app, params),
+        "extension.log" => extension_log(&app, params),
         "host.log" => {
             log::debug!("extension: {params:?}");
         }
@@ -242,6 +257,87 @@ fn root_commands_pushed<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) {
     // query per push.
     let extension_icon = state.extensions.list().into_iter().find(|e| e.id == extension_id).and_then(|e| e.icon);
     state.root_commands.set_rows(extension_id, command_name, supports_inline_query, extension_icon, commands);
+}
+
+/// Anything an extension printed. The host redirects extension output away
+/// from stdout (which carries the frame protocol) and forwards it here, so
+/// `console.log` debugging reaches the app log — and the terminal, when
+/// someone is attached with `openray develop`, which is where an author
+/// expects to see it.
+fn extension_log<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) {
+    let Some(params) = params else { return };
+    let extension_id = params.get("extensionId").and_then(Value::as_str).unwrap_or("unknown");
+    let message = params.get("message").and_then(Value::as_str).unwrap_or_default();
+    log::info!("extension {extension_id}: {message}");
+
+    if let Some(events) = app.try_state::<crate::infrastructure::control_socket::ControlEvents>() {
+        events.publish(crate::infrastructure::control_socket::ControlEvent {
+            extension_id: extension_id.to_string(),
+            kind: "log".to_string(),
+            payload: json!({ "message": message }),
+        });
+    }
+}
+
+/// `dev.ts`'s response to a file change: the extension was rebuilt, here
+/// is what failed and whether the manifest itself moved.
+///
+/// A manifest change is re-registered here rather than in the command that
+/// started dev mode, because that command returned long ago — adding a new
+/// command to `package.json` mid-session has to reach the registry through
+/// this path or it stays invisible until the app restarts. Registration
+/// runs *before* the event is emitted so a webview reacting to it (the
+/// palette re-launching a hot-reloaded command) already sees the new
+/// manifest.
+fn dev_build_finished<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) {
+    let Some(params) = params else {
+        log::warn!("extension.devBuild notification with no params");
+        return;
+    };
+    // Owned, not a borrow of `params`: the payload is moved into the
+    // event emit below, and the id is still needed for the log line there.
+    let Some(extension_id) = params.get("extensionId").and_then(Value::as_str).map(str::to_string) else {
+        log::warn!("extension.devBuild notification missing extensionId");
+        return;
+    };
+
+    if let Some(state) = app.try_state::<AppState>() {
+        let manifest_changed = params.get("manifestChanged").and_then(Value::as_bool).unwrap_or(false);
+        if manifest_changed {
+            let dir = params.get("dir").and_then(Value::as_str).unwrap_or_default();
+            match params.get("manifest").cloned().map(serde_json::from_value::<crate::infrastructure::extension_host::protocol::ExtensionManifest>) {
+                Some(Ok(manifest)) => {
+                    if let Err(e) = state.extensions.register_installed(
+                        &extension_id,
+                        &manifest,
+                        dir,
+                        crate::application::dev_extensions::DEV_SOURCE,
+                    ) {
+                        log::warn!("dev: failed to re-register '{extension_id}' after a manifest change: {e}");
+                    }
+                }
+                Some(Err(e)) => log::warn!("dev: '{extension_id}' manifest change is unparseable: {e}"),
+                // A manifest that failed to parse host-side arrives with
+                // the error in `errors` and no `manifest` — the event still
+                // goes out so the author sees it.
+                None => {}
+            }
+        }
+    }
+
+    // Also to any attached CLI client, so `openray develop` prints build
+    // results in the terminal the author is already watching.
+    if let Some(events) = app.try_state::<crate::infrastructure::control_socket::ControlEvents>() {
+        events.publish(crate::infrastructure::control_socket::ControlEvent {
+            extension_id: extension_id.clone(),
+            kind: "build".to_string(),
+            payload: params.clone(),
+        });
+    }
+
+    if let Err(e) = app.emit(EXTENSION_DEV_BUILD_EVENT, params) {
+        log::warn!("failed to forward a dev build for '{extension_id}': {e}");
+    }
 }
 
 /// Resolves `Clipboard.copy`/`paste` content into the text to place on the
@@ -668,6 +764,166 @@ fn screenshots_set_pinned<R: Runtime>(app: &AppHandle<R>, params: Option<Value>)
     let path = param_str(&params, "path")?;
     let pinned = params.as_ref().and_then(|p| p.get("pinned")).and_then(Value::as_bool).ok_or_else(|| Error::msg("missing 'pinned' parameter"))?;
     state.screenshots.set_pinned(&path, pinned);
+    Ok(Value::Null)
+}
+
+/// `host.dev.develop({ path })` — starts dev mode on a folder, so the
+/// "Create Extension" command can hand back a scaffold that is *already
+/// running* in the launcher rather than a folder and instructions.
+///
+/// Reachable by any extension, which grants nothing new: extensions run
+/// unsandboxed in the host process and can already execute whatever they
+/// like (see the plan's explicit non-goal). What this does add is that the
+/// platform, not the extension, owns registration — the id-collision rules
+/// and the watcher's lifetime stay in one place.
+async fn dev_develop<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let path = param_str(&params, "path")?;
+    // This dispatcher is generic over `Runtime`, but the develop flow ends
+    // in `hotkey::sync_bindings`, which is not. `AppState.app` is the
+    // concrete handle kept for exactly this.
+    let concrete = {
+        let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+        state.app.clone()
+    };
+    let state = concrete
+        .try_state::<AppState>()
+        .ok_or_else(|| Error::msg("app state not managed"))?;
+    let entry = crate::api::extensions::develop_extension_at(&concrete, &state, &path)
+        .await
+        .map_err(Error::msg)?;
+    Ok(json!({ "id": entry.id, "title": entry.title, "path": entry.path }))
+}
+
+/// The `host.registry.*` family, which exists so the Store command can be
+/// an ordinary first-party extension rather than a native pane. Everything
+/// here is platform-owned state (which registries are trusted, what's
+/// installed, what a given install would replace) — precisely the kind of
+/// thing an extension must ask the platform for rather than reach for
+/// itself.
+fn registry_sources<R: Runtime>(app: &AppHandle<R>) -> Result<Value, Error> {
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    Ok(json!(state.registry_sources.enabled()))
+}
+
+/// One registry's catalog, fetched through the host (ETag-cached, and
+/// falling back to the cached copy when the registry is unreachable).
+async fn registry_catalog<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let url = param_str(&params, "url")?;
+    let cache_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| Error::msg(e.to_string()))?
+        .join("registry-cache");
+    std::fs::create_dir_all(&cache_dir).map_err(|e| Error::msg(e.to_string()))?;
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    state
+        .extension_host
+        .call(
+            "registry.fetchCatalog",
+            Some(json!({ "url": url, "cacheDir": cache_dir.to_string_lossy() })),
+        )
+        .await
+        .map_err(|e| Error::msg(e.to_string()))
+}
+
+/// What's installed, reduced to what the Store needs to label a row
+/// (installed / update available / built-in / in development).
+fn registry_installed<R: Runtime>(app: &AppHandle<R>) -> Result<Value, Error> {
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    let rows: Vec<Value> = state
+        .extensions
+        .list()
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "id": entry.id,
+                "title": entry.title,
+                "version": entry.version,
+                "sourceUrl": entry.source_url,
+                "source": entry.source,
+                "enabled": entry.enabled,
+            })
+        })
+        .collect();
+    Ok(json!(rows))
+}
+
+fn registry_classify<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    let id = param_str(&params, "id")?;
+    let source_url = param_str(&params, "sourceUrl")?;
+    let extensions = state.extensions.list();
+    let impact = crate::api::registry::classify_install(extensions.iter().find(|e| e.id == id), &source_url);
+    Ok(json!(impact))
+}
+
+/// Download, verify, unpack, register — the same path
+/// `api::registry::install_from_registry` takes for the Settings UI, reached
+/// from an extension instead. Provenance is recorded here too, so an
+/// extension installed through the Store is auto-updatable exactly like one
+/// installed through Settings.
+async fn registry_install<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let source_url = param_str(&params, "sourceUrl")?;
+    let file_url = param_str(&params, "fileUrl")?;
+    let sha256 = param_str(&params, "sha256").ok();
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| Error::msg(e.to_string()))?
+        .join("extensions");
+    std::fs::create_dir_all(&root).map_err(|e| Error::msg(e.to_string()))?;
+
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    let mut call_params = json!({ "fileUrl": file_url, "extensionsRoot": root.to_string_lossy() });
+    if let Some(sha256) = sha256 {
+        call_params["sha256"] = json!(sha256);
+    }
+    let value = state
+        .extension_host
+        .call("registry.install", Some(call_params))
+        .await
+        .map_err(|e| Error::msg(e.to_string()))?;
+    let result: crate::infrastructure::extension_host::protocol::HostBuildResult =
+        serde_json::from_value(value).map_err(|e| Error::msg(e.to_string()))?;
+
+    let extensions = state.extensions.list();
+    if let crate::api::registry::InstallImpact::Blocked { reason } =
+        crate::api::registry::classify_install(extensions.iter().find(|e| e.id == result.id), &source_url)
+    {
+        return Err(Error::msg(reason));
+    }
+
+    let normalized = crate::application::registry_sources::normalize_url(&source_url);
+    state
+        .extensions
+        .register_installed_from(&result.id, &result.manifest, &result.dir, "installed", result.version.as_deref(), Some(&normalized))?;
+    Ok(json!({ "id": result.id, "version": result.version }))
+}
+
+async fn registry_uninstall<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let id = param_str(&params, "id")?;
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+    if let Some(entry) = state.extensions.list().into_iter().find(|e| e.id == id) {
+        if entry.source == "builtin" {
+            return Err(Error::msg(format!("'{id}' is a built-in extension")));
+        }
+        if entry.source == crate::application::dev_extensions::DEV_SOURCE {
+            return Err(Error::msg(format!("'{id}' is being developed locally — remove it from Settings")));
+        }
+    }
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| Error::msg(e.to_string()))?
+        .join("extensions");
+    state
+        .extension_host
+        .call("extension.uninstall", Some(json!({ "id": id, "extensionsRoot": root.to_string_lossy() })))
+        .await
+        .map_err(|e| Error::msg(e.to_string()))?;
+    state.extensions.unregister(&id)?;
+    state.command_settings.delete_for_extension(&id)?;
+    state.root_commands.clear_extension(&id);
     Ok(Value::Null)
 }
 
