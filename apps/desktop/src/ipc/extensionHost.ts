@@ -18,6 +18,13 @@ export function resolveConfirmAlert(requestId: string, confirmed: boolean): Prom
   return invoke('resolve_confirm_alert', { requestId, confirmed })
 }
 
+/** Undoes one `Action.Push` in a mounted command — resolves false when the
+ *  command is already at its initial view, which is the caller's cue to
+ *  leave the command entirely (back to root search). */
+export function popExtensionView(extensionId: string, commandName: string): Promise<boolean> {
+  return invoke('pop_extension_view', { extensionId, commandName })
+}
+
 export function invokeExtensionCallback(callbackId: string, args: unknown[] = []): Promise<void> {
   return invoke('invoke_extension_callback', { callbackId, args })
 }

@@ -2,7 +2,7 @@ import ReactReconciler from 'react-reconciler'
 import { DefaultEventPriority } from 'react-reconciler/constants'
 import { createContext, createElement, type ReactElement } from 'react'
 import type { JsonValue, UiDiffOp, UiNode, UiTreeCommit } from '@openray/protocol'
-import { NavigationRoot } from './hooks'
+import { NavigationRoot, type NavigationController } from './hooks'
 
 /**
  * The mutable, in-memory host tree. Mirrors `UiNode` from the protocol but
@@ -293,6 +293,10 @@ export interface MountHandle {
   resync: () => UiTreeCommit
   unmount: () => void
   rootId: string
+  /** Pops this tree's own navigation stack one level (false when it's
+   *  already showing the command's initial view) — how the host's back
+   *  button and Escape undo an `Action.Push`. */
+  popNavigation: () => boolean
 }
 
 /**
@@ -430,11 +434,15 @@ export function mount(element: ReactElement, onCommit: (commit: UiTreeCommit) =>
     () => {},
   )
 
-  Reconciler.updateContainer(createElement(NavigationRoot, { initial: element }), container, null, () => {})
+  // Filled in by NavigationRoot's own render; the placeholder answers
+  // "nothing to pop" for the window between mount and first commit.
+  const navigation: NavigationController = { pop: () => false }
+  Reconciler.updateContainer(createElement(NavigationRoot, { initial: element, controller: navigation }), container, null, () => {})
 
   return {
     rootId: rootNode.id,
     resync: () => snapshotFrom(rootNode),
+    popNavigation: () => navigation.pop(),
     unmount: () => {
       Reconciler.updateContainer(null, container, null, () => {})
     },

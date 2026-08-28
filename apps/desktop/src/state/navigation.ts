@@ -8,5 +8,5 @@ export type PaletteView =
    *  but any extension command declaring `arguments` in its manifest
    *  still reaches this same view). */
   | { type: 'quicklink-argument'; item: PaletteItem }
-  | { type: 'extension'; extensionId: string; commandName: string }
+  | { type: 'extension'; extensionId: string; commandName: string; title: string; icon?: string | null }
   | { type: 'confirm'; item: PaletteItem }

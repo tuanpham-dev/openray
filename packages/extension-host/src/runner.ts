@@ -624,6 +624,15 @@ export function registerRunnerMethods(dispatcher: RpcDispatcher): void {
     return null
   })
 
+  // The palette's back button / Escape, undoing an `Action.Push`. Answers
+  // false when the command is already showing its initial view (or isn't
+  // mounted at all), which is the frontend's cue to leave the command
+  // instead.
+  dispatcher.register('extension.popNavigation', (params) => {
+    const { extensionId, commandName } = asRecord(params) as unknown as { extensionId: string; commandName: string }
+    return mounts.get(mountKey(extensionId, commandName))?.popNavigation() ?? false
+  })
+
   dispatcher.register('extension.runRootProviderList', async (params) => {
     await runRootProviderList(dispatcher, asRecord(params) as unknown as RunRootProviderListParams)
     return null

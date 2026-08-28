@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { suppressHoverSelection } from './hoverSelection'
+import { BackButton } from './BackButton'
 
 interface SearchBarProps {
   value: string
@@ -99,17 +100,7 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, titl
       {onBack ? (
         // The back arrow stands in for the magnifier in sub-views — two
         // leading glyphs would just crowd the field.
-        <button type="button" className="openray-search-back" aria-label="Go back" onClick={onBack}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path
-              d="M10 3L5 8L10 13"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        <BackButton onClick={onBack} />
       ) : (
         <svg className="openray-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
           <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" />

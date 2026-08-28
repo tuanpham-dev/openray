@@ -198,11 +198,39 @@ body,
   justify-self: start;
 }
 
+/* An explanatory paragraph inside the form grid, aligned with the controls
+   rather than starting back at the label column (AI's "managed from root
+   search" note sits under Quick AI Model this way). */
+.openray-settings-form-note {
+  grid-column: 2;
+  justify-self: stretch;
+  margin: 0;
+  max-width: 420px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--openray-text-tertiary);
+}
+
 .openray-settings-form-label {
   justify-self: end;
   text-align: right;
   font-size: 13px;
   color: var(--openray-text-secondary);
+}
+
+/* Pairs with a control that carries a hint line beneath it: the label
+   reads against the control itself, not against the middle of the whole
+   stack. */
+.openray-settings-form-label--top {
+  align-self: start;
+  padding-top: 7px;
+}
+
+/* Same idea for a short control (a checkbox/toggle), whose box is half the
+   height of a text field's — 7px would drop the label below it. */
+.openray-settings-form-label--top-compact {
+  align-self: start;
+  padding-top: 1px;
 }
 
 .openray-settings-form .openray-form-field,
@@ -543,7 +571,7 @@ body,
 }
 
 .openray-extension-prefs-group h4 {
-  margin: 10px 0 4px;
+  margin: 0;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -551,22 +579,51 @@ body,
   color: var(--openray-text-tertiary);
 }
 
-.openray-extension-pref-row {
-  max-width: none;
-  gap: 12px;
+/* Groups within a schema-driven preference form (one per command, plus a
+   shared "General") — each is its own label/control grid, so the spacing
+   between groups comes from here rather than from the grid's row gap. */
+.openray-extension-prefs {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
-.openray-extension-pref-row input[type='text'],
-.openray-extension-pref-row input[type='password'] {
-  min-width: 120px;
+.openray-extension-prefs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Text-like controls inside a settings form: same box as the form's
+   `select`, so a text preference and a dropdown preference line up. */
+.openray-settings-text-input {
   width: 100%;
-  padding: 4px 8px;
-  border-radius: 6px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
   border: 1px solid var(--openray-border);
-  background: var(--openray-bg-solid);
+  background: var(--openray-bg-raised);
   color: var(--openray-text-primary);
   font-size: 13px;
   font-family: inherit;
+  outline: none;
+}
+
+.openray-settings-text-input:focus {
+  border-color: var(--openray-accent);
+}
+
+/* A path field: the text box takes the room, the OS chooser sits beside
+   it. */
+.openray-settings-path-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.openray-settings-path-field .openray-settings-text-input {
+  flex: 1;
 }
 
 .openray-extension-pref-required {
@@ -901,6 +958,28 @@ body,
   cursor: default;
 }
 
+/* The OS folder-chooser button in a directory list's add row, and in a
+   `directory`/`file` extension preference — same chrome as its "Add"
+   sibling, with the icon leading. */
+button.openray-settings-browse-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+button.openray-settings-browse-button:hover {
+  background: var(--openray-hover-bg);
+}
+
 .openray-settings-script-dir-add button:hover:not(:disabled) {
   background: var(--openray-hover-bg);
 }
@@ -1006,6 +1085,24 @@ body,
   margin-top: 0;
 }
 
+/* Views whose body is one long list (Applications) take the window's full
+   height instead of sizing to content: the view stretches, its section
+   stretches, and the scrolling happens inside the list itself — see
+   `.openray-command-list--fill`. */
+.openray-extension-view--fill {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  gap: 16px;
+}
+
+.openray-extension-view-section--fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* Non-extension full-width views (Applications, Install) reuse the same
    section vocabulary but skip the centered header. */
 .openray-settings-view-heading {
@@ -1052,6 +1149,21 @@ body,
 
 .openray-command-list-rows--virtualized {
   max-height: 340px;
+  overflow-y: auto;
+}
+
+.openray-command-list--fill {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Still `display: block` inside (the spacer-shrink reason above) — this
+   only makes the rows box itself the flex child that absorbs the leftover
+   height, replacing the fixed 340px cap. */
+.openray-command-list-rows--fill {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
 }
 

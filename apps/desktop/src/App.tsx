@@ -25,7 +25,7 @@ import { extensionTreeStore } from './extensions/registry'
 import { startExtensionEventBridge, type ExtensionConfirmAlertPayload, type ExtensionToastPayload } from './extensions/eventBridge'
 import { ExtensionConfirmAlert, Hud, Toast } from './extensions/Toast'
 import { parseExtensionCommandId } from './extensions/commandId'
-import { runExtensionCommand, unmountExtensionCommand } from './ipc/extensionHost'
+import { popExtensionView, runExtensionCommand, unmountExtensionCommand } from './ipc/extensionHost'
 import { useAppSettings } from './state/appSettings'
 import './theme/tokens.css'
 import './components/palette.css'
@@ -122,11 +122,11 @@ function Palette() {
    * comment). Shares the same missing-preferences/toast failure handling
    * either call site would otherwise duplicate.
    */
-  const launchExtensionCommand = useCallback((extensionId: string, commandName: string, argument?: string) => {
+  const launchExtensionCommand = useCallback((extensionId: string, commandName: string, title: string, icon?: string | null, argument?: string) => {
     extensionTreeStore.reset()
     void runExtensionCommand(extensionId, commandName, argument)
       .then((mode) => {
-        if (mode === 'view') setView({ type: 'extension', extensionId, commandName })
+        if (mode === 'view') setView({ type: 'extension', extensionId, commandName, title, icon })
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
@@ -171,7 +171,7 @@ function Palette() {
 
     if (item.kind === 'extensionCommand') {
       const parsed = parseExtensionCommandId(item.id)
-      if (parsed) launchExtensionCommand(parsed.extensionId, parsed.commandName)
+      if (parsed) launchExtensionCommand(parsed.extensionId, parsed.commandName, item.title, item.icon)
       return true
     }
 
@@ -276,7 +276,7 @@ function Palette() {
           // (disclosed simplification vs. native's separate ⌘↵ "create
           // silently" behavior — see plans/refactor-extension-platform.md's
           // T26 notes).
-          launchExtensionCommand(row.extensionId, row.commandName, row.argument)
+          launchExtensionCommand(row.extensionId, row.commandName, row.title, row.icon, row.argument)
           void hidePalette()
           return
         }
@@ -364,17 +364,38 @@ function Palette() {
     return selectedItem ? getActionsForItem(selectedItem, activateItem) : []
   }, [inlineRowActions, selectedItem, activateItem])
 
+  /**
+   * "Back" from an extension view: first undo an `Action.Push` if the
+   * command has one on its own stack (the snippets form pushed from the
+   * snippets list, translate's language picker, notes' Browse), and only
+   * leave the command when there's nothing left to pop — the same order
+   * Raycast's own back arrow and Escape follow. The host owns that stack,
+   * so this is a round trip; any failure falls back to leaving.
+   */
+  const leaveExtensionView = useCallback((extensionId: string, commandName: string) => {
+    void popExtensionView(extensionId, commandName)
+      .then((popped) => {
+        if (!popped) setView({ type: 'search' })
+      })
+      .catch(() => setView({ type: 'search' }))
+  }, [])
+
   const handleEscape = useCallback(() => {
     // An open Actions panel — this view's or a sub-view's — closes
     // itself; navigating away here would skip past it.
     if (isOverlayOpen()) return
+    if (view.type === 'extension') {
+      leaveExtensionView(view.extensionId, view.commandName)
+      setArgumentValue('')
+      return
+    }
     if (!inSearchView) {
       setView({ type: 'search' })
       setArgumentValue('')
     } else {
       void hidePalette()
     }
-  }, [inSearchView])
+  }, [inSearchView, view, leaveExtensionView])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -401,7 +422,7 @@ function Palette() {
         // doc comment.
         const parsed = view.item.kind === 'extensionCommand' ? parseExtensionCommandId(view.item.id) : null
         if (parsed) {
-          launchExtensionCommand(parsed.extensionId, parsed.commandName, argumentValue)
+          launchExtensionCommand(parsed.extensionId, parsed.commandName, view.item.title, view.item.icon, argumentValue)
         } else {
           void runCommandWithArgument(view.item.id, argumentValue)
         }
@@ -426,7 +447,7 @@ function Palette() {
 
       if (inSearchView && event.key === 'Tab' && query.trim().length > 0) {
         event.preventDefault()
-        launchExtensionCommand('ai', 'quick-ai-command', query.trim())
+        launchExtensionCommand('ai', 'quick-ai-command', 'Quick AI', 'sparkles', query.trim())
         return
       }
 
@@ -451,7 +472,11 @@ function Palette() {
   if (view.type === 'extension') {
     return (
       <>
-        <ExtensionView onBack={() => setView({ type: 'search' })} />
+        <ExtensionView
+          onBack={() => leaveExtensionView(view.extensionId, view.commandName)}
+          title={view.title}
+          icon={view.icon}
+        />
         {overlays}
       </>
     )

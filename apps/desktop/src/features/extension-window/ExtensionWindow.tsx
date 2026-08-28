@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { notifyExtensionWindowReady } from '../../ipc/extensionHost'
 import { closeExtensionWindow } from '../../ipc/window'
 import { startExtensionEventBridge, stopExtensionEventBridge } from '../../extensions/eventBridge'
@@ -58,7 +59,36 @@ export function ExtensionWindow() {
 
   return (
     <ThemeProvider>
+      <WindowDragBar />
       <ExtensionView />
     </ThemeProvider>
+  )
+}
+
+/**
+ * Extension-owned windows are built with `decorations: false` (see
+ * `open_extension_window`), so there's no title bar to move them by. This
+ * strip spans the top of the window and hands a press straight to the
+ * compositor's own move loop via `startDragging` — the same thing a title
+ * bar would do.
+ *
+ * Fixed rather than a child of the view: `ExtensionView` renders whatever
+ * tree the extension mounted (a `MarkdownEditor` for Notes) and has no
+ * chrome slot of its own. It sits over `.palette`'s 14px shadow gutter
+ * plus a few pixels of the content's own top padding, so it doesn't eat
+ * clicks that were aimed at anything.
+ */
+function WindowDragBar() {
+  return (
+    <div
+      className="openray-window-drag-bar"
+      onMouseDown={(event) => {
+        // Left button only — a right-press here should still reach the
+        // context menu, and starting a drag from it strands the window
+        // following the cursor.
+        if (event.button !== 0) return
+        void getCurrentWindow().startDragging()
+      }}
+    />
   )
 }

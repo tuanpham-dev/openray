@@ -80,6 +80,7 @@ pub fn run() {
       api::extension_host::run_extension_command,
       api::extension_host::unmount_extension_command,
       api::extension_host::invoke_extension_callback,
+      api::extension_host::pop_extension_view,
       api::extension_host::resolve_confirm_alert,
       api::extension_host::notify_extension_window_ready,
       // api::screenshots

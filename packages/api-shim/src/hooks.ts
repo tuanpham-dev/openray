@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactElement } from 'react'
+import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { globalSlot } from './global-slot'
 
 interface NavigationContextValue {
@@ -32,13 +32,31 @@ export function useNavigation(): NavigationContextValue {
 }
 
 /**
+ * A handle on one mounted tree's own stack, for the *host* rather than for
+ * extension code: the palette's back button and Escape need to pop the
+ * view the user is actually looking at, and can't use `navigationSlot` for
+ * it — that slot holds whichever tree rendered last, which is the notes
+ * window's, not the palette's, whenever both are up (see the slot's
+ * comment above). `mount()` hands each tree its own controller instead.
+ */
+export interface NavigationController {
+  /** Pops one level, or reports false when already at the initial view. */
+  pop: () => boolean
+}
+
+/**
  * Owns the push/pop navigation stack for one mounted command and renders
  * whatever's on top of it. `mount()` wraps every command's root element in
  * this, so `useNavigation` works anywhere in the tree without extensions
  * having to set anything up themselves.
  */
-export function NavigationRoot({ initial }: { initial: ReactElement }): ReactElement {
+export function NavigationRoot({ initial, controller }: { initial: ReactElement; controller?: NavigationController }): ReactElement {
   const [stack, setStack] = useState<ReactElement[]>([initial])
+  // Read by `controller.pop` at call time (an event from the host, long
+  // after this render) — a closed-over `stack` would be whatever the
+  // render that installed the callback saw.
+  const depth = useRef(1)
+  depth.current = stack.length
 
   const push = useCallback((view: ReactElement) => {
     setStack((current) => [...current, view])
@@ -56,6 +74,13 @@ export function NavigationRoot({ initial }: { initial: ReactElement }): ReactEle
   // this assignment is idempotent — it has no observable effect beyond
   // being available for the next synchronous read.
   navigationSlot.set({ push, pop })
+  if (controller) {
+    controller.pop = () => {
+      if (depth.current <= 1) return false
+      pop()
+      return true
+    }
+  }
 
   const top = stack[stack.length - 1]!
   return top

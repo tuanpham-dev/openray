@@ -27,70 +27,70 @@ export function AiPrefs({ settings, onChange }: AiPrefsProps) {
   }
 
   return (
-    <>
-      <div className="openray-settings-form">
-        <label className="openray-settings-form-label" htmlFor="ai-default-model">
-          Default Model
-        </label>
-        <div className="openray-form-field">
-          <select id="ai-default-model" value={settings.aiDefaultModel} onChange={(event) => save({ aiDefaultModel: event.target.value })}>
-            {BUILTIN_MODELS.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDownIcon size={13} className="openray-settings-select-chevron" />
-        </div>
-
-        <label className="openray-settings-form-label" htmlFor="ai-quick-model">
-          Quick AI Model
-        </label>
-        <div className="openray-form-field">
-          <select id="ai-quick-model" value={settings.aiQuickModel} onChange={(event) => save({ aiQuickModel: event.target.value })}>
-            <option value="">Follow default model</option>
-            {BUILTIN_MODELS.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDownIcon size={13} className="openray-settings-select-chevron" />
-        </div>
-
-        <hr className="openray-settings-separator" />
-
-        <label className="openray-settings-form-label" htmlFor="ai-profile">
-          Personalization — Profile
-        </label>
-        <div className="openray-form-field">
-          <textarea
-            id="ai-profile"
-            className="openray-form-textarea"
-            rows={3}
-            value={settings.aiProfile}
-            onChange={(event) => save({ aiProfile: event.target.value })}
-            placeholder="Your role, preferred language, communication style — shared with every chat."
-          />
-        </div>
-
-        <hr className="openray-settings-separator" />
-
-        <label className="openray-settings-form-label">Skills</label>
-        <div className="openray-settings-control-stack">
-          <StringListField
-            id="ai-skill-dirs"
-            placeholder="~/.claude/skills"
-            hint="Directories scanned (top level only) for SKILL.md files."
-            values={settings.aiSkillDirs}
-            onChange={(values) => save({ aiSkillDirs: values })}
-          />
-        </div>
+    <div className="openray-settings-form">
+      <label className="openray-settings-form-label" htmlFor="ai-default-model">
+        Default Model
+      </label>
+      <div className="openray-form-field">
+        <select id="ai-default-model" value={settings.aiDefaultModel} onChange={(event) => save({ aiDefaultModel: event.target.value })}>
+          {BUILTIN_MODELS.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon size={13} className="openray-settings-select-chevron" />
       </div>
-      <p className="openray-settings-description">
+
+      <label className="openray-settings-form-label" htmlFor="ai-quick-model">
+        Quick AI Model
+      </label>
+      <div className="openray-form-field">
+        <select id="ai-quick-model" value={settings.aiQuickModel} onChange={(event) => save({ aiQuickModel: event.target.value })}>
+          <option value="">Follow default model</option>
+          {BUILTIN_MODELS.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon size={13} className="openray-settings-select-chevron" />
+      </div>
+
+      <p className="openray-settings-form-note">
         Provider API keys, AI Commands, Agents, and MCP Servers are managed from root search — run "AI Providers", "Search AI
         Commands", "Create Agent", or "Manage MCP Servers".
       </p>
-    </>
+
+      <hr className="openray-settings-separator" />
+
+      <label className="openray-settings-form-label" htmlFor="ai-profile">
+        Personalization — Profile
+      </label>
+      <div className="openray-form-field">
+        <textarea
+          id="ai-profile"
+          className="openray-form-textarea"
+          rows={3}
+          value={settings.aiProfile}
+          onChange={(event) => save({ aiProfile: event.target.value })}
+          placeholder="Your role, preferred language, communication style — shared with every chat."
+        />
+      </div>
+
+      <hr className="openray-settings-separator" />
+
+      <label className="openray-settings-form-label openray-settings-form-label--top">Skills</label>
+      <div className="openray-settings-control-stack">
+        <StringListField
+          id="ai-skill-dirs"
+          directory
+          placeholder="~/.claude/skills"
+          hint="Directories scanned (top level only) for SKILL.md files."
+          values={settings.aiSkillDirs}
+          onChange={(values) => save({ aiSkillDirs: values })}
+        />
+      </div>
+    </div>
   )
 }

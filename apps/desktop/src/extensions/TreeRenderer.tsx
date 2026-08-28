@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import type { UiNode } from '@openray/protocol'
 import { SearchBar } from '../components/SearchBar'
 import { Footer } from '../components/Footer'
 import { ActionPanel } from '../components/ActionPanel'
+import { FilterSelect } from '../components/FilterSelect'
+import { ChevronDownIcon } from '../components/icons'
+import { BackButton } from '../components/BackButton'
 import { altHorizontalDirection, altNavigationDirection, useListNavigation, useScrollIntoViewWhenSelected } from '../components/useListNavigation'
 import { useAppSettings } from '../state/appSettings'
 import { isHoverSelectionEnabled, suppressHoverSelection } from '../components/hoverSelection'
@@ -278,8 +281,26 @@ function useControlledSearchText(node: UiNode): [string, (value: string) => void
 
 /** `List`'s `searchBarAccessory` — a `List.Dropdown` element, rendered into
  *  `SearchBar`'s `trailing` slot (T28: first consumer, clipboard-history's
- *  content-type filter). */
-function ListDropdownAccessory({ node, nodes }: { node: UiNode; nodes: Record<string, UiNode> }) {
+ *  content-type filter), drawn by `FilterSelect` — a borderless label +
+ *  chevron whose menu matches the ⌘K actions popover, not a native
+ *  `<select>`. */
+function ListDropdownAccessory({
+  node,
+  nodes,
+  onValueChange,
+  onOpenChange,
+}: {
+  node: UiNode
+  nodes: Record<string, UiNode>
+  /** Lets the owning List/Grid reselect its first row when the filter
+   *  changes — picking a category is as much a new result set as typing a
+   *  new query is, and leaving the old index selected lands the cursor
+   *  somewhere arbitrary in the middle of the new one. */
+  onValueChange?: (value: string) => void
+  /** Raised while the menu is open, so the list/grid underneath leaves the
+   *  arrow keys and ↵ to it. */
+  onOpenChange?: (open: boolean) => void
+}) {
   const propValue = typeof node.props.value === 'string' ? node.props.value : undefined
   const defaultValue = typeof node.props.defaultValue === 'string' ? node.props.defaultValue : ''
   const [value, setValue] = useControlledProp(propValue, defaultValue)
@@ -297,27 +318,37 @@ function ListDropdownAccessory({ node, nodes }: { node: UiNode; nodes: Record<st
   collectOptions(node)
 
   return (
-    <select
-      className="openray-searchbar-dropdown"
+    <FilterSelect
+      label={propString(node, 'tooltip') ?? 'Filter'}
       value={value}
-      title={propString(node, 'tooltip')}
-      onChange={(event) => {
-        setValue(event.target.value)
-        if (onChangeCallback) void invokeExtensionCallback(onChangeCallback, [event.target.value])
+      onOpenChange={onOpenChange}
+      options={options.map((option) => ({ value: propString(option, 'value') ?? '', label: propString(option, 'title') ?? '' }))}
+      onChange={(next) => {
+        setValue(next)
+        onValueChange?.(next)
+        if (onChangeCallback) void invokeExtensionCallback(onChangeCallback, [next])
       }}
-    >
-      {options.map((option) => (
-        <option key={option.id} value={propString(option, 'value') ?? ''}>
-          {propString(option, 'title')}
-        </option>
-      ))}
-    </select>
+    />
   )
 }
 
-function ExtensionList({ node, nodes, onBack }: { node: UiNode; nodes: Record<string, UiNode>; onBack?: () => void }) {
+function ExtensionList({
+  node,
+  nodes,
+  onBack,
+  title,
+  icon,
+}: {
+  node: UiNode
+  nodes: Record<string, UiNode>
+  onBack?: () => void
+  title?: string
+  icon?: string | null
+}) {
   const [searchText, setSearchText] = useControlledSearchText(node)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
+  const [accessoryValue, setAccessoryValue] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   const entries = useMemo(() => collectListEntries(node, nodes), [node, nodes])
   const searchCallback = callbackId(node.props.onSearchTextChange)
@@ -348,7 +379,12 @@ function ExtensionList({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
     [filtered, nodes],
   )
 
-  const { selectedIndex, setSelectedIndex } = useListNavigation(filtered.length, onActivate, !actionPanelOpen, searchText)
+  const { selectedIndex, setSelectedIndex } = useListNavigation(
+    filtered.length,
+    onActivate,
+    !actionPanelOpen && !dropdownOpen,
+    `${searchText}\u0000${accessoryValue}`,
+  )
 
   const actions = useMemo(() => {
     if (filtered.length === 0) return actionsFromSlot(emptyView && findActionsSlot(emptyView, nodes), nodes)
@@ -367,6 +403,7 @@ function ExtensionList({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
   }, [filtered, selectedIndex, nodes])
 
   useEffect(() => {
+    if (dropdownOpen) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault()
@@ -375,7 +412,7 @@ function ExtensionList({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [filtered.length, emptyView])
+  }, [filtered.length, emptyView, dropdownOpen])
 
   let lastSectionTitle: string | undefined
   const rows = (
@@ -407,7 +444,7 @@ function ExtensionList({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
         onBack={onBack}
         title={propString(node, 'navigationTitle')}
         loading={propBoolean(node, 'isLoading')}
-        trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} />}
+        trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} onValueChange={setAccessoryValue} onOpenChange={setDropdownOpen} />}
       />
       {hasDetail ? (
         <div className="openray-list-split">
@@ -418,7 +455,7 @@ function ExtensionList({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
         rows
       )}
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer />
+      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} />
     </div>
   )
 }
@@ -491,10 +528,24 @@ function ExtensionGridCell({
   )
 }
 
-function ExtensionGrid({ node, nodes, onBack }: { node: UiNode; nodes: Record<string, UiNode>; onBack?: () => void }) {
+function ExtensionGrid({
+  node,
+  nodes,
+  onBack,
+  title,
+  icon,
+}: {
+  node: UiNode
+  nodes: Record<string, UiNode>
+  onBack?: () => void
+  title?: string
+  icon?: string | null
+}) {
   const [searchText, setSearchText] = useControlledSearchText(node)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [accessoryValue, setAccessoryValue] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const { altJkNavigation } = useAppSettings()
 
   const columns = typeof node.props.columns === 'number' && node.props.columns > 0 ? node.props.columns : 5
@@ -526,13 +577,14 @@ function ExtensionGrid({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
     if (searchCallback) void invokeExtensionCallback(searchCallback, [searchText])
   }, [searchCallback, searchText])
 
-  // Reselect the top result whenever the query changes — same reasoning
-  // as useListNavigation's own resetKey (see its doc comment): the item
-  // count alone doesn't tell you the result set is entirely different,
-  // so the clamp effect below is not enough on its own.
+  // Reselect the top result whenever the query — or the search bar's own
+  // filter dropdown — changes: same reasoning as useListNavigation's own
+  // resetKey (see its doc comment), the item count alone doesn't tell you
+  // the result set is entirely different, so the clamp effect below is not
+  // enough on its own.
   useEffect(() => {
     setSelectedIndex(0)
-  }, [searchText])
+  }, [searchText, accessoryValue])
 
   useEffect(() => {
     if (selectedIndex >= filtered.length) setSelectedIndex(Math.max(0, filtered.length - 1))
@@ -558,7 +610,7 @@ function ExtensionGrid({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
   // 2D navigation: ←/→ step one cell, ↑/↓ step a whole row (`columns`),
   // clamped rather than wrapped so the last partial row is reachable.
   useEffect(() => {
-    if (actionPanelOpen) return
+    if (actionPanelOpen || dropdownOpen) return
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
@@ -657,7 +709,7 @@ function ExtensionGrid({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
         onBack={onBack}
         title={propString(node, 'navigationTitle')}
         loading={propBoolean(node, 'isLoading')}
-        trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} />}
+        trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} onValueChange={setAccessoryValue} onOpenChange={setDropdownOpen} />}
       />
       <div
         ref={hasSections ? undefined : containerRef}
@@ -669,7 +721,7 @@ function ExtensionGrid({ node, nodes, onBack }: { node: UiNode; nodes: Record<st
         {cells}
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer />
+      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} />
     </div>
   )
 }
@@ -706,7 +758,7 @@ function DetailMetadataTagListRow({ node, nodes }: { node: UiNode; nodes: Record
 
 function ExtensionDetailMetadata({ node, nodes }: { node: UiNode; nodes: Record<string, UiNode> }) {
   return (
-    <div className="openray-settings-fields">
+    <div className="openray-detail-fields">
       {node.children.map((childId) => {
         const child = nodes[childId]
         if (!child) return null
@@ -736,10 +788,25 @@ function ExtensionDetailMetadata({ node, nodes }: { node: UiNode; nodes: Record<
         }
         const title = propString(child, 'title')
         const text = propString(child, 'text')
+        // `Detail.Metadata.Label`'s own `icon` (already in the shim's
+        // props) — a hex string renders as a swatch, which is how a
+        // clipboard colour entry shows the colour itself next to its
+        // notation.
+        const labelIcon = child.props.icon
         return (
           <dl key={child.id}>
             <dt>{title}</dt>
-            <dd>{text}</dd>
+            <dd>
+              {labelIcon && (
+                <VisualContent
+                  raw={labelIcon}
+                  imageClassName="openray-detail-field-image"
+                  glyphClassName="openray-detail-field-glyph"
+                  swatchClassName="openray-detail-field-swatch"
+                />
+              )}
+              {text}
+            </dd>
           </dl>
         )
       })}
@@ -754,15 +821,35 @@ function ExtensionDetailMetadata({ node, nodes }: { node: UiNode; nodes: Record<
 function DetailBody({ node, nodes }: { node: UiNode; nodes: Record<string, UiNode> }) {
   const markdown = propString(node, 'markdown') ?? ''
   const metadataNode = node.children.map((id) => nodes[id]).find((n) => n?.type === 'Detail.Metadata')
+  // The rendered content scrolls; the metadata block stays put beneath it
+  // rather than scrolling away with long content — Raycast's own detail
+  // pane splits the same way.
   return (
     <>
-      <Markdown urlTransform={markdownUrlTransform}>{markdown}</Markdown>
-      {metadataNode && <ExtensionDetailMetadata node={metadataNode} nodes={nodes} />}
+      <div className="openray-detail-markdown">
+        <Markdown urlTransform={markdownUrlTransform}>{markdown}</Markdown>
+      </div>
+      {metadataNode && (
+        <div className="openray-detail-info">
+          <h4 className="openray-detail-info-heading">Information</h4>
+          <ExtensionDetailMetadata node={metadataNode} nodes={nodes} />
+        </div>
+      )}
     </>
   )
 }
 
-function ExtensionDetail({ node, nodes }: { node: UiNode; nodes: Record<string, UiNode> }) {
+function ExtensionDetail({
+  node,
+  nodes,
+  title,
+  icon,
+}: {
+  node: UiNode
+  nodes: Record<string, UiNode>
+  title?: string
+  icon?: string | null
+}) {
   const actionsSlot = findActionsSlot(node, nodes)
   const actions = actionsFromSlot(actionsSlot, nodes)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
@@ -787,7 +874,7 @@ function ExtensionDetail({ node, nodes }: { node: UiNode; nodes: Record<string, 
         <DetailBody node={node} nodes={nodes} />
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer />
+      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} />
     </div>
   )
 }
@@ -843,11 +930,19 @@ function ExtensionMarkdownEditor({ node, nodes }: { node: UiNode; nodes: Record<
   )
 }
 
-function ExtensionForm({ node, nodes }: { node: UiNode; nodes: Record<string, UiNode> }) {
-  const fieldIds = node.children.filter((id) => {
-    const child = nodes[id]
-    return child && child.type.startsWith('Form.') && child.type !== 'Form.Description' && child.type !== 'Form.Separator'
-  })
+function ExtensionForm({
+  node,
+  nodes,
+  onBack,
+  title,
+  icon,
+}: {
+  node: UiNode
+  nodes: Record<string, UiNode>
+  onBack?: () => void
+  title?: string
+  icon?: string | null
+}) {
   const [values, setValues] = useState<Record<string, string | boolean>>({})
   const actionsSlot = findActionsSlot(node, nodes)
   const actions = actionsFromSlot(actionsSlot, nodes)
@@ -891,108 +986,168 @@ function ExtensionForm({ node, nodes }: { node: UiNode; nodes: Record<string, Ui
 
   return (
     <div className="palette">
-      <div className="openray-settings-content" style={{ overflowY: 'auto', flex: 1 }}>
-        {fieldIds.map((id) => {
-          const field = nodes[id]
-          if (!field) return null
-          const fieldId = propString(field, 'id') ?? field.id
-          const title = propString(field, 'title')
-          const fireOnChange = (value: unknown) => {
-            const callback = callbackId(field.props.onChange)
-            if (callback) void invokeExtensionCallback(callback, [value])
-          }
-
-          if (field.type === 'Form.Checkbox') {
-            const checked = Boolean(values[fieldId] ?? field.props.defaultValue ?? false)
-            return (
-              <div className="openray-settings-row" key={field.id}>
-                <label>{propString(field, 'label')}</label>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(e) => {
-                    setValues((v) => ({ ...v, [fieldId]: e.target.checked }))
-                    fireOnChange(e.target.checked)
-                  }}
-                />
-              </div>
-            )
-          }
-
-          if (field.type === 'Form.TextArea') {
-            const value = (values[fieldId] as string | undefined) ?? (field.props.defaultValue as string | undefined) ?? ''
-            return (
-              <div className="openray-settings-row openray-settings-row--textarea" key={field.id}>
-                <label>{title}</label>
-                <textarea
-                  className="openray-form-textarea"
-                  value={value}
-                  placeholder={propString(field, 'placeholder')}
-                  onChange={(e) => {
-                    setValues((v) => ({ ...v, [fieldId]: e.target.value }))
-                    fireOnChange(e.target.value)
-                  }}
-                />
-              </div>
-            )
-          }
-
-          if (field.type === 'Form.Dropdown') {
-            const value = (values[fieldId] as string | undefined) ?? (field.props.defaultValue as string | undefined) ?? ''
-            const options: UiNode[] = []
-            const collectOptions = (n: UiNode) => {
-              for (const childId of n.children) {
-                const child = nodes[childId]
-                if (!child) continue
-                if (child.type === 'Form.Dropdown.Item') options.push(child)
-                else if (child.type === 'Form.Dropdown.Section') collectOptions(child)
-              }
-            }
-            collectOptions(field)
-            return (
-              <div className="openray-settings-row" key={field.id}>
-                <label>{title}</label>
-                <select
-                  value={value}
-                  onChange={(e) => {
-                    setValues((v) => ({ ...v, [fieldId]: e.target.value }))
-                    fireOnChange(e.target.value)
-                  }}
-                >
-                  {options.map((option) => (
-                    <option key={option.id} value={propString(option, 'value') ?? ''}>
-                      {propString(option, 'title')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )
-          }
-
-          const value = (values[fieldId] as string | undefined) ?? (field.props.defaultValue as string | undefined) ?? ''
-          return (
-            <div className="openray-settings-row" key={field.id}>
-              <label>{title}</label>
-              <input
-                type={field.type === 'Form.PasswordField' ? 'password' : 'text'}
-                value={value}
-                placeholder={propString(field, 'placeholder')}
-                onChange={(e) => {
-                  setValues((v) => ({ ...v, [fieldId]: e.target.value }))
-                  fireOnChange(e.target.value)
-                }}
-              />
-            </div>
-          )
-        })}
+      {/* A form has no search field, but it does have the same top bar a
+          List/Grid sub-view gets: the way back, and the view's own name.
+          Raycast draws its forms this way too. */}
+      <div className="openray-form-header">
+        {onBack && <BackButton onClick={onBack} />}
+        <span className="openray-form-header-title">{propString(node, 'navigationTitle') ?? title}</span>
+        {propBoolean(node, 'isLoading') && <span className="openray-toast-spinner" aria-label="Loading" />}
+      </div>
+      <div className="openray-form-scroll">
+        {/* One grid for the whole form — right-aligned labels in a fixed
+            column with every control starting at the same x, the same
+            vocabulary Settings' own panes use. Each field contributes two
+            grid children (label, control), so a long label can never push
+            its own control out of line with the others'. */}
+        <div className="openray-extension-form">
+          {node.children.map((id) => {
+            const field = nodes[id]
+            if (!field || !field.type.startsWith('Form.')) return null
+            return <FormField key={field.id} field={field} nodes={nodes} values={values} setValues={setValues} />
+          })}
+        </div>
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer primaryActionLabel="Submit" />
+      <Footer primaryActionLabel={actions[0]?.title ?? 'Submit'} context={title} contextIcon={icon} />
     </div>
   )
 }
 
-export function ExtensionView({ onBack }: { onBack?: () => void } = {}) {
+/** One `Form.*` child: its label in the grid's label column and its control
+ *  in the value column, plus the `info`/`error` lines underneath. */
+function FormField({
+  field,
+  nodes,
+  values,
+  setValues,
+}: {
+  field: UiNode
+  nodes: Record<string, UiNode>
+  values: Record<string, string | boolean>
+  setValues: (update: (current: Record<string, string | boolean>) => Record<string, string | boolean>) => void
+}) {
+  if (field.type === 'Form.Separator') {
+    return <hr className="openray-extension-form-separator" />
+  }
+
+  if (field.type === 'Form.Description') {
+    // Spans both columns: it's prose about the form, not a field of it.
+    return (
+      <p className="openray-extension-form-description">
+        {propString(field, 'title') && <strong>{propString(field, 'title')}: </strong>}
+        {propString(field, 'text')}
+      </p>
+    )
+  }
+
+  const fieldId = propString(field, 'id') ?? field.id
+  const label = propString(field, 'title')
+  const info = propString(field, 'info')
+  const error = propString(field, 'error')
+  const controlId = `form-field-${field.id}`
+  const autoFocus = propBoolean(field, 'autoFocus')
+
+  const fireOnChange = (value: unknown) => {
+    const callback = callbackId(field.props.onChange)
+    if (callback) void invokeExtensionCallback(callback, [value])
+  }
+  const set = (value: string | boolean) => {
+    setValues((current) => ({ ...current, [fieldId]: value }))
+    fireOnChange(value)
+  }
+
+  // Local edits win; otherwise a `value` the extension controls, then its
+  // `defaultValue`.
+  const textValue =
+    (values[fieldId] as string | undefined) ?? propString(field, 'value') ?? (field.props.defaultValue as string | undefined) ?? ''
+
+  let control: ReactNode
+  // A textarea is taller than one row, so its label sits at the top of the
+  // box rather than centred against the whole of it.
+  let labelAtTop = false
+
+  if (field.type === 'Form.Checkbox') {
+    const checked = Boolean(values[fieldId] ?? field.props.value ?? field.props.defaultValue ?? false)
+    control = (
+      <label className="openray-extension-form-checkbox">
+        <input id={controlId} type="checkbox" checked={checked} autoFocus={autoFocus} onChange={(event) => set(event.target.checked)} />
+        {propString(field, 'label')}
+      </label>
+    )
+  } else if (field.type === 'Form.TextArea') {
+    labelAtTop = true
+    control = (
+      <textarea
+        id={controlId}
+        className="openray-extension-form-textarea"
+        value={textValue}
+        placeholder={propString(field, 'placeholder')}
+        autoFocus={autoFocus}
+        onChange={(event) => set(event.target.value)}
+      />
+    )
+  } else if (field.type === 'Form.Dropdown') {
+    const options: UiNode[] = []
+    const collectOptions = (n: UiNode) => {
+      for (const childId of n.children) {
+        const child = nodes[childId]
+        if (!child) continue
+        if (child.type === 'Form.Dropdown.Item') options.push(child)
+        else if (child.type === 'Form.Dropdown.Section') collectOptions(child)
+      }
+    }
+    collectOptions(field)
+    control = (
+      <div className="openray-extension-form-select">
+        <select id={controlId} value={textValue} autoFocus={autoFocus} onChange={(event) => set(event.target.value)}>
+          {options.map((option) => (
+            <option key={option.id} value={propString(option, 'value') ?? ''}>
+              {propString(option, 'title')}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon size={13} className="openray-extension-form-select-chevron" />
+      </div>
+    )
+  } else {
+    control = (
+      <input
+        id={controlId}
+        className="openray-extension-form-input"
+        type={field.type === 'Form.PasswordField' ? 'password' : 'text'}
+        value={textValue}
+        placeholder={propString(field, 'placeholder')}
+        autoFocus={autoFocus}
+        spellCheck={false}
+        onChange={(event) => set(event.target.value)}
+      />
+    )
+  }
+
+  return (
+    <>
+      <label className={`openray-extension-form-label${labelAtTop || info || error ? ' openray-extension-form-label--top' : ''}`} htmlFor={controlId}>
+        {label}
+      </label>
+      <div className="openray-extension-form-control">
+        {control}
+        {info && <span className="openray-extension-form-hint">{info}</span>}
+        {error && <span className="openray-extension-form-error">{error}</span>}
+      </div>
+    </>
+  )
+}
+
+export function ExtensionView({
+  onBack,
+  title,
+  icon,
+}: {
+  onBack?: () => void
+  title?: string
+  icon?: string | null
+} = {}) {
   const root = useExtensionRootNode()
   const { nodes } = useExtensionTree()
 
@@ -1019,13 +1174,13 @@ export function ExtensionView({ onBack }: { onBack?: () => void } = {}) {
   // in-place updates still correctly preserve state as before.
   switch (root.type) {
     case 'List':
-      return <ExtensionList key={root.id} node={root} nodes={nodes} onBack={onBack} />
+      return <ExtensionList key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
     case 'Grid':
-      return <ExtensionGrid key={root.id} node={root} nodes={nodes} onBack={onBack} />
+      return <ExtensionGrid key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
     case 'Detail':
-      return <ExtensionDetail key={root.id} node={root} nodes={nodes} />
+      return <ExtensionDetail key={root.id} node={root} nodes={nodes} title={title} icon={icon} />
     case 'Form':
-      return <ExtensionForm key={root.id} node={root} nodes={nodes} />
+      return <ExtensionForm key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
     case 'MarkdownEditor':
       return <ExtensionMarkdownEditor key={root.id} node={root} nodes={nodes} />
     default:

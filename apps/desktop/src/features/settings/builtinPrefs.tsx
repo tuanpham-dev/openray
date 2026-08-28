@@ -25,11 +25,12 @@ function ScriptCommandsPrefs({ settings, onChange }: BuiltinPrefsProps) {
 
   return (
     <div className="openray-settings-form">
-      <label className="openray-settings-form-label" htmlFor="script-directory-input">
+      <label className="openray-settings-form-label openray-settings-form-label--top" htmlFor="script-directory-input">
         Script Directories
       </label>
       <StringListField
         id="script-directory-input"
+        directory
         placeholder="~/scripts"
         hint={
           <>

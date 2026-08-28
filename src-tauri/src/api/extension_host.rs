@@ -89,6 +89,23 @@ pub async fn invoke_extension_callback(state: State<'_, AppState>, callback_id: 
         .map_err(|e| e.to_string())
 }
 
+/// Pops one level off a mounted command's own navigation stack (what an
+/// `Action.Push` put there), returning whether there was anything to pop —
+/// `false` means the command is already showing its initial view, and the
+/// frontend's back button / Escape should leave the command instead.
+#[tauri::command]
+pub async fn pop_extension_view(state: State<'_, AppState>, extension_id: String, command_name: String) -> Result<bool, String> {
+    let value = state
+        .extension_host
+        .call(
+            "extension.popNavigation",
+            Some(json!({ "extensionId": extension_id, "commandName": command_name })),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(value.as_bool().unwrap_or(false))
+}
+
 /// T24: an extension window's own frontend calls this once it's attached
 /// its `extension-ui-commit` listener — only then does Node's window
 /// mounter actually call `mount()` and start streaming commits, so the

@@ -20,11 +20,15 @@ interface CommandListProps {
   /** Always show the filter input, even at or under `FILTER_THRESHOLD`
    *  rows (Applications runs to hundreds and always wants one). */
   alwaysShowFilter?: boolean
+  /** Stretch to fill the height its parent gives it, scrolling inside
+   *  itself, instead of sizing to content (and, when windowed, stopping at
+   *  `--virtualized`'s fixed max-height). Applications passes this. */
+  fill?: boolean
   /** Shown instead of the row list when `commands` is empty. */
   emptyText?: string
 }
 
-export function CommandList({ commands, commandSettings, onAlias, onHotkey, onEnabled, alwaysShowFilter, emptyText }: CommandListProps) {
+export function CommandList({ commands, commandSettings, onAlias, onHotkey, onEnabled, alwaysShowFilter, fill, emptyText }: CommandListProps) {
   const [filter, setFilter] = useState('')
 
   const filterLower = filter.trim().toLowerCase()
@@ -43,7 +47,10 @@ export function CommandList({ commands, commandSettings, onAlias, onHotkey, onEn
   )
 
   const showFilter = alwaysShowFilter || commands.length > FILTER_THRESHOLD
-  const virtualize = filtered.length > VIRTUALIZE_THRESHOLD
+  // A filling list always scrolls inside itself, so it windows regardless
+  // of row count — its rows box is bounded by the layout, not by content.
+  const virtualize = fill || filtered.length > VIRTUALIZE_THRESHOLD
+  const rowsClass = `openray-command-list-rows${fill ? ' openray-command-list-rows--fill' : ''}`
 
   if (commands.length === 0) {
     return <p className="openray-extension-prefs-empty">{emptyText ?? 'No commands.'}</p>
@@ -62,7 +69,7 @@ export function CommandList({ commands, commandSettings, onAlias, onHotkey, onEn
   )
 
   return (
-    <div className="openray-command-list">
+    <div className={`openray-command-list${fill ? ' openray-command-list--fill' : ''}`}>
       {showFilter && (
         <input
           type="text"
@@ -76,13 +83,13 @@ export function CommandList({ commands, commandSettings, onAlias, onHotkey, onEn
       {filtered.length === 0 ? (
         <p className="openray-extension-prefs-empty">No matching commands.</p>
       ) : virtualize ? (
-        <div ref={containerRef} className="openray-command-list-rows openray-command-list-rows--virtualized" onScroll={onScroll}>
+        <div ref={containerRef} className={`${rowsClass} openray-command-list-rows--virtualized`} onScroll={onScroll}>
           {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
           {filtered.slice(startIndex, endIndex).map((command, offset) => row(command, offset === 0 ? measureFirstCell : undefined))}
           {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} />}
         </div>
       ) : (
-        <div className="openray-command-list-rows">{filtered.map((command) => row(command))}</div>
+        <div className={rowsClass}>{filtered.map((command) => row(command))}</div>
       )}
     </div>
   )

@@ -59,11 +59,12 @@ export function ScreenshotsPrefs({ settings, onChange }: ScreenshotsPrefsProps) 
 
   return (
     <div className="openray-settings-form">
-      <label className="openray-settings-form-label" htmlFor="screenshot-scopes-input">
+      <label className="openray-settings-form-label openray-settings-form-label--top" htmlFor="screenshot-scopes-input">
         Search Scopes
       </label>
       <StringListField
         id="screenshot-scopes-input"
+        directory
         placeholder="~/Pictures/Screenshots"
         hint="Folders scanned for screenshots and recordings"
         values={settings.screenshotSearchScopes ?? []}
@@ -72,7 +73,7 @@ export function ScreenshotsPrefs({ settings, onChange }: ScreenshotsPrefsProps) 
 
       <hr className="openray-settings-separator" />
 
-      <label className="openray-settings-form-label" htmlFor="screenshot-video-extensions-input">
+      <label className="openray-settings-form-label openray-settings-form-label--top" htmlFor="screenshot-video-extensions-input">
         Video Extensions
       </label>
       <StringListField

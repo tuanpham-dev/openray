@@ -6,6 +6,7 @@ const COLUMNS = 10
 const RECENTS_KEY = 'recents'
 const RECENTS_MAX = 20
 const RECENTS_TITLE = 'Recently Used'
+const ALL_CATEGORIES = 'all'
 
 /** Character → name, for labelling recents without a second dataset scan. */
 const NAME_BY_CHAR = new Map<string, string>()
@@ -43,6 +44,10 @@ export default function SearchEmoji() {
   const [searchText, setSearchText] = useState('')
   const [recents, setRecents] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  /** A section title, or `ALL_CATEGORIES` — the dropdown at the trailing
+   *  edge of the search bar, the way Raycast's own emoji picker scopes the
+   *  grid to one category. */
+  const [category, setCategory] = useState(ALL_CATEGORIES)
 
   useEffect(() => {
     void loadRecents().then((loaded) => {
@@ -62,10 +67,32 @@ export default function SearchEmoji() {
   const needle = searchText.trim().toLowerCase()
   const matches = (name: string) => !needle || name.includes(needle)
 
-  const recentEntries: EmojiEntry[] = recents.map((char) => ({ e: char, n: NAME_BY_CHAR.get(char) ?? '' })).filter((entry) => matches(entry.n))
+  // Recents span every category, so they only lead the grid while it shows
+  // all of them — scoped to one category, the section would be a second,
+  // unrelated answer to "show me Arrows".
+  const showRecents = category === ALL_CATEGORIES
+  const recentEntries: EmojiEntry[] = showRecents
+    ? recents.map((char) => ({ e: char, n: NAME_BY_CHAR.get(char) ?? '' })).filter((entry) => matches(entry.n))
+    : []
+  const sections = category === ALL_CATEGORIES ? EMOJI_SECTIONS : EMOJI_SECTIONS.filter((section) => section.title === category)
 
   return (
-    <Grid columns={COLUMNS} isLoading={isLoading} searchText={searchText} onSearchTextChange={setSearchText} navigationTitle="Emoji & Symbols" searchBarPlaceholder="Search emoji & symbols…">
+    <Grid
+      columns={COLUMNS}
+      isLoading={isLoading}
+      searchText={searchText}
+      onSearchTextChange={setSearchText}
+      navigationTitle="Emoji & Symbols"
+      searchBarPlaceholder="Search emoji & symbols…"
+      searchBarAccessory={
+        <Grid.Dropdown tooltip="Filter by category" value={category} onChange={setCategory}>
+          <Grid.Dropdown.Item title="All Categories" value={ALL_CATEGORIES} />
+          {EMOJI_SECTIONS.map((section) => (
+            <Grid.Dropdown.Item key={section.title} title={section.title} value={section.title} />
+          ))}
+        </Grid.Dropdown>
+      }
+    >
       {recentEntries.length > 0 && (
         <Grid.Section title={RECENTS_TITLE}>
           {recentEntries.map((entry) => (
@@ -73,7 +100,7 @@ export default function SearchEmoji() {
           ))}
         </Grid.Section>
       )}
-      {EMOJI_SECTIONS.map((section) => {
+      {sections.map((section) => {
         const filtered = section.items.filter((entry) => matches(entry.n))
         if (filtered.length === 0) return null
         return (

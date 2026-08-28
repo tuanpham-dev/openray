@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, List, confirmAlert, showHUD } from '@raycast/api'
+import { Action, ActionPanel, List, confirmAlert, open, showHUD } from '@raycast/api'
 import {
   type ClipboardHistoryEntry,
   clearClipboardHistory,
@@ -8,8 +8,53 @@ import {
   pasteClipboardHistoryEntry,
   pasteImageClipboardHistoryEntry,
 } from '@openray/extras'
+import { detectContentKind, parseColor, toHex, toRgbString, urlHost, type ClipboardContentKind, type Rgb } from './contentType'
 
-type Filter = 'all' | 'text' | 'file' | 'image'
+/** Images and files are storage kinds the backend already records; the
+ *  rest are detected from the entry's own text — the same split native
+ *  x-ray's clipboard view used before this was an extension. */
+type EntryKind = ClipboardContentKind | 'image' | 'file'
+type Filter = EntryKind | 'all'
+
+const KIND_LABELS: Record<EntryKind, string> = {
+  color: 'Color',
+  url: 'Link',
+  email: 'Email',
+  number: 'Number',
+  text: 'Text',
+  image: 'Image',
+  file: 'File',
+}
+
+const KIND_ICONS: Record<EntryKind, string> = {
+  color: 'clipboard',
+  url: 'link',
+  email: 'mail',
+  number: 'hash',
+  text: 'text',
+  image: 'camera',
+  file: 'file',
+}
+
+const FILTERS: { value: Filter; title: string }[] = [
+  { value: 'all', title: 'All Types' },
+  { value: 'text', title: 'Text' },
+  { value: 'image', title: 'Images' },
+  { value: 'file', title: 'Files' },
+  { value: 'url', title: 'Links' },
+  { value: 'color', title: 'Colors' },
+  { value: 'email', title: 'Emails' },
+  { value: 'number', title: 'Numbers' },
+]
+
+function entryKind(entry: ClipboardHistoryEntry): EntryKind {
+  if (entry.kind === 'image' || entry.kind === 'file') return entry.kind
+  return detectContentKind(entry.text)
+}
+
+function entryColor(entry: ClipboardHistoryEntry, kind: EntryKind): Rgb | null {
+  return kind === 'color' ? parseColor(entry.text) : null
+}
 
 function formatBytes(bytes: number | null): string | undefined {
   if (bytes == null) return undefined
@@ -18,19 +63,99 @@ function formatBytes(bytes: number | null): string | undefined {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function previewTitle(entry: ClipboardHistoryEntry): string {
-  if (entry.kind === 'image') return `Image (${entry.imageWidth ?? '?'}×${entry.imageHeight ?? '?'})`
+/** Trailing path segment, so a file reads by name in the list and keeps its
+ *  full path for the detail pane. */
+function baseName(path: string): string {
+  return path.trim().split('/').filter(Boolean).pop() ?? path
+}
+
+function imageLabel(entry: ClipboardHistoryEntry): string {
+  const { imageWidth: w, imageHeight: h } = entry
+  return w && h ? `Image (${w}×${h})` : 'Image'
+}
+
+function previewTitle(entry: ClipboardHistoryEntry, kind: EntryKind): string {
+  if (kind === 'image') return imageLabel(entry)
+  if (kind === 'file') return baseName(entry.text)
   return entry.text.split('\n')[0]?.slice(0, 200) || '(empty)'
 }
 
-// Native's own preview sniffed text further into colors/links/emails/numbers
-// for richer per-kind actions — this port keeps the three real backend
-// `kind`s (text/file/image) as the whole filter/preview surface, a
-// disclosed simplification.
-function detailMarkdown(entry: ClipboardHistoryEntry): string {
-  if (entry.kind === 'image') return entry.imagePath ? `![](${entry.imagePath})` : '_No preview available._'
-  if (entry.kind === 'file') return `**File**\n\n\`${entry.text}\``
-  return entry.text || '_(empty)_'
+/** A row's leading visual: the thumbnail for an image, the colour itself
+ *  for a colour (the host renders a bare `#rrggbb` as a swatch), and the
+ *  kind's own glyph otherwise. */
+function rowIcon(entry: ClipboardHistoryEntry, kind: EntryKind, color: Rgb | null): string | undefined {
+  if (kind === 'image') return entry.imagePath ?? KIND_ICONS.image
+  if (color) return toHex(color)
+  return KIND_ICONS[kind]
+}
+
+function rowSubtitle(entry: ClipboardHistoryEntry, kind: EntryKind): string | undefined {
+  if (kind === 'file') return entry.text.trim()
+  if (kind === 'url') return urlHost(entry.text) ?? undefined
+  return undefined
+}
+
+/** Fences the raw text so the detail pane shows it verbatim — clipboard
+ *  content is not markdown, and rendering it as markdown ate list markers,
+ *  headings and underscores. The fence grows past any backtick run inside
+ *  the text so content that itself contains a fence can't break out. */
+function codeBlock(text: string): string {
+  const longestRun = [...text.matchAll(/`+/g)].reduce((max, [run]) => Math.max(max, run.length), 0)
+  const fence = '`'.repeat(Math.max(3, longestRun + 1))
+  return `${fence}\n${text}\n${fence}`
+}
+
+function detailMarkdown(entry: ClipboardHistoryEntry, kind: EntryKind): string {
+  if (kind === 'image') return entry.imagePath ? `![](${entry.imagePath})` : '_No preview available._'
+  if (kind === 'file') return `### ${baseName(entry.text)}\n\n${codeBlock(entry.text.trim())}`
+  if (!entry.text) return '_(empty)_'
+  return codeBlock(entry.text)
+}
+
+/** The Information block under the preview: the rows unique to this kind
+ *  first, then Type and Copied, which every entry carries. */
+function DetailMetadata({ entry, kind, color }: { entry: ClipboardHistoryEntry; kind: EntryKind; color: Rgb | null }) {
+  const host = kind === 'url' ? urlHost(entry.text) : null
+
+  return (
+    <List.Item.Detail.Metadata>
+      {kind === 'image' && (
+        <>
+          <List.Item.Detail.Metadata.Label title="Content Type" text="Image (PNG)" />
+          {entry.imageWidth != null && entry.imageHeight != null && (
+            <List.Item.Detail.Metadata.Label title="Dimensions" text={`${entry.imageWidth} × ${entry.imageHeight}`} />
+          )}
+          {entry.imageBytes != null && <List.Item.Detail.Metadata.Label title="File Size" text={formatBytes(entry.imageBytes)} />}
+          {entry.imagePath && <List.Item.Detail.Metadata.Label title="Path" text={entry.imagePath} />}
+        </>
+      )}
+      {color && (
+        <>
+          <List.Item.Detail.Metadata.Label title="Color" text={toHex(color)} icon={toHex(color)} />
+          <List.Item.Detail.Metadata.Label title="RGB" text={toRgbString(color)} />
+        </>
+      )}
+      {kind === 'file' && (
+        <>
+          <List.Item.Detail.Metadata.Label title="Content Type" text="File" />
+          <List.Item.Detail.Metadata.Label title="Path" text={entry.text.trim()} />
+        </>
+      )}
+      {/* Host only: the URL itself is already the preview above, and a
+          second full copy of a long one wrapped over four lines here. */}
+      {kind === 'url' && host && <List.Item.Detail.Metadata.Label title="Host" text={host} />}
+      {kind === 'email' && <List.Item.Detail.Metadata.Label title="Address" text={entry.text.trim()} />}
+      {(kind === 'text' || kind === 'number') && (
+        <>
+          <List.Item.Detail.Metadata.Label title="Characters" text={entry.text.length.toLocaleString()} />
+          <List.Item.Detail.Metadata.Label title="Words" text={String(entry.text.trim().split(/\s+/).filter(Boolean).length)} />
+        </>
+      )}
+      <List.Item.Detail.Metadata.Separator />
+      <List.Item.Detail.Metadata.Label title="Type" text={KIND_LABELS[kind]} />
+      <List.Item.Detail.Metadata.Label title="Copied" text={new Date(entry.createdAt * 1000).toLocaleString()} />
+    </List.Item.Detail.Metadata>
+  )
 }
 
 export default function ClipboardHistoryCommand() {
@@ -48,7 +173,7 @@ export default function ClipboardHistoryCommand() {
     void refresh()
   }, [])
 
-  const filtered = filter === 'all' ? entries : entries.filter((entry) => entry.kind === filter)
+  const filtered = filter === 'all' ? entries : entries.filter((entry) => entryKind(entry) === filter)
 
   const paste = async (entry: ClipboardHistoryEntry) => {
     if (entry.kind === 'image') await pasteImageClipboardHistoryEntry(entry.id)
@@ -78,57 +203,57 @@ export default function ClipboardHistoryCommand() {
       navigationTitle="Clipboard History"
       searchBarAccessory={
         <List.Dropdown tooltip="Filter by type" value={filter} onChange={(value) => setFilter(value as Filter)}>
-          <List.Dropdown.Item title="All" value="all" />
-          <List.Dropdown.Item title="Text" value="text" />
-          <List.Dropdown.Item title="Files" value="file" />
-          <List.Dropdown.Item title="Images" value="image" />
+          {FILTERS.map((option) => (
+            <List.Dropdown.Item key={option.value} title={option.title} value={option.value} />
+          ))}
         </List.Dropdown>
       }
     >
       <List.EmptyView title="No Clipboard History" description="Copy something to see it here." />
-      {filtered.map((entry) => (
-        <List.Item
-          key={entry.id}
-          id={entry.id}
-          title={previewTitle(entry)}
-          subtitle={entry.kind === 'file' ? 'File' : undefined}
-          icon={entry.kind === 'image' ? (entry.imagePath ?? undefined) : undefined}
-          accessories={[{ date: new Date(entry.createdAt * 1000).toISOString() }]}
-          detail={
-            <List.Item.Detail
-              markdown={detailMarkdown(entry)}
-              metadata={
-                <List.Item.Detail.Metadata>
-                  <List.Item.Detail.Metadata.Label title="Type" text={entry.kind[0].toUpperCase() + entry.kind.slice(1)} />
-                  {entry.kind === 'image' && entry.imageWidth != null && entry.imageHeight != null && (
-                    <List.Item.Detail.Metadata.Label title="Dimensions" text={`${entry.imageWidth} × ${entry.imageHeight}`} />
-                  )}
-                  {entry.imageBytes != null && <List.Item.Detail.Metadata.Label title="File Size" text={formatBytes(entry.imageBytes)} />}
-                  {entry.kind === 'file' && <List.Item.Detail.Metadata.Label title="Path" text={entry.text} />}
-                  <List.Item.Detail.Metadata.Label title="Copied" text={new Date(entry.createdAt * 1000).toLocaleString()} />
-                </List.Item.Detail.Metadata>
-              }
-            />
-          }
-          actions={
-            <ActionPanel>
-              <Action title="Paste" onAction={() => void paste(entry)} />
-              {entry.kind !== 'image' && (
-                <Action.CopyToClipboard title="Copy" content={entry.text} shortcut={{ modifiers: ['cmd'], key: 'c' }} />
-              )}
-              <Action title="Delete" style="destructive" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void remove(entry)} />
-              <ActionPanel.Section>
-                <Action
-                  title="Clear All"
-                  style="destructive"
-                  shortcut={{ modifiers: ['cmd', 'shift'], key: 'backspace' }}
-                  onAction={() => void clearAll()}
-                />
-              </ActionPanel.Section>
-            </ActionPanel>
-          }
-        />
-      ))}
+      {filtered.map((entry) => {
+        const kind = entryKind(entry)
+        const color = entryColor(entry, kind)
+        const value = entry.text.trim()
+        return (
+          <List.Item
+            key={entry.id}
+            id={entry.id}
+            title={previewTitle(entry, kind)}
+            subtitle={rowSubtitle(entry, kind)}
+            icon={rowIcon(entry, kind, color)}
+            detail={<List.Item.Detail markdown={detailMarkdown(entry, kind)} metadata={<DetailMetadata entry={entry} kind={kind} color={color} />} />}
+            actions={
+              <ActionPanel>
+                <Action title="Paste" icon="clipboard" onAction={() => void paste(entry)} />
+                {entry.kind !== 'image' && (
+                  <Action.CopyToClipboard title="Copy" content={entry.text} shortcut={{ modifiers: ['cmd'], key: 'c' }} />
+                )}
+                {/* Type-specific entries, the way native's preview offered
+                    them — a link opens, a file opens, a colour copies in
+                    either notation. */}
+                {kind === 'url' && <Action.OpenInBrowser title="Open in Browser" url={value} />}
+                {kind === 'file' && <Action title="Open File" icon="file" onAction={() => void open(value)} />}
+                {kind === 'email' && <Action title="Compose Email" icon="mail" onAction={() => void open(`mailto:${value}`)} />}
+                {color && (
+                  <>
+                    <Action.CopyToClipboard title="Copy as HEX" content={toHex(color)} />
+                    <Action.CopyToClipboard title="Copy as RGB" content={toRgbString(color)} />
+                  </>
+                )}
+                <Action title="Delete" style="destructive" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void remove(entry)} />
+                <ActionPanel.Section>
+                  <Action
+                    title="Clear All"
+                    style="destructive"
+                    shortcut={{ modifiers: ['cmd', 'shift'], key: 'backspace' }}
+                    onAction={() => void clearAll()}
+                  />
+                </ActionPanel.Section>
+              </ActionPanel>
+            }
+          />
+        )
+      })}
     </List>
   )
 }

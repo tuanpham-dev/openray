@@ -15,11 +15,16 @@ export function ApplicationsView({ commands, commandSettings, onAlias, onHotkey,
   const appCommands = commands.filter((command) => command.kind === 'app')
 
   return (
-    <div className="openray-extension-view">
+    // `--fill` (not the centered, content-height `openray-extension-view`
+    // default): the app list is the whole point of this view and runs to
+    // hundreds of rows, so it takes the window's full height and scrolls
+    // inside itself rather than stopping at the virtualizer's default
+    // 340px box with dead space underneath.
+    <div className="openray-extension-view openray-extension-view--fill">
       <header className="openray-settings-view-heading">
         <h2>Applications</h2>
       </header>
-      <section className="openray-extension-view-section">
+      <section className="openray-extension-view-section openray-extension-view-section--fill">
         <CommandList
           commands={appCommands}
           commandSettings={commandSettings}
@@ -27,6 +32,7 @@ export function ApplicationsView({ commands, commandSettings, onAlias, onHotkey,
           onHotkey={onHotkey}
           onEnabled={onEnabled}
           alwaysShowFilter
+          fill
           emptyText="No applications found."
         />
       </section>
