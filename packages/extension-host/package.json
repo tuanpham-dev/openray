@@ -1,22 +1,37 @@
 {
   "name": "@openray/extension-host",
-  "private": true,
   "version": "0.1.0",
+  "description": "OpenRay's extension build, pack, and run pipeline \u2014 the Node sidecar and the .orx packer.",
+  "license": "MIT",
+  "author": "Tuan Pham",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuanpham-dev/openray.git",
+    "directory": "packages/extension-host"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "node scripts/build.mjs"
   },
   "dependencies": {
     "@openray/api-shim": "workspace:*",
     "@openray/protocol": "workspace:*",
+    "esbuild": "^0.27.1",
     "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
-    "esbuild": "^0.27.1",
     "typescript": "~6.0.2",
     "vitest": "^4.1.10"
   }

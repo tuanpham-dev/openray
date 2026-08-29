@@ -1,5 +1,6 @@
 {
   "name": "switch-windows",
+  "private": true,
   "title": "Switch Windows",
   "description": "Search and switch between open windows.",
   "icon": "window-move",

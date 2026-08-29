@@ -1,5 +1,6 @@
 {
   "name": "window-management",
+  "private": true,
   "title": "Window Management",
   "description": "Tile, resize, and move windows with presets and custom layouts.",
   "export": {

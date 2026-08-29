@@ -68,10 +68,7 @@ await build({
   sourcemap: true,
   logLevel: 'info',
   jsx: 'automatic',
-  alias: {
-    react: requireFromApiShim.resolve('react'),
-  },
-  external: ['esbuild', requireFromApiShim.resolve('react')],
+  external: ['esbuild'],
 })
 
 // A second, separate entry point exposing builder.ts's `buildCommand`/

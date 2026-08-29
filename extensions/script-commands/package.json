@@ -1,5 +1,6 @@
 {
   "name": "script-commands",
+  "private": true,
   "title": "Script Commands",
   "description": "Run user-authored scripts annotated with @raycast.* or @openray.* headers.",
   "icon": "code",

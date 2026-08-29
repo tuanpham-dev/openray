@@ -1,16 +1,30 @@
 {
   "name": "@openray/api-shim",
-  "private": true,
   "version": "0.1.0",
+  "description": "OpenRay's implementation of the Raycast extension API surface, consumed as TypeScript source by the build pipeline.",
+  "license": "MIT",
+  "author": "Tuan Pham",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuanpham-dev/openray.git",
+    "directory": "packages/api-shim"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./src/index.cts",
   "types": "./src/index.cts",
   "exports": {
     ".": "./src/index.cts",
+    "./package.json": "./package.json",
     "./utils": "./src/utils.cts",
     "./openray": "./src/openray.cts",
     "./runtime": "./src/runtime.ts"
   },
+  "files": [
+    "src"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

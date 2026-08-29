@@ -1,5 +1,6 @@
 {
   "name": "store",
+  "private": true,
   "title": "Store",
   "description": "Browse and install extensions from the registries you trust.",
   "icon": "app-window",

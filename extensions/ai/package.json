@@ -1,5 +1,6 @@
 {
   "name": "ai",
+  "private": true,
   "title": "AI",
   "description": "Chat, Quick AI, AI Commands, Agents, Skills, and MCP servers.",
   "icon": "sparkles",

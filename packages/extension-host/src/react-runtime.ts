@@ -1,17 +1,39 @@
 import { createRequire } from 'node:module'
 import Module from 'node:module'
-import { join, sep } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { log } from './rpc'
 
 const requireFromHere = createRequire(__filename)
 
-// __dirname resolves to dist/ at runtime (esbuild injects a real CJS
-// __dirname for the bundled host.cjs). packages/api-shim is a sibling of
-// packages/extension-host, so this walks dist -> extension-host -> packages
-// -> api-shim/src. Dev-mode only, matching the same relative-path
-// assumption process.rs makes for host.cjs itself; T24 packaging carries
-// api-shim's source alongside the bundle for production.
-export const apiShimSrcDir = join(__dirname, '..', '..', 'api-shim', 'src')
+/**
+ * Where the api shim's TypeScript *sources* live on disk.
+ *
+ * They have to be findable at runtime, not just at build time: `buildCommand`
+ * aliases `@raycast/api` (and four sibling specifiers) straight at these
+ * `.cts` files, so esbuild reads them on every pack, install, and dev-mode
+ * rebuild.
+ *
+ * Two layouts have to work, which is why this is a lookup rather than a
+ * constant. In the monorepo, `__dirname` is `packages/extension-host/dist`
+ * and api-shim is a sibling package — the walk up to `packages/` and back
+ * down is what the relative fallback does, matching the same assumption
+ * `process.rs` makes for `host.cjs` itself. Installed from npm, api-shim is
+ * an ordinary dependency under `node_modules/@openray/api-shim`, nowhere
+ * near a sibling, and only `require.resolve` finds it. Resolving its
+ * `package.json` (rather than an entry point) is deliberate: the entry
+ * points are `.cts` source that Node cannot load, and the package.json is
+ * exported precisely so this lookup can locate the directory without
+ * evaluating anything.
+ */
+function resolveApiShimSrcDir(): string {
+  try {
+    return join(dirname(requireFromHere.resolve('@openray/api-shim/package.json')), 'src')
+  } catch {
+    return join(__dirname, '..', '..', 'api-shim', 'src')
+  }
+}
+
+export const apiShimSrcDir = resolveApiShimSrcDir()
 
 /**
  * The three react entry points every extension bundle shares with this

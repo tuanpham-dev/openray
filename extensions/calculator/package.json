@@ -1,5 +1,6 @@
 {
   "name": "calculator",
+  "private": true,
   "title": "Calculator",
   "description": "Arithmetic, unit/currency conversion, and date/time math as an inline root-search row.",
   "icon": "calculator",

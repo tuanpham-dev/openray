@@ -1,5 +1,6 @@
 {
   "name": "screenshots",
+  "private": true,
   "title": "Screenshots",
   "description": "Search, paste, and drop screenshots and screen recordings.",
   "icon": "camera",
