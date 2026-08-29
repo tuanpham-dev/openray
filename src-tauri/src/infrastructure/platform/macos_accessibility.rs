@@ -246,7 +246,7 @@ impl AXElement {
     /// Writes a boolean-typed attribute, e.g. `AXFullScreen`.
     pub fn set_attribute_bool(&self, name: &str, flag: bool) -> bool {
         let value = CFBoolean::new(flag);
-        let value_ptr = CFRetained::as_ptr(&value).as_ptr().cast();
+        let value_ptr = (value as *const CFBoolean).cast();
         self.set_attribute_raw(name, value_ptr)
     }
 }

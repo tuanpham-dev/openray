@@ -82,6 +82,9 @@ argon2 = "0.5"
 # under the Argon2-derived key. Pure-Rust, small, matches argon2's RustCrypto
 # lineage.
 chacha20poly1305 = "0.10"
+# application::inline_query joins per-command onQuery futures cross-platform;
+# also used by infrastructure::wayland_hotkey on Linux.
+futures-util = "0.3.34"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1.10.0"
@@ -132,7 +135,6 @@ glib = "0.18"
 # randr: per-monitor work-area resolution for Window Management's
 # Next/Previous Display and multi-monitor gap math.
 x11rb = { version = "0.13.2", features = ["randr"] }
-futures-util = "0.3.34"
 # Navigation: reads/activates app menu bars over D-Bus (Qt/KDE dbusmenu,
 # GTK org.gtk.Menus, AppMenu.Registrar). Blocking API only — verified via
 # a throwaway spike that it coexists with the app's own tokio runtime

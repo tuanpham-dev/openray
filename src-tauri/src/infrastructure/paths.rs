@@ -55,7 +55,7 @@ mod tests {
     /// assertion is specifically about the final component and its parent.
     #[test]
     fn config_dir_is_a_plain_openray_folder_inside_the_platform_config_dir() {
-        let app = tauri::test::mock_builder().build(tauri::generate_context!()).expect("failed to build mock app");
+        let app = tauri::test::mock_builder().build(crate::test_context()).expect("failed to build mock app");
         let dir = config_dir(app.handle()).expect("config dir should resolve");
 
         assert_eq!(dir.file_name().and_then(|n| n.to_str()), Some("openray"));

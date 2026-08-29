@@ -4,6 +4,18 @@ mod domain;
 mod error;
 mod infrastructure;
 
+/// `tauri::generate_context!()` embeds the app's `Info.plist` as a
+/// crate-wide `_EMBED_INFO_PLIST` static — a **compile-time error** if the
+/// macro expands more than once in the same binary (see `embed_plist`'s
+/// docs). `cargo test` links every `#[cfg(test)]` module into one binary
+/// alongside this file's own `run()`, so every test-side mock app must
+/// route through this single shared expansion rather than calling the
+/// macro directly.
+#[cfg(test)]
+pub(crate) fn test_context() -> tauri::Context<tauri::test::MockRuntime> {
+  tauri::generate_context!()
+}
+
 use std::sync::Arc;
 
 use tauri::{Emitter, Manager, WindowEvent};
@@ -35,7 +47,7 @@ use crate::infrastructure::window::{self, PALETTE_WINDOW_LABEL};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let builder = tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
       let _ = window::toggle_palette(app);
     }))
@@ -43,7 +55,12 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
     .plugin(tauri_plugin_shell::init())
-    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_dialog::init());
+
+  #[cfg(target_os = "macos")]
+  let builder = builder.plugin(tauri_nspanel::init());
+
+  builder
     .invoke_handler(tauri::generate_handler![
       // api::window
       api::window::hide_palette,
@@ -126,8 +143,23 @@ pub fn run() {
 
       Ok(())
     })
-    .run(tauri::generate_context!())
+    .run(app_context())
     .expect("error while running tauri application");
+}
+
+/// Isolates the one production-build expansion of `tauri::generate_context!()`
+/// (see `test_context`'s doc comment: the macro embeds a crate-wide static,
+/// so exactly one expansion may exist per compiled binary). `run()` above is
+/// never called under `cargo test`, but its body is still compiled, so this
+/// must stay out of that path too.
+#[cfg(not(test))]
+fn app_context() -> tauri::Context<tauri::Wry> {
+  tauri::generate_context!()
+}
+
+#[cfg(test)]
+fn app_context() -> tauri::Context<tauri::Wry> {
+  unreachable!("run() is not exercised by cargo test")
 }
 
 /// Dev-only logging, the palette window's macOS panel conversion and
@@ -136,7 +168,7 @@ pub fn run() {
 /// touching `AppState`. Split from `run`'s `.setup()` closure (T8,
 /// `plans/refactor-extension-platform.md`) purely for readability; no
 /// behavior change.
-fn setup_window_chrome(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+fn setup_window_chrome(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
   if cfg!(debug_assertions) {
     app.handle().plugin(
       tauri_plugin_log::Builder::default()

@@ -65,7 +65,19 @@ impl AppScanner for MacosAppScanner {
 }
 
 fn app_dirs() -> Vec<PathBuf> {
-    let mut dirs = vec![PathBuf::from("/Applications")];
+    // `/System/Applications` (+ its `Utilities` subfolder): since
+    // Catalina, most of Apple's built-in apps (Calculator, Chess,
+    // Stickies, Terminal, Disk Utility, ...) live on the sealed system
+    // volume here rather than in `/Applications` — omitting it meant this
+    // scanner silently missed every one of them, found only on a real Mac
+    // (this dev sandbox has neither directory). The scan below is
+    // non-recursive, so `Utilities` needs listing separately from its
+    // parent.
+    let mut dirs = vec![
+        PathBuf::from("/Applications"),
+        PathBuf::from("/System/Applications"),
+        PathBuf::from("/System/Applications/Utilities"),
+    ];
     if let Some(home) = std::env::var_os("HOME") {
         dirs.push(PathBuf::from(home).join("Applications"));
     }
@@ -159,4 +171,23 @@ fn resolve_and_convert_icon(bundle_path: &Path, icon_name: &str) -> Option<Strin
         .unwrap_or(false);
 
     converted.then(|| png_path.to_str().map(String::from)).flatten()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Found live on a real Mac (this dev sandbox has neither directory,
+    /// so cross-compile checks never caught it): most of Apple's built-in
+    /// apps live under `/System/Applications` since Catalina, not
+    /// `/Applications` — a scanner that only looks in the latter silently
+    /// drops Calculator, Chess, Terminal, and everything else Apple ships
+    /// there.
+    #[test]
+    fn app_dirs_includes_system_applications_and_its_utilities_subfolder() {
+        let dirs = app_dirs();
+        assert!(dirs.contains(&PathBuf::from("/Applications")));
+        assert!(dirs.contains(&PathBuf::from("/System/Applications")));
+        assert!(dirs.contains(&PathBuf::from("/System/Applications/Utilities")));
+    }
 }
