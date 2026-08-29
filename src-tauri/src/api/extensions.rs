@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::application::dev_extensions;
 use crate::application::extensions_registry::{ExtensionEntry, PreferenceDefinition, CLIPBOARD_HISTORY_ID};
@@ -62,7 +62,12 @@ fn extensions_root(app: &AppHandle) -> Result<String, String> {
 /// folder the author owns and is actively editing (see
 /// `application::dev_extensions`) — since everything downstream of
 /// registration is identical for both.
-fn finish_install(app: &AppHandle, state: &State<AppState>, result: HostBuildResult, source: &str) -> Result<ExtensionEntry, String> {
+fn finish_install<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &State<AppState>,
+    result: HostBuildResult,
+    source: &str,
+) -> Result<ExtensionEntry, String> {
     register_installed_extension(app, state, result, source, None)
 }
 
@@ -72,8 +77,8 @@ fn finish_install(app: &AppHandle, state: &State<AppState>, result: HostBuildRes
 /// `api::registry` finishes its own installs through it — the registry path
 /// downloads and verifies before it gets here, but everything from
 /// registration onward is identical.
-pub(crate) fn register_installed_extension(
-    app: &AppHandle,
+pub(crate) fn register_installed_extension<R: Runtime>(
+    app: &AppHandle<R>,
     state: &State<AppState>,
     result: HostBuildResult,
     source: &str,

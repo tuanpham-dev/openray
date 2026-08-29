@@ -913,10 +913,26 @@ async fn registry_install<R: Runtime>(app: &AppHandle<R>, params: Option<Value>)
     }
 
     let normalized = crate::application::registry_sources::normalize_url(&source_url);
-    state
-        .extensions
-        .register_installed_from(&result.id, &result.manifest, &result.dir, "installed", result.version.as_deref(), Some(&normalized))?;
-    Ok(json!({ "id": result.id, "version": result.version }))
+    let id = result.id.clone();
+    let version = result.version.clone();
+
+    // Registration goes through `register_installed_extension`, not
+    // `register_installed_from` directly.
+    //
+    // That function is where everything a *finished* install owes the rest
+    // of the app lives: re-running the extension's root-provider listing
+    // (those rows are push-based, so a newly installed root-provider
+    // extension contributes none until something asks it again), widening
+    // the asset-protocol scope so its icon resolves instead of rendering
+    // broken, and warning when the manifest disclaims this platform or the
+    // build reported errors. Registering the row directly here skipped all
+    // of it, so the same extension behaved differently depending on whether
+    // it was installed from the Store or from Settings — and the Store is
+    // the path almost everyone uses.
+    crate::api::extensions::register_installed_extension(app, &state, result, "installed", Some(&normalized))
+        .map_err(Error::msg)?;
+
+    Ok(json!({ "id": id, "version": version }))
 }
 
 async fn registry_uninstall<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
