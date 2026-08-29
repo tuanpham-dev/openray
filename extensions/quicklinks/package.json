@@ -1,5 +1,6 @@
 {
   "name": "quicklinks",
+  "private": true,
   "title": "Quicklinks",
   "description": "Create shortcuts to URLs, files, and folders with placeholders for query, clipboard, selection, and more.",
   "icon": "link",

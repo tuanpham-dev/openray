@@ -1,11 +1,25 @@
 {
   "name": "@openray/cli",
-  "private": true,
   "version": "0.1.0",
+  "description": "Develop, pack, and publish OpenRay extensions.",
+  "license": "MIT",
+  "author": "Tuan Pham",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuanpham-dev/openray.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "openray": "./bin/openray.mjs"
   },
+  "files": [
+    "bin",
+    "src"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },

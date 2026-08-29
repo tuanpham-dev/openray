@@ -1,5 +1,6 @@
 {
   "name": "system-commands",
+  "private": true,
   "title": "System Commands",
   "description": "Lock, sleep, restart, and other system controls.",
   "icon": "power",

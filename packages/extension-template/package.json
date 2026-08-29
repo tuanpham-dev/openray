@@ -1,10 +1,23 @@
 {
   "name": "@openray/extension-template",
-  "private": true,
   "version": "0.1.0",
+  "description": "Extension scaffolds shared by `openray create` and OpenRay's in-app Create Extension command.",
+  "license": "MIT",
+  "author": "Tuan Pham",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuanpham-dev/openray.git",
+    "directory": "packages/extension-template"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./index.mjs",
   "exports": {
     ".": "./index.mjs"
-  }
+  },
+  "files": [
+    "index.mjs"
+  ]
 }

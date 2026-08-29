@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildCommand } from '../src/builder'
 import { installReactResolver, resolveApiShimReactPaths } from '../src/react-runtime'
@@ -111,5 +111,45 @@ describe('portable command bundles', () => {
     const requireFromExtensionRoot = createRequire(join(dir, 'probe.js'))
     expect((requireFromExtensionRoot('react') as { __decoy?: boolean }).__decoy).toBe(true)
     expect(join(dir, '.openray', 'build', 'index.js')).toContain(`${sep}.openray${sep}build${sep}`)
+  })
+})
+
+/**
+ * The same no-machine-paths guarantee the bundles above need, applied to the
+ * *packer* — for a different reason, which is why it is a separate case.
+ *
+ * A command bundle must be path-free so a `.orx` built on one machine
+ * installs on another. `dist/cli-api.cjs` must be path-free so the published
+ * `@openray/extension-host` works at all: it is what `openray pack` loads,
+ * so an absolute path baked in here means a registry's CI cannot pack on any
+ * machine but the one that built the bundle. This entry point inlines react
+ * rather than externalizing it — nothing it exports ever mounts a component,
+ * so the singleton invariant that forces `host.cjs` to reference react by
+ * absolute path does not apply, and being self-contained is worth more.
+ */
+describe('portable packer bundle', () => {
+  const bundle = join(__dirname, '..', 'dist', 'cli-api.cjs')
+
+  it.skipIf(!existsSync(bundle))('contains no absolute path from the building machine', () => {
+    const source = readFileSync(bundle, 'utf-8')
+
+    // Deliberately unfiltered. An earlier version of this test exempted
+    // paths under `node_modules` on the theory that they were esbuild's own
+    // — which silently exempted the exact leak it was written to catch,
+    // since the bug put `/…/node_modules/.pnpm/react@19/…/index.js` in the
+    // output. A correctly built bundle contains no quoted absolute path at
+    // all, so there is nothing to carve out.
+    const absolute = [...source.matchAll(/["'`](\/[A-Za-z0-9._][A-Za-z0-9._/-]{6,})["'`]/g)].map((match) => match[1])
+    expect(absolute).toEqual([])
+
+    // The repo root, belt-and-braces: `test` -> `extension-host` ->
+    // `packages` -> root.
+    expect(source).not.toContain(dirname(dirname(dirname(__dirname))))
+  })
+
+  it.skipIf(!existsSync(bundle))('inlines react instead of leaving a require for it', () => {
+    const source = readFileSync(bundle, 'utf-8')
+    expect(source).not.toMatch(/require\(["']react["']\)/)
+    expect(source).toContain('react.production')
   })
 })

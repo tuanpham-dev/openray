@@ -1,5 +1,6 @@
 {
   "name": "emoji",
+  "private": true,
   "title": "Emoji & Symbols",
   "description": "Search and paste emoji and symbols.",
   "icon": "smiley",

@@ -1,5 +1,6 @@
 {
   "name": "clipboard-history",
+  "private": true,
   "title": "Clipboard History",
   "description": "Browse, search, and paste from your clipboard history.",
   "icon": "clipboard",

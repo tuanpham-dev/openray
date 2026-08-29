@@ -1,5 +1,6 @@
 {
   "name": "file-search",
+  "private": true,
   "title": "File Search",
   "description": "Search files by name across configured folders.",
   "icon": "search",

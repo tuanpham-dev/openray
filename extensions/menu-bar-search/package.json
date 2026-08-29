@@ -1,5 +1,6 @@
 {
   "name": "menu-bar-search",
+  "private": true,
   "title": "Menu Bar Search",
   "description": "Search and trigger the frontmost app's menu bar items.",
   "icon": "monitor",

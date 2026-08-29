@@ -1,5 +1,6 @@
 {
   "name": "translate",
+  "private": true,
   "title": "Translate",
   "description": "Translate text via Google's free gtx endpoint \u2014 inline root-search intent, a full translate view, and fixed-language-pair custom commands.",
   "export": {

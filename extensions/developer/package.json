@@ -1,5 +1,6 @@
 {
   "name": "developer",
+  "private": true,
   "title": "Developer",
   "description": "Scaffold and develop OpenRay extensions.",
   "icon": "code",

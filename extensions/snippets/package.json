@@ -1,5 +1,6 @@
 {
   "name": "snippets",
+  "private": true,
   "title": "Snippets",
   "description": "Save and paste reusable text with placeholders for arguments, clipboard, selection, and more.",
   "export": {

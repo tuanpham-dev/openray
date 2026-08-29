@@ -1,5 +1,6 @@
 {
   "name": "notes",
+  "private": true,
   "title": "Notes",
   "description": "A floating, always-available markdown scratchpad.",
   "export": {
