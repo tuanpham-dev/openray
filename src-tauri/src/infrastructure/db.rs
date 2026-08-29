@@ -130,6 +130,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0033_registry_sources",
         include_str!("../../migrations/0033_registry_sources.sql"),
     ),
+    (
+        "0034_default_registry_source",
+        include_str!("../../migrations/0034_default_registry_source.sql"),
+    ),
 ];
 
 pub fn open(app: &AppHandle) -> Result<SharedConnection, Box<dyn std::error::Error>> {
@@ -896,4 +900,42 @@ mod tests {
             .unwrap();
         assert_eq!(leftover_sync_meta, 0, "0027 must also clear out any sync_meta rows still tagged with a retired kind");
     }
+
+    /// The default registry source is seeded by migration 0034, and the whole
+    /// reason it is a migration rather than app-start logic is that a
+    /// migration runs **once per database**. Removing the registry is a trust
+    /// decision — archives from a trusted source install automatically — so a
+    /// later launch must not quietly hand it back.
+    ///
+    /// Driving `run_migrations` directly is the point: the seed's own
+    /// `INSERT OR IGNORE` would happily re-insert a deleted row, so what makes
+    /// removal stick is the `_migrations` ledger, not the SQL.
+    #[test]
+    fn the_default_registry_source_is_seeded_once_and_stays_removed() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let count = |conn: &Connection| -> i64 {
+            conn.query_row("SELECT COUNT(*) FROM registry_sources", [], |row| row.get(0)).unwrap()
+        };
+        assert_eq!(count(&conn), 1, "a fresh database starts with the default source");
+
+        // Re-running every migration (an ordinary relaunch) is a no-op.
+        run_migrations(&conn).unwrap();
+        assert_eq!(count(&conn), 1, "relaunching must not duplicate the source");
+
+        conn.execute("DELETE FROM registry_sources", []).unwrap();
+        run_migrations(&conn).unwrap();
+        assert_eq!(count(&conn), 0, "a source the user removed must stay removed");
+    }
+
+    #[test]
+    fn every_migration_is_registered_exactly_once() {
+        let mut names: Vec<&str> = MIGRATIONS.iter().map(|(name, _)| *name).collect();
+        let total = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), total, "duplicate migration name in MIGRATIONS");
+    }
+
 }
