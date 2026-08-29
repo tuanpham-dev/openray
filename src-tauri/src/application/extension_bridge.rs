@@ -1483,7 +1483,7 @@ mod tests {
     use tauri::Listener;
 
     fn mock_app() -> tauri::AppHandle<tauri::test::MockRuntime> {
-        let app = mock_builder().build(tauri::generate_context!()).expect("failed to build mock app");
+        let app = mock_builder().build(crate::test_context()).expect("failed to build mock app");
         app.handle().clone()
     }
 

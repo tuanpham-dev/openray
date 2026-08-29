@@ -16,6 +16,7 @@
 use std::path::Path;
 
 use objc2::rc::Retained;
+use objc2::AnyThread;
 use objc2_foundation::{NSArray, NSDictionary, NSString, NSURL};
 use objc2_vision::{VNImageRequestHandler, VNRecognizeTextRequest, VNRequestTextRecognitionLevel};
 
@@ -43,16 +44,17 @@ pub fn extract_text(path: &Path) -> Option<String> {
     let request = unsafe { VNRecognizeTextRequest::new() };
     unsafe { request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate) };
 
-    let requests: Retained<NSArray<_>> = NSArray::from_retained_slice(&[Retained::into_super(request.clone())]);
+    let requests: Retained<NSArray<_>> =
+        NSArray::from_retained_slice(&[Retained::into_super(Retained::into_super(request.clone()))]);
     unsafe { handler.performRequests_error(&requests) }.ok()?;
 
     let observations = unsafe { request.results() }?;
 
     let mut lines = Vec::new();
     for observation in observations.iter() {
-        let candidates = unsafe { observation.topCandidates(1) };
+        let candidates = observation.topCandidates(1);
         if let Some(top) = candidates.iter().next() {
-            let text = unsafe { top.string() };
+            let text = top.string();
             lines.push(text.to_string());
         }
     }

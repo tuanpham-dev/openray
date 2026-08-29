@@ -481,7 +481,7 @@ mod tests {
     fn mock_app_handle() -> AppHandle<MockRuntime> {
         let app = mock_builder()
             .plugin(tauri_plugin_shell::init())
-            .build(tauri::generate_context!())
+            .build(crate::test_context())
             .expect("failed to build mock app");
         app.handle().clone()
     }

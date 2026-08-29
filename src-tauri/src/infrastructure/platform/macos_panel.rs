@@ -15,6 +15,8 @@
 //! window vs. active app — and Spotlight-style panels rely on exactly this
 //! split.
 
+use std::sync::mpsc;
+
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_nspanel::{tauri_panel, CollectionBehavior, ManagerExt, WebviewWindowExt};
 
@@ -46,16 +48,49 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
 
+/// AppKit/NSPanel calls are main-thread-only, and modern macOS hard-crashes
+/// (a trap, not a catchable panic) rather than merely warning when that's
+/// violated. Two callers reach `show`/`hide`/`is_visible` off the main
+/// thread: `hotkey.rs::dispatch` deliberately runs on a spawned thread (see
+/// its doc comment on the X11 deadlock that requires), and the
+/// single-instance relaunch callback (`lib.rs`) isn't marshalled at all.
+/// Neither was ever exercised on real macOS before — cross-compile checks
+/// can't catch a runtime threading violation — so route through the main
+/// thread here, once, rather than requiring every caller to remember to.
+fn on_main_thread<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> T {
+    if objc2::MainThreadMarker::new().is_some() {
+        return f();
+    }
+    let (tx, rx) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(f());
+    })
+    .expect("main event loop should still be running");
+    rx.recv().expect("main thread dropped the result sender without running the task")
+}
+
 pub fn show(app: &AppHandle, label: &str) -> Result<(), Error> {
-    app.get_webview_panel(label).map_err(|e| Error::msg(format!("{e:?}")))?.show_and_make_key();
-    Ok(())
+    let inner = app.clone();
+    let label = label.to_string();
+    on_main_thread(app, move || {
+        inner.get_webview_panel(&label).map_err(|e| Error::msg(format!("{e:?}")))?.show_and_make_key();
+        Ok(())
+    })
 }
 
 pub fn hide(app: &AppHandle, label: &str) -> Result<(), Error> {
-    app.get_webview_panel(label).map_err(|e| Error::msg(format!("{e:?}")))?.hide();
-    Ok(())
+    let inner = app.clone();
+    let label = label.to_string();
+    on_main_thread(app, move || {
+        inner.get_webview_panel(&label).map_err(|e| Error::msg(format!("{e:?}")))?.hide();
+        Ok(())
+    })
 }
 
 pub fn is_visible(app: &AppHandle, label: &str) -> Result<bool, Error> {
-    Ok(app.get_webview_panel(label).map_err(|e| Error::msg(format!("{e:?}")))?.is_visible())
+    let inner = app.clone();
+    let label = label.to_string();
+    on_main_thread(app, move || {
+        Ok(inner.get_webview_panel(&label).map_err(|e| Error::msg(format!("{e:?}")))?.is_visible())
+    })
 }

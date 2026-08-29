@@ -302,6 +302,14 @@ function Palette() {
       hiddenAtRef.current = Date.now()
     })
     const unlistenShown = listen('palette-shown', () => {
+      // The NSPanel/native window becoming key (macos_panel::show's
+      // show_and_make_key) doesn't put DOM focus on any particular
+      // element inside the webview — without this, the search input only
+      // has focus if it happened to already have it (e.g. survived from
+      // before the palette was hidden), so a keystroke right after
+      // reopening can silently go nowhere.
+      document.querySelector<HTMLInputElement>('.openray-search-input')?.focus()
+
       const hiddenAt = hiddenAtRef.current
       hiddenAtRef.current = null
       if (popToRootDelay === 'never' || hiddenAt === null) return

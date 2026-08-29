@@ -15,6 +15,7 @@
 //! (see `ns_rect_to_ax`): x is unchanged; y flips via
 //! `primary_screen_height - (y + height)`.
 
+use objc2::MainThreadMarker;
 use objc2_app_kit::{NSScreen, NSWorkspace};
 
 use super::Rect;
@@ -76,11 +77,11 @@ pub fn work_area(id: &str) -> Option<Rect> {
 
     // NSScreen is the one class in this file with no precedent elsewhere
     // in the codebase (`window_list`/`menu_bar`'s macos.rs only ever touch
-    // NSWorkspace/NSRunningApplication, called without a MainThreadMarker
-    // in this crate version) — if `objc2-app-kit` 0.3 requires one for
-    // `NSScreen::screens()`, that surfaces here first as a compile error
-    // the CI platform-check job catches; no way to confirm from Linux.
-    let screens = NSScreen::screens().to_vec();
+    // NSWorkspace/NSRunningApplication). `objc2-app-kit` 0.3 requires a
+    // `MainThreadMarker` for `NSScreen::screens()`; degrade to "no result"
+    // rather than panic if this ever runs off the main thread.
+    let mtm = MainThreadMarker::new()?;
+    let screens = NSScreen::screens(mtm).to_vec();
     let primary_height = screens.first()?.frame().size.height;
 
     let target_screen = screens
@@ -97,7 +98,8 @@ pub fn work_area(id: &str) -> Option<Rect> {
 }
 
 pub fn displays() -> Vec<Rect> {
-    let screens = NSScreen::screens().to_vec();
+    let Some(mtm) = MainThreadMarker::new() else { return Vec::new() };
+    let screens = NSScreen::screens(mtm).to_vec();
     let Some(primary_height) = screens.first().map(|s| s.frame().size.height) else { return Vec::new() };
     screens
         .iter()
