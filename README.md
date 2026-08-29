@@ -186,6 +186,19 @@ writes — `index.json` plus the archives — served from anywhere static.
 There is no backend. Add one under Settings → Add Extension → Registries,
 and browse it with the **Store** command.
 
+Every install starts with one already added: **OpenRay Extensions**
+(<https://tuanpham-dev.github.io/openray-extensions/>), seeded on first run.
+It is an ordinary source with no privileges — remove it in Settings and it
+stays removed. Its repository is also the worked example of everything
+below: a folder per extension, a Pages workflow, nothing else.
+
+The `openray` CLI is published, so a registry's CI needs no checkout of this
+repository:
+
+```sh
+npm install --save-dev @openray/cli
+```
+
 ```yaml
 # .github/workflows/pages.yml — publish a registry from a repo of extensions
 name: Publish registry
@@ -200,7 +213,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm install
-      - run: npx openray publish */ --out dist
+      - run: npx openray publish extensions/*/ --out dist
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
       - uses: actions/deploy-pages@v4

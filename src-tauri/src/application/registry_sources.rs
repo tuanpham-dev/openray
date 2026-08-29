@@ -139,6 +139,17 @@ mod tests {
         RegistrySources::new(Arc::new(Mutex::new(conn)))
     }
 
+    /// The schema *plus* the default-source seed — what a real database looks
+    /// like after migrating, as opposed to `store()`'s bare table.
+    fn seeded_store() -> RegistrySources {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../../migrations/0033_registry_sources.sql")).unwrap();
+        conn.execute_batch(SEED).unwrap();
+        RegistrySources::new(Arc::new(Mutex::new(conn)))
+    }
+
+    const SEED: &str = include_str!("../../migrations/0034_default_registry_source.sql");
+
     #[test]
     fn normalizes_a_missing_trailing_slash() {
         assert_eq!(normalize_url("https://x.test/registry"), "https://x.test/registry/");
@@ -185,4 +196,48 @@ mod tests {
         store.remove("https://x.test/r").unwrap();
         assert!(store.list().is_empty());
     }
+
+    #[test]
+    fn a_fresh_database_starts_with_the_default_registry() {
+        let store = seeded_store();
+        let sources = store.list();
+
+        assert_eq!(sources.len(), 1, "a fresh install should have exactly the default source");
+        assert_eq!(sources[0].name.as_deref(), Some("OpenRay Extensions"));
+        assert!(sources[0].enabled);
+        assert!(sources[0].auto_update);
+    }
+
+    #[test]
+    fn the_seeded_url_is_already_normalized() {
+        // If the seed were written without its trailing slash it would not
+        // match what `add` stores, so re-adding the same registry by hand
+        // would create a second row for one registry — and `source_url`
+        // equality is what decides same-source vs cross-source installs.
+        let store = seeded_store();
+        let url = store.list()[0].url.clone();
+
+        assert_eq!(normalize_url(&url), url);
+        assert!(store.get(&url).is_some());
+        assert!(store.get(url.trim_end_matches('/')).is_some(), "lookup by either spelling");
+    }
+
+    #[test]
+    fn seeding_over_a_hand_added_copy_is_not_an_error() {
+        // Someone who added this registry manually before upgrading must not
+        // hit a primary-key violation when the migration lands.
+        let store = store();
+        store.add("https://tuanpham-dev.github.io/openray-extensions/", Some("Mine"), 99).unwrap();
+
+        {
+            let conn = store.conn.lock().unwrap();
+            conn.execute_batch(SEED).unwrap();
+        }
+
+        let sources = store.list();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].name.as_deref(), Some("Mine"), "the user's own name wins");
+        assert_eq!(sources[0].added_at, 99);
+    }
+
 }
