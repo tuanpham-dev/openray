@@ -196,13 +196,34 @@ impl<R: Runtime> ExtensionHost<R> {
                                         }
                                     }
                                     RpcMessage::Request(request) => {
-                                        Self::handle_inbound_request(
-                                            app_for_reader.clone(),
-                                            &process_for_reader,
-                                            request,
-                                            request_handler.clone(),
-                                        )
-                                        .await;
+                                        // Handled on its own task, never awaited inline.
+                                        //
+                                        // An inbound request is an extension calling the
+                                        // host bridge, and a bridge handler may call
+                                        // *back* into the sidecar — `host.registry.catalog`
+                                        // does exactly that, forwarding to the host's own
+                                        // `registry.fetchCatalog`. The response to that
+                                        // nested call arrives as a frame that only *this*
+                                        // loop delivers, so awaiting the handler here
+                                        // blocks the very task that would unblock it. The
+                                        // deadlock is invisible until it expires:
+                                        // `CALL_TIMEOUT` fires after 10s and `call` kills
+                                        // the whole sidecar, taking every other
+                                        // extension's state with it.
+                                        //
+                                        // Spawning keeps the reader free to route
+                                        // responses while a handler is in flight. Requests
+                                        // are independent and carry their own ids, so
+                                        // nothing here depended on them being processed
+                                        // one at a time — the sidecar treats its own
+                                        // inbound frames the same way (`index.ts` calls
+                                        // `dispatcher.feed` without awaiting it).
+                                        let app = app_for_reader.clone();
+                                        let process = process_for_reader.clone();
+                                        let handler = request_handler.clone();
+                                        tauri::async_runtime::spawn(async move {
+                                            Self::handle_inbound_request(app, &process, request, handler).await;
+                                        });
                                     }
                                 }
                             }
