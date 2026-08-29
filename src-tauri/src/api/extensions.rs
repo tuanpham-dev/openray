@@ -79,6 +79,22 @@ pub(crate) fn register_installed_extension(
     source: &str,
     source_url: Option<&str>,
 ) -> Result<ExtensionEntry, String> {
+    // An extension that says it doesn't support this OS is registered
+    // anyway, with a warning: the author's `platforms` is a claim, not a
+    // fact, and a user installing it deliberately may well know better
+    // than the manifest. Refusing outright would make a mislabelled
+    // extension uninstallable with no way around it.
+    if crate::application::platform_support::evaluate(result.manifest.platforms.as_ref())
+        == crate::application::platform_support::PlatformSupport::Unsupported
+    {
+        log::warn!(
+            "extension '{}' declares platforms {:?}, which does not include {} — installing anyway",
+            result.id,
+            result.manifest.platforms,
+            crate::application::platform_support::current_platform()
+        );
+    }
+
     if !result.build_errors.is_empty() {
         log::warn!("extension '{}' registered with build errors: {:?}", result.id, result.build_errors);
     }
@@ -175,6 +191,10 @@ pub async fn uninstall_extension(app: AppHandle, state: State<'_, AppState>, id:
         .call("extension.uninstall", Some(json!({ "id": id, "extensionsRoot": root })))
         .await
         .map_err(|e| e.to_string())?;
+    // A menu-bar command's output is a tray icon, not a view, so it never
+    // goes through `unmount_extension_command` — without this an extension
+    // that has been removed leaves a live-looking menu behind.
+    crate::application::menu_bar::remove(&app, &id);
     state.extensions.unregister(&id)?;
     state.command_settings.delete_for_extension(&id)?;
     state.sync_hotkey_bindings(&app);
@@ -275,6 +295,10 @@ pub async fn stop_developing(state: State<'_, AppState>, id: String) -> Result<(
 #[tauri::command]
 pub async fn remove_dev_extension(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     dev_extensions::stop(&state, &id).await;
+    // A menu-bar command's output is a tray icon, not a view, so it never
+    // goes through `unmount_extension_command` — without this an extension
+    // that has been removed leaves a live-looking menu behind.
+    crate::application::menu_bar::remove(&app, &id);
     state.extensions.unregister(&id)?;
     state.command_settings.delete_for_extension(&id)?;
     state.root_commands.clear_extension(&id);

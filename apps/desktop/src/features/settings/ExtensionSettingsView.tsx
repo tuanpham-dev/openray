@@ -14,6 +14,8 @@ import type { Settings } from '../../ipc/settings'
 interface ExtensionSettingsViewProps {
   extension: ExtensionEntry
   commands: SettingsCommand[]
+  /** Deep-linked command whose preference group should be highlighted. */
+  highlightCommand?: string
   commandSettings: Record<string, CommandSettingsEntry>
   settings: Settings
   onSettingsChange: (settings: Settings) => void
@@ -38,6 +40,7 @@ interface ExtensionSettingsViewProps {
 export function ExtensionSettingsView({
   extension,
   commands,
+  highlightCommand,
   commandSettings,
   settings,
   onSettingsChange,
@@ -154,7 +157,12 @@ export function ExtensionSettingsView({
       <section className="openray-extension-view-section" style={showPreferences ? undefined : { display: 'contents' }}>
         {showPreferences && <h3>Preferences</h3>}
         {BuiltinPrefsSection && <BuiltinPrefsSection settings={settings} onChange={onSettingsChange} />}
-        <ExtensionPrefsForm extensionId={extension.id} hideEmptyState onEmptyChange={(empty) => setHasSchemaPrefs(!empty)} />
+        <ExtensionPrefsForm
+          extensionId={extension.id}
+          highlightCommand={highlightCommand}
+          hideEmptyState
+          onEmptyChange={(empty) => setHasSchemaPrefs(!empty)}
+        />
       </section>
 
       {showCommands && (

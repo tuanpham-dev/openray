@@ -104,6 +104,10 @@ pub async fn dispatch_request<R: Runtime>(app: AppHandle<R>, method: String, par
         "host.system.closeMainWindow" => close_main_window(&app, params),
         "host.system.popToRoot" => pop_to_root(&app, params),
         "host.system.showInFinder" => show_in_finder(&app, params),
+        "host.system.openExtensionPreferences" => open_extension_preferences(&app, params),
+        "host.system.openCommandPreferences" => open_command_preferences(&app, params),
+        "host.launch" => host_launch(&app, params).await,
+        "host.sql.query" => host_sql_query(params),
         "host.system.getApplications" => get_applications(),
         "host.system.getSelectedText" => get_selected_text(),
         "host.system.trash" => trash(params),
@@ -184,6 +188,7 @@ pub fn dispatch_notification<R: Runtime>(app: AppHandle<R>, method: String, para
                 log::warn!("failed to forward ui.commit to window '{window_label}': {e}");
             }
         }
+        "ui.menuBar" => menu_bar_committed(&app, params),
         "extension.rootCommands" => root_commands_pushed(&app, params),
         "extension.devBuild" => dev_build_finished(&app, params),
         "extension.log" => extension_log(&app, params),
@@ -205,6 +210,20 @@ pub fn dispatch_notification<R: Runtime>(app: AppHandle<R>, method: String, para
 /// that omits it — every current mount variant sends it explicitly, but a
 /// malformed or pre-T24-shaped payload still routes somewhere sane instead
 /// of silently dropping the commit.
+/// A `menu-bar` command's tree goes to the system tray rather than to a
+/// webview — see `application::menu_bar`. The host sends these separately
+/// (and always as a full snapshot), so nothing here applies tree diffs.
+fn menu_bar_committed<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) {
+    let Some(Value::Object(map)) = params else { return };
+    let Some(extension_id) = map.get("extensionId").and_then(Value::as_str) else { return };
+    let Some(commit) = map.get("commit") else { return };
+    // Same downcast as the settings handlers: `menu_bar` is written
+    // against the concrete runtime, while a bridge handler is generic so
+    // its tests can use a mock.
+    let Some(app) = (app as &dyn std::any::Any).downcast_ref::<AppHandle>() else { return };
+    crate::application::menu_bar::commit(app, extension_id, commit.clone());
+}
+
 fn parse_ui_commit(params: Option<Value>) -> (String, Value) {
     match params {
         Some(Value::Object(mut map)) => {
@@ -921,6 +940,9 @@ async fn registry_uninstall<R: Runtime>(app: &AppHandle<R>, params: Option<Value
         .call("extension.uninstall", Some(json!({ "id": id, "extensionsRoot": root.to_string_lossy() })))
         .await
         .map_err(|e| Error::msg(e.to_string()))?;
+    if let Some(app) = (app as &dyn std::any::Any).downcast_ref::<AppHandle>() {
+        crate::application::menu_bar::remove(app, &id);
+    }
     state.extensions.unregister(&id)?;
     state.command_settings.delete_for_extension(&id)?;
     state.root_commands.clear_extension(&id);
@@ -1144,6 +1166,149 @@ fn pop_to_root<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<
 
 /// XDG has no "reveal in file manager" standard, so the containing
 /// directory is opened instead — the closest portable equivalent.
+/// `useSQL` / `executeSQL` — a read-only query against a SQLite file the
+/// extension names.
+///
+/// Raycast's own use case is reading a browser's history database, so any
+/// readable path is allowed. Two restrictions, and neither is access
+/// control — an extension already has full filesystem access through Node,
+/// so this API grants nothing new. They exist so a query cannot *damage* a
+/// database the extension does not own: the connection is opened read-only,
+/// and anything but a single `SELECT` is refused.
+fn host_sql_query(params: Option<Value>) -> Result<Value, Error> {
+    use rusqlite::{Connection, OpenFlags};
+
+    let Some(Value::Object(map)) = params else {
+        return Err(Error::msg("host.sql.query needs parameters"));
+    };
+    let path = map
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Error::msg("host.sql.query needs a database path"))?;
+    let query = map
+        .get("query")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Error::msg("host.sql.query needs a query"))?;
+
+    // `SELECT` only. A leading-CTE query (`WITH … SELECT`) is refused too,
+    // which is stricter than necessary but keeps the check to one rule
+    // rather than a parser.
+    let trimmed = query.trim_start();
+    if trimmed.len() < 6 || !trimmed[..6].eq_ignore_ascii_case("SELECT") {
+        return Err(Error::msg("only SELECT statements are allowed"));
+    }
+
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| Error::msg(format!("could not open {path}: {e}")))?;
+    let mut stmt = conn.prepare(query).map_err(|e| Error::msg(e.to_string()))?;
+    let columns: Vec<String> = stmt.column_names().into_iter().map(str::to_string).collect();
+
+    let rows = stmt
+        .query_map([], |row| {
+            let mut object = serde_json::Map::new();
+            for (index, name) in columns.iter().enumerate() {
+                let value = match row.get_ref(index)? {
+                    rusqlite::types::ValueRef::Null => Value::Null,
+                    rusqlite::types::ValueRef::Integer(i) => Value::from(i),
+                    rusqlite::types::ValueRef::Real(f) => Value::from(f),
+                    rusqlite::types::ValueRef::Text(t) => Value::from(String::from_utf8_lossy(t).to_string()),
+                    // A blob has no JSON form; its length is more useful to
+                    // an extension than a mangled string would be.
+                    rusqlite::types::ValueRef::Blob(b) => Value::from(b.len()),
+                };
+                object.insert(name.clone(), value);
+            }
+            Ok(Value::Object(object))
+        })
+        .map_err(|e| Error::msg(e.to_string()))?;
+
+    let collected: Vec<Value> = rows.filter_map(Result::ok).collect();
+    Ok(Value::Array(collected))
+}
+
+/// `launchCommand` — one command starting another, with a payload.
+///
+/// The target defaults to the *caller's* own extension; naming another is
+/// allowed (Raycast parity), and every one of the 75 call sites in a
+/// 180-extension sample targets its own. Runs through the same
+/// `extension_commands::launch` path a keyboard launch takes, so the two
+/// cannot drift.
+async fn host_launch<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let Some(Value::Object(map)) = params else {
+        return Err(Error::msg("host.launch needs parameters"));
+    };
+    let caller = map.get("callerExtensionId").and_then(Value::as_str).unwrap_or_default();
+    let target_extension = map.get("extensionName").and_then(Value::as_str).unwrap_or(caller);
+    let command_name = map
+        .get("commandName")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Error::msg("host.launch needs a command name"))?;
+
+    let arguments: std::collections::HashMap<String, String> = map
+        .get("arguments")
+        .and_then(Value::as_object)
+        .map(|o| {
+            o.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+    let launch_context = map.get("context").filter(|v| !v.is_null()).cloned();
+    let fallback_text = map.get("fallbackText").and_then(Value::as_str).map(str::to_string);
+
+    // An unknown command is reported back to the caller rather than
+    // silently dropped — a stubbed `launchCommand` already failed that way
+    // and gave the extension author nothing to go on.
+    crate::application::extension_commands::launch_with_context(
+        app,
+        target_extension,
+        command_name,
+        &arguments,
+        launch_context,
+        fallback_text,
+    )
+    .await
+    .map_err(|e| Error::msg(format!("could not launch '{target_extension}:{command_name}': {e}")))?;
+    Ok(Value::Null)
+}
+
+/// Opens Settings on the calling extension's own preferences.
+///
+/// The extension id comes from the shim's command context, not from
+/// anything the extension composed itself — see `openExtensionPreferences`
+/// in `api/system.ts`.
+fn open_extension_preferences<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let extension_id = param_str(&params, "extensionId")?;
+    open_settings_for(app, crate::infrastructure::window::SettingsTarget::Extension(&extension_id))
+}
+
+/// As above, but highlights the calling command's own preference group.
+fn open_command_preferences<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
+    let extension_id = param_str(&params, "extensionId")?;
+    let command_name = param_str(&params, "commandName")?;
+    open_settings_for(
+        app,
+        crate::infrastructure::window::SettingsTarget::Command {
+            extension_id: &extension_id,
+            command_name: &command_name,
+        },
+    )
+}
+
+fn open_settings_for<R: Runtime>(
+    app: &AppHandle<R>,
+    target: crate::infrastructure::window::SettingsTarget<'_>,
+) -> Result<Value, Error> {
+    // `open_settings_window` is written against the concrete runtime the
+    // app actually uses; a bridge handler is generic over `R` so its unit
+    // tests can drive it with a mock.
+    let Some(app) = (app as &dyn std::any::Any).downcast_ref::<AppHandle>() else {
+        return Ok(Value::Null)
+    };
+    crate::infrastructure::window::open_settings_window(app, target).map_err(|e| Error::msg(e.to_string()))?;
+    Ok(Value::Null)
+}
+
 fn show_in_finder<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
     use tauri_plugin_opener::OpenerExt;
 
@@ -1639,5 +1804,74 @@ mod tests {
         let (_, rx) = registry.register();
         drop(registry);
         assert!(!rx.await.unwrap_or(false));
+    }
+}
+
+#[cfg(test)]
+mod sql_tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    /// `std::env::temp_dir()` rather than a `tempfile` dev-dependency —
+    /// the convention the rest of this crate's tests already use.
+    fn fixture(name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("openray-sql-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("probe.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE visits (id INTEGER, title TEXT, score REAL, blob BLOB, missing TEXT);
+             INSERT INTO visits VALUES (1, 'first', 1.5, x'00ff', NULL);",
+        )
+        .unwrap();
+        path.to_string_lossy().to_string()
+    }
+
+    fn query(path: &str, sql: &str) -> Result<Value, Error> {
+        host_sql_query(Some(serde_json::json!({ "path": path, "query": sql })))
+    }
+
+    #[test]
+    fn returns_rows_with_each_column_type() {
+        let path = fixture("types");
+        let rows = query(&path, "SELECT * FROM visits").unwrap();
+        let row = &rows.as_array().unwrap()[0];
+        assert_eq!(row["id"], Value::from(1));
+        assert_eq!(row["title"], Value::from("first"));
+        assert_eq!(row["score"], Value::from(1.5));
+        // A blob has no JSON form; its length is reported instead.
+        assert_eq!(row["blob"], Value::from(2));
+        assert_eq!(row["missing"], Value::Null);
+    }
+
+    #[test]
+    fn accepts_select_regardless_of_case_or_leading_space() {
+        let path = fixture("case");
+        assert!(query(&path, "  select id from visits").is_ok());
+    }
+
+    #[test]
+    fn refuses_anything_that_is_not_a_select() {
+        // Not access control — an extension already has full filesystem
+        // access — but a query must not be able to damage a database the
+        // extension does not own.
+        let path = fixture("refuse");
+        for sql in ["DELETE FROM visits", "DROP TABLE visits", "INSERT INTO visits VALUES (2,'x',0,NULL,NULL)", ""] {
+            assert!(query(&path, sql).is_err(), "should have refused: {sql}");
+        }
+    }
+
+    #[test]
+    fn refuses_a_write_even_when_it_starts_with_select() {
+        // The connection is read-only, so a smuggled write fails at the
+        // SQLite layer rather than relying on the string check alone.
+        let path = fixture("smuggle");
+        assert!(query(&path, "SELECT 1; DELETE FROM visits").is_err());
+    }
+
+    #[test]
+    fn reports_a_missing_database_rather_than_panicking() {
+        assert!(query("/nonexistent/nope.db", "SELECT 1").is_err());
     }
 }

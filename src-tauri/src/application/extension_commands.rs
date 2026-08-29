@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::application::extension_bridge::EXTENSION_TOAST_EVENT;
@@ -79,6 +79,21 @@ pub async fn launch<R: Runtime>(
     command_name: &str,
     arguments: &std::collections::HashMap<String, String>,
 ) -> Result<(), Error> {
+    launch_with_context(app, extension_id, command_name, arguments, None, None).await
+}
+
+/// `launch` plus the extras a programmatic `launchCommand` carries — the
+/// payload the target reads as `props.launchContext`, and how it was
+/// started. Kept as one path with the user-initiated launch above so a
+/// programmatic launch and a keyboard launch cannot drift apart.
+pub async fn launch_with_context<R: Runtime>(
+    app: &AppHandle<R>,
+    extension_id: &str,
+    command_name: &str,
+    arguments: &std::collections::HashMap<String, String>,
+    launch_context: Option<Value>,
+    fallback_text: Option<String>,
+) -> Result<(), Error> {
     let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
 
     let is_real_command = state.extensions.installed_commands().iter().any(|c| c.extension_id == extension_id && c.name == command_name);
@@ -114,6 +129,8 @@ pub async fn launch<R: Runtime>(
         "commandPath": command_path,
         "preferences": preferences,
         "arguments": arguments,
+        "launchContext": launch_context,
+        "fallbackText": fallback_text,
         "environment": environment,
         "platform": platform,
     });
@@ -474,6 +491,7 @@ mod tests {
                     icon: None,
                     author: None,
                     categories: None,
+            platforms: None,
                     commands: vec![ExtensionCommandManifest {
                         name: "search".into(),
                         title: "Search Demo".into(),
@@ -514,6 +532,7 @@ mod tests {
                     icon: None,
                     author: None,
                     categories: None,
+            platforms: None,
                     commands: vec![ExtensionCommandManifest {
                         name: "greet".into(),
                         title: "Greet".into(),
@@ -558,6 +577,7 @@ mod tests {
                     icon: None,
                     author: None,
                     categories: None,
+            platforms: None,
                     commands: vec![ExtensionCommandManifest {
                         name: "list".into(),
                         title: "List Quicklinks".into(),
@@ -596,6 +616,7 @@ mod tests {
                     icon: Some("camera".into()),
                     author: None,
                     categories: None,
+            platforms: None,
                     commands: vec![ExtensionCommandManifest {
                         name: "search".into(),
                         title: "Search Demo".into(),

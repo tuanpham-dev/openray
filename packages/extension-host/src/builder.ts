@@ -38,6 +38,7 @@ export async function readManifest(extensionDir: string): Promise<ExtensionManif
   if (typeof pkg.icon === 'string') manifest.icon = pkg.icon
   if (typeof pkg.author === 'string') manifest.author = pkg.author
   if (Array.isArray(pkg.categories)) manifest.categories = pkg.categories as string[]
+  if (Array.isArray(pkg.platforms)) manifest.platforms = pkg.platforms as string[]
   if (Array.isArray(pkg.preferences)) manifest.preferences = pkg.preferences as NonNullable<ExtensionManifest['preferences']>
   if (pkg.export && typeof pkg.export === 'object') {
     const declared = pkg.export as Record<string, unknown>

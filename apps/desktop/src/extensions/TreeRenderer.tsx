@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
@@ -1148,6 +1149,14 @@ function ExtensionForm({
         collected[fieldId] = declared
       } else if (field.type === 'Form.Checkbox') {
         collected[fieldId] = false
+      } else if (field.type === 'Form.FilePicker' || field.type === 'Form.TagPicker') {
+        // Both are array-valued; an untouched one submits an empty array
+        // rather than the empty string a text field would.
+        collected[fieldId] = [] as unknown as string
+      } else if (field.type === 'Form.DatePicker') {
+        // Raycast's value is `Date | null`; tagged so the shim can tell a
+        // never-picked date from an empty string.
+        collected[fieldId] = { __date: null } as unknown as string
       } else if (field.type === 'Form.Dropdown') {
         // A dropdown with no declared value shows its first option, so
         // that is what submitting it means.
@@ -1275,6 +1284,18 @@ function FormField({
     return <hr className="openray-extension-form-separator" />
   }
 
+  if (field.type === 'Form.Unsupported') {
+    // A form item this shim doesn't implement. Shown rather than dropped:
+    // the field is missing either way, and a silent gap reads as a bug in
+    // the extension rather than a gap in ours.
+    return (
+      <p className="openray-extension-form-description">
+        <strong>{propString(field, 'title') ?? propString(field, 'name')}</strong>
+        {' — this form field isn’t supported yet.'}
+      </p>
+    )
+  }
+
   if (field.type === 'Form.Description') {
     // Spans both columns: it's prose about the form, not a field of it.
     return (
@@ -1291,6 +1312,17 @@ function FormField({
   const error = propString(field, 'error')
   const controlId = `form-field-${field.id}`
   const autoFocus = propBoolean(field, 'autoFocus')
+  // `useForm().focus(id)` — and its focus-the-first-invalid-field on a
+  // failed submit — arrive as a bumped nonce on this field rather than as
+  // a new protocol message, so the existing commit path carries them.
+  // React's `autoFocus` can't serve: it only applies at mount, so a second
+  // request for an already-mounted field would do nothing.
+  const focusRequest = field.props.focusRequest
+  const controlRef = useRef<HTMLInputElement & HTMLTextAreaElement & HTMLSelectElement>(null)
+  useEffect(() => {
+    if (focusRequest === undefined || focusRequest === null) return
+    controlRef.current?.focus()
+  }, [focusRequest])
 
   const fireOnChange = (value: unknown) => {
     const callback = callbackId(field.props.onChange)
@@ -1315,7 +1347,7 @@ function FormField({
     const checked = Boolean(values[fieldId] ?? field.props.value ?? field.props.defaultValue ?? false)
     control = (
       <label className="openray-extension-form-checkbox">
-        <input id={controlId} type="checkbox" checked={checked} autoFocus={autoFocus} onChange={(event) => set(event.target.checked)} />
+        <input ref={controlRef} id={controlId} type="checkbox" checked={checked} autoFocus={autoFocus} onChange={(event) => set(event.target.checked)} />
         {propString(field, 'label')}
       </label>
     )
@@ -1323,6 +1355,7 @@ function FormField({
     labelAtTop = true
     control = (
       <textarea
+        ref={controlRef}
         id={controlId}
         className="openray-extension-form-textarea"
         value={textValue}
@@ -1330,6 +1363,111 @@ function FormField({
         autoFocus={autoFocus}
         onChange={(event) => set(event.target.value)}
       />
+    )
+  } else if (field.type === 'Form.FilePicker') {
+    // Raycast's value here is always an array of paths, even for a single
+    // selection, so an extension indexing `values.folder[0]` works.
+    const selected = Array.isArray(values[fieldId])
+      ? (values[fieldId] as unknown as string[])
+      : Array.isArray(field.props.value)
+        ? (field.props.value as string[])
+        : Array.isArray(field.props.defaultValue)
+          ? (field.props.defaultValue as string[])
+          : []
+    const chooseDirectories = propBoolean(field, 'canChooseDirectories')
+    const chooseFiles = field.props.canChooseFiles !== false
+    const multiple = field.props.allowMultipleSelection !== false
+    const choose = async () => {
+      // The same native dialog Settings' folder pickers use.
+      const picked = await openDialog({
+        // A picker that can only take directories asks for one; anything
+        // else asks for files, since the dialog can't offer both at once.
+        directory: chooseDirectories && !chooseFiles,
+        multiple,
+      })
+      if (picked === null) return
+      const paths = Array.isArray(picked) ? picked : [picked]
+      set(paths as unknown as string)
+    }
+    control = (
+      <div className="openray-extension-form-filepicker">
+        <input
+          ref={controlRef}
+          id={controlId}
+          className="openray-extension-form-input"
+          type="text"
+          readOnly
+          value={selected.join(', ')}
+          placeholder={propString(field, 'placeholder') ?? (chooseDirectories ? 'No folder selected' : 'No file selected')}
+          onClick={() => void choose()}
+        />
+        <button type="button" onClick={() => void choose()}>
+          Choose…
+        </button>
+      </div>
+    )
+  } else if (field.type === 'Form.DatePicker') {
+    // `datetime-local` wants `YYYY-MM-DDTHH:mm`, `date` wants the first
+    // ten characters of the same ISO string.
+    const withTime = propString(field, 'type') !== 'Date'
+    const held = values[fieldId]
+    const iso =
+      held && typeof held === 'object' && '__date' in (held as object)
+        ? ((held as { __date: string | null }).__date ?? '')
+        : (propString(field, 'value') ?? (field.props.defaultValue as string | undefined) ?? '')
+    const shown = iso ? (withTime ? iso.slice(0, 16) : iso.slice(0, 10)) : ''
+    control = (
+      <input
+        ref={controlRef}
+        id={controlId}
+        className="openray-extension-form-input"
+        type={withTime ? 'datetime-local' : 'date'}
+        value={shown}
+        autoFocus={autoFocus}
+        onChange={(event) => {
+          // Back to a full ISO string, which is what the shim turns into
+          // a `Date` for the extension.
+          // Tagged rather than a bare string: `Form.DatePicker`'s value is
+          // a `Date` on the extension's side, and props cross as JSON. The
+          // shim unwraps `{__date}` back into a Date before `onSubmit` sees
+          // it — a bare ISO string would arrive as a string and break
+          // `values.when.getTime()`.
+          const raw = event.target.value
+          set({ __date: raw ? new Date(raw).toISOString() : null } as unknown as string)
+        }}
+      />
+    )
+  } else if (field.type === 'Form.TagPicker') {
+    const options: UiNode[] = []
+    for (const childId of field.children) {
+      const child = nodes[childId]
+      if (child?.type === 'Form.TagPicker.Item') options.push(child)
+    }
+    const selected = Array.isArray(values[fieldId])
+      ? (values[fieldId] as unknown as string[])
+      : Array.isArray(field.props.defaultValue)
+        ? (field.props.defaultValue as string[])
+        : []
+    control = (
+      <div className="openray-extension-form-tags">
+        {options.map((option) => {
+          const optionValue = propString(option, 'value') ?? ''
+          const active = selected.includes(optionValue)
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={`openray-extension-form-tag${active ? ' openray-extension-form-tag--active' : ''}`}
+              onClick={() => {
+                const next = active ? selected.filter((v) => v !== optionValue) : [...selected, optionValue]
+                set(next as unknown as string)
+              }}
+            >
+              {propString(option, 'title') ?? optionValue}
+            </button>
+          )
+        })}
+      </div>
     )
   } else if (field.type === 'Form.Dropdown') {
     const options: UiNode[] = []
@@ -1344,7 +1482,7 @@ function FormField({
     collectOptions(field)
     control = (
       <div className="openray-extension-form-select">
-        <select id={controlId} value={textValue} autoFocus={autoFocus} onChange={(event) => set(event.target.value)}>
+        <select ref={controlRef} id={controlId} value={textValue} autoFocus={autoFocus} onChange={(event) => set(event.target.value)}>
           {options.map((option) => (
             <option key={option.id} value={propString(option, 'value') ?? ''}>
               {propString(option, 'title')}
@@ -1357,6 +1495,7 @@ function FormField({
   } else {
     control = (
       <input
+        ref={controlRef}
         id={controlId}
         className="openray-extension-form-input"
         type={field.type === 'Form.PasswordField' ? 'password' : 'text'}

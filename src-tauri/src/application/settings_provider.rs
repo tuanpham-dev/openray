@@ -30,6 +30,6 @@ impl CommandProvider for SettingsCommandProvider {
     }
 
     fn execute(&self, _command_id: &str) -> Result<(), String> {
-        window::open_settings_window(&self.app).map_err(|e| e.to_string())
+        window::open_settings_window(&self.app, window::SettingsTarget::General).map_err(|e| e.to_string())
     }
 }

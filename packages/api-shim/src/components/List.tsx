@@ -2,6 +2,7 @@ import { createElement, type ReactElement, type ReactNode } from 'react'
 import { NodeType } from '../node-types'
 import { actionsSlot } from './host'
 import { Detail } from './Detail'
+import { withFallbacks } from './namespace-fallback'
 
 export interface ListItemAccessory {
   text?: string | { value: string; color?: string }
@@ -107,11 +108,26 @@ export interface ListProps {
   children?: ReactNode
 }
 
-export function List(props: ListProps): ReactElement {
+function ListBase(props: ListProps): ReactElement {
   const { children, searchBarAccessory, actions, ...rest } = props
   return createElement(NodeType.List, rest, searchBarAccessory ?? null, actionsSlot(actions), children)
 }
-List.Item = ListItem
-List.Section = ListSection
-List.EmptyView = ListEmptyView
-List.Dropdown = ListDropdown
+ListBase.Item = ListItem
+ListBase.Section = ListSection
+ListBase.EmptyView = ListEmptyView
+ListBase.Dropdown = ListDropdown
+
+/**
+ * A `List.*` member this shim doesn't implement renders nothing.
+ *
+ * Unlike `Form`, these namespaces have no inert visual slot — the
+ * renderer collects `List.Item`/`List.Section` children by type, so an
+ * unknown node would either be ignored anyway or disturb that collection.
+ * Rendering `null` keeps the command mounting, which is the whole point.
+ */
+const listWithFallbacks = withFallbacks(ListBase, () => {
+  return (): null => null
+})
+
+/** The `List` extensions actually see. */
+export const List = listWithFallbacks

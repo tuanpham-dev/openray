@@ -17,6 +17,7 @@ import {
   type ExtensionWindowOptions,
 } from '@openray/api-shim/runtime'
 import type { JsonValue } from '@openray/protocol'
+import type { UiTreeCommit } from '@openray/protocol'
 import type { RpcDispatcher } from './rpc'
 import { log } from './rpc'
 
@@ -25,6 +26,15 @@ import { log } from './rpc'
  * variants (`runCommand`/`runRootCommandView`) tag theirs with this literal
  * rather than importing a constant across the Rust/TS boundary. */
 const PALETTE_WINDOW_LABEL = 'main'
+
+/** Whether a mount's first commit is a `MenuBarExtra` tree — the one
+ *  signal that a command's output belongs in the tray. */
+function isMenuBarCommit(commit: UiTreeCommit): boolean {
+  if (commit.kind !== 'snapshot') return false
+  const root = commit.snapshot.nodes[commit.snapshot.rootId]
+  const topId = root?.children[0]
+  return topId ? commit.snapshot.nodes[topId]?.type === 'MenuBarExtra' : false
+}
 
 // createRequire(import.meta.url) is NOT an option here: this file is
 // authored as ESM but bundled to CJS output, where import.meta is always
@@ -42,6 +52,11 @@ interface RunCommandParams {
    * declared argument name — absent when the command declares no
    * `arguments[]`, or none were collected. */
   arguments?: Record<string, unknown>
+  /** The payload a programmatic `launchCommand` handed this command —
+   *  surfaced as `props.launchContext`, matching Raycast's `LaunchProps`. */
+  launchContext?: Record<string, unknown>
+  /** Raycast's fallback-command text, carried for the same reason. */
+  fallbackText?: string
   environment: {
     raycastVersion: string
     assetsPath: string
@@ -265,16 +280,43 @@ async function runCommand(dispatcher: RpcDispatcher, params: RunCommandParams): 
   // function's first argument, even when the manifest declares no
   // `arguments[]` — `arguments` defaults to `{}` rather than being absent,
   // so a command destructuring `{ arguments: { foo } }` never throws.
-  const launchProps = { arguments: params.arguments ?? {} }
+  // Raycast's `LaunchProps`: `arguments` always present (a command
+  // destructuring `{ arguments: { foo } }` must never throw), plus the
+  // context a programmatic `launchCommand` passed and the fallback text.
+  const launchProps: Record<string, unknown> = { arguments: params.arguments ?? {} }
+  if (params.launchContext !== undefined) launchProps.launchContext = params.launchContext
+  if (params.fallbackText !== undefined) launchProps.fallbackText = params.fallbackText
 
   if (Command.constructor.name === 'AsyncFunction') {
     await (Command as (props: typeof launchProps) => Promise<unknown>)(launchProps)
     return
   }
 
+  // A `menu-bar` command's tree belongs in the system tray, not in a
+  // webview, and Rust builds that menu — so it needs to know which
+  // extension committed and to receive a *full* tree every time. Deciding
+  // here rather than in Rust keeps the diff-applying out of the tray path
+  // entirely: the menu is small, so re-sending it whole costs nothing.
+  let menuBarMount: boolean | null = null
+  let handleRef: MountHandle | null = null
   const handle = mount(createElement(Command as never, launchProps as never), (commit) => {
+    if (menuBarMount === null) {
+      menuBarMount = isMenuBarCommit(commit)
+    }
+    if (menuBarMount) {
+      const snapshot = commit.kind === 'snapshot' ? commit : handleRef?.resync()
+      if (snapshot) {
+        dispatcher.notify('ui.menuBar', {
+          extensionId: context.extensionId,
+          commandName: context.commandName,
+          commit: snapshot,
+        } as unknown as JsonValue)
+      }
+      return
+    }
     dispatcher.notify('ui.commit', { windowLabel: PALETTE_WINDOW_LABEL, commit } as unknown as JsonValue)
   })
+  handleRef = handle
   mounts.set(key, handle)
 }
 

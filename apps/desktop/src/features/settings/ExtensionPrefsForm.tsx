@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Checkbox } from './Checkbox'
 import { ChevronDownIcon, FolderIcon } from '../../components/icons'
@@ -10,6 +10,10 @@ import {
 } from '../../ipc/extensions'
 
 interface ExtensionPrefsFormProps {
+  /** A command whose own preference group should be scrolled to and
+   *  highlighted — how `openCommandPreferences()` lands somewhere useful
+   *  rather than at the top of a long extension pane. */
+  highlightCommand?: string
   extensionId: string
   /** Render nothing instead of the empty-state message when there are no
    *  preferences — used where a native prefs section already covers the
@@ -22,7 +26,11 @@ interface ExtensionPrefsFormProps {
   onEmptyChange?: (empty: boolean) => void
 }
 
-export function ExtensionPrefsForm({ extensionId, hideEmptyState, onEmptyChange }: ExtensionPrefsFormProps) {
+export function ExtensionPrefsForm({ extensionId, hideEmptyState, onEmptyChange, highlightCommand }: ExtensionPrefsFormProps) {
+  const highlightRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (highlightCommand) highlightRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [highlightCommand])
   const [definitions, setDefinitions] = useState<PreferenceDefinition[]>([])
   const [values, setValues] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState(true)
@@ -76,7 +84,11 @@ export function ExtensionPrefsForm({ extensionId, hideEmptyState, onEmptyChange 
   return (
     <div className="openray-extension-prefs">
       {[...grouped.entries()].map(([commandName, defs]) => (
-        <div key={commandName || 'general'} className="openray-extension-prefs-group">
+        <div
+          key={commandName || 'general'}
+          ref={commandName === highlightCommand ? highlightRef : undefined}
+          className={`openray-extension-prefs-group${commandName === highlightCommand ? ' openray-extension-prefs-group--highlight' : ''}`}
+        >
           <h4>{commandName || 'General'}</h4>
           {/* The same right-aligned label / stretched control grid every
               native pane uses (`GeneralPane`, `ScreenshotsPrefs`, …), rather

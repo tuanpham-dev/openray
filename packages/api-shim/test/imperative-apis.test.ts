@@ -313,3 +313,28 @@ describe('refreshRootCommands (T14)', () => {
     expect(calls).toEqual([{ method: 'host.system.refreshRootCommands', params: { extensionId: 'quicklinks' } }])
   })
 })
+
+describe('showFailureToast', () => {
+  it('raises a failure toast carrying the error message', async () => {
+    // As a stub this swallowed the error entirely — no toast, no log line.
+    const { showFailureToast } = await import('../src/api/toast')
+    const { bridge, calls } = mockBridge()
+    setHostBridge(bridge)
+
+    await showFailureToast(new Error('disk on fire'))
+
+    const toast = calls.find((c) => c.method === 'host.toast.show')
+    expect(toast?.params).toMatchObject({ style: 'FAILURE', title: 'Something went wrong', message: 'disk on fire' })
+  })
+
+  it('accepts a non-Error and an explicit title', async () => {
+    const { showFailureToast } = await import('../src/api/toast')
+    const { bridge, calls } = mockBridge()
+    setHostBridge(bridge)
+
+    await showFailureToast('plain string', { title: 'Export failed' })
+
+    const toast = calls.find((c) => c.method === 'host.toast.show')
+    expect(toast?.params).toMatchObject({ title: 'Export failed', message: 'plain string' })
+  })
+})

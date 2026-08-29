@@ -2231,3 +2231,59 @@ button.openray-tag:hover {
   border-radius: 25%;
   object-fit: cover;
 }
+
+/* `Form.FilePicker` — a read-only path display beside its own Choose
+   button, so the value is visible without being editable as free text. */
+.openray-extension-form-filepicker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.openray-extension-form-filepicker input {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.openray-extension-form-filepicker button {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-primary);
+  font: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  cursor: pointer;
+}
+
+.openray-extension-form-filepicker button:hover {
+  background: var(--openray-selected-bg);
+}
+
+/* `Form.TagPicker` — a row of toggleable chips. Multi-select is what
+   distinguishes it from a dropdown, so the selected state has to read at
+   a glance rather than as a subtle tint. */
+.openray-extension-form-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.openray-extension-form-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--openray-border);
+  background: var(--openray-bg-raised);
+  color: var(--openray-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  cursor: pointer;
+}
+
+.openray-extension-form-tag--active {
+  border-color: var(--openray-accent);
+  background: var(--openray-selected-bg);
+  color: var(--openray-text-primary);
+}

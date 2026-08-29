@@ -3,21 +3,32 @@
 // needs a concrete ownKeys list rather than being a fully-dynamic Proxy —
 // both fixes here mirror index.cts exactly.
 
-import { usePromise, useCachedState, useCachedPromise, useFetch, useLocalStorage } from './utils-hooks'
+import { usePromise, useCachedState, useCachedPromise, useFetch, useLocalStorage, useForm, FormValidation } from './utils-hooks'
+// A type at runtime, but extensions import it as a value binding; exported
+// as a marker object so `import { MutatePromise }` resolves to something
+// rather than tripping the stub proxy.
+const MutatePromise = {} as Record<string, never>
+import { showFailureToast } from './api/toast'
+import { runAppleScript } from './api/applescript'
+import { useExec } from './api/exec'
+import { getFavicon } from './api/favicon'
+import { executeSQL, useSQL } from './api/sql'
+import { useFrecencySorting } from './api/frecency'
 
 const KNOWN_EXPORTS = [
-  'useExec',
-  'useSQL',
-  'useForm',
+  // Real `@raycast/utils` names this shim doesn't implement, listed so an
+  // `import { X }` of one resolves to a logging stub rather than
+  // `undefined` — an undefined import is the "Element type is invalid"
+  // class of failure for a component, and a silent crash for a hook.
+  'useAI',
+  'OAuthService',
+  'withAccessToken',
+  'getAccessToken',
   'useFrontmostApplication',
   'useStreamJSON',
-  'runAppleScript',
-  'showFailureToast',
   'createDeeplink',
-  'getFavicon',
   'getProgressIcon',
   'getAvatarIcon',
-  'MutatePromise',
 ]
 
 /** See `index.cts`'s `shimLog` for why `OPENRAY_SHIM_QUIET` exists. */
@@ -92,4 +103,14 @@ module.exports = {
   useCachedPromise,
   useFetch,
   useLocalStorage,
+  showFailureToast,
+  runAppleScript,
+  useExec,
+  getFavicon,
+  MutatePromise,
+  useSQL,
+  executeSQL,
+  useFrecencySorting,
+  useForm,
+  FormValidation,
 }

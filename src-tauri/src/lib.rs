@@ -117,6 +117,7 @@ pub fn run() {
           let _ = tray.set_visible(false);
         }
       }
+      app.manage(application::menu_bar::MenuBarState::new(state.settings.get().show_tray_icon));
       app.manage(state);
       application::transfer::cleanup_legacy_sync_files(&app.handle().clone());
       spawn_background_workers(app.handle());

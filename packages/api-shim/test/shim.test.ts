@@ -93,14 +93,17 @@ describe('api-shim under real esbuild ESM->CJS interop (regression for both fixe
 describe('unimplemented API stubs', () => {
   it('coerce to a primitive instead of throwing', () => {
     // React stringifies props in dev. A stub handed straight to a component
-    // (`shortcut={Keyboard.Shortcut.Common.Open}`) used to return another
+    // (`shortcut={Keyboard.Shortcut.Common.Open}` was the original case,
+    // before `Keyboard` became real) used to return another
     // stub for `toString`/`valueOf`, so coercion threw "Cannot convert
     // object to primitive value" — mid-commit, which left the reconciler
     // wedged and killed every later update. One unimplemented API used as a
     // prop took down the whole command (found with the real `wikipedia`
     // extension).
     const shim = require(bundledShimPath) as Record<string, unknown>
-    const stub = (shim.Keyboard as { Shortcut: { Common: { Open: unknown } } }).Shortcut.Common.Open
+    // `BrowserExtension` is a real Raycast API this shim doesn't implement
+    // — used here because the test needs something still stubbed.
+    const stub = (shim.BrowserExtension as { getContent: unknown }).getContent
 
     expect(() => `${stub}`).not.toThrow()
     expect(() => String(stub)).not.toThrow()
@@ -109,7 +112,7 @@ describe('unimplemented API stubs', () => {
 
   it('still resolve nested access to further stubs', () => {
     const shim = require(bundledShimPath) as Record<string, unknown>
-    const deep = (shim.Keyboard as Record<string, unknown>).Shortcut as Record<string, unknown>
+    const deep = (shim.BrowserExtension as Record<string, unknown>).getContent as Record<string, unknown>
     expect(deep).toBeDefined()
     expect(() => `${deep.Anything}`).not.toThrow()
   })
@@ -126,5 +129,28 @@ describe('Image', () => {
 
     expect(image.Mask.Circle).toBe('circle')
     expect(image.Mask.RoundedRectangle).toBe('roundedRectangle')
+  })
+})
+
+describe('Keyboard', () => {
+  it('exposes real Common shortcuts rather than the stub proxy', () => {
+    // 37 of 180 sampled extensions import `Keyboard`; as a stub every
+    // shortcut they declared was silently inert.
+    const shim = require(bundledShimPath) as Record<string, unknown>
+    const common = (shim.Keyboard as { Shortcut: { Common: Record<string, { modifiers: string[]; key: string }> } })
+      .Shortcut.Common
+
+    expect(common.Save).toEqual({ modifiers: ['cmd'], key: 's' })
+    expect(common.CopyName).toEqual({ modifiers: ['cmd', 'shift'], key: '.' })
+  })
+
+  it('remaps the two shortcuts that collide with standard Linux bindings', () => {
+    // Raycast's macOS table binds Remove to ⌃X, which is Cut on Linux.
+    const shim = require(bundledShimPath) as Record<string, unknown>
+    const common = (shim.Keyboard as { Shortcut: { Common: Record<string, { modifiers: string[]; key: string }> } })
+      .Shortcut.Common
+
+    expect(common.Remove).toEqual({ modifiers: ['cmd'], key: 'backspace' })
+    expect(common.RemoveAll).toEqual({ modifiers: ['cmd', 'shift'], key: 'backspace' })
   })
 })

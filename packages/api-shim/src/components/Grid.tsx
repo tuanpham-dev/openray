@@ -2,6 +2,7 @@ import { createElement, type ReactElement, type ReactNode } from 'react'
 import { NodeType } from '../node-types'
 import { actionsSlot } from './host'
 import { ListDropdown } from './List'
+import { withFallbacks } from './namespace-fallback'
 
 export interface GridItemProps {
   id?: string
@@ -54,7 +55,7 @@ export interface GridProps {
   children?: ReactNode
 }
 
-export function Grid(props: GridProps): ReactElement {
+function GridBase(props: GridProps): ReactElement {
   const { children, searchBarAccessory, actions, ...rest } = props
   return createElement(NodeType.Grid, rest, searchBarAccessory ?? null, actionsSlot(actions), children)
 }
@@ -70,11 +71,26 @@ export function Grid(props: GridProps): ReactElement {
  * compares them behaves the same here. The renderer does not vary layout
  * on them yet; carrying them keeps such extensions running until it does.
  */
-Grid.Fit = { Contain: 'contain', Fill: 'fill' } as const
-Grid.Inset = { Small: 'small', Medium: 'medium', Large: 'large' } as const
-Grid.ItemSize = { Small: 'small', Medium: 'medium', Large: 'large' } as const
+GridBase.Fit = { Contain: 'contain', Fill: 'fill' } as const
+GridBase.Inset = { Small: 'small', Medium: 'medium', Large: 'large' } as const
+GridBase.ItemSize = { Small: 'small', Medium: 'medium', Large: 'large' } as const
 
-Grid.Item = GridItem
-Grid.Section = GridSection
-Grid.EmptyView = GridEmptyView
-Grid.Dropdown = ListDropdown
+GridBase.Item = GridItem
+GridBase.Section = GridSection
+GridBase.EmptyView = GridEmptyView
+GridBase.Dropdown = ListDropdown
+
+/**
+ * A `Grid.*` member this shim doesn't implement renders nothing.
+ *
+ * Unlike `Form`, these namespaces have no inert visual slot — the
+ * renderer collects `Grid.Item`/`Grid.Section` children by type, so an
+ * unknown node would either be ignored anyway or disturb that collection.
+ * Rendering `null` keeps the command mounting, which is the whole point.
+ */
+const gridWithFallbacks = withFallbacks(GridBase, () => {
+  return (): null => null
+})
+
+/** The `Grid` extensions actually see. */
+export const Grid = gridWithFallbacks

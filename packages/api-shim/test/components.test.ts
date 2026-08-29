@@ -6,6 +6,8 @@ import { List } from '../src/components/List'
 import { Grid } from '../src/components/Grid'
 import { Detail } from '../src/components/Detail'
 import { ActionPanel, Action } from '../src/components/ActionPanel'
+import { Form } from '../src/components/Form'
+import { MenuBarExtra } from '../src/components/MenuBarExtra'
 import { useNavigation } from '../src/hooks'
 
 function collect(): { commits: UiTreeCommit[]; onCommit: (c: UiTreeCommit) => void } {
@@ -298,5 +300,124 @@ describe('unimplemented Action variants', () => {
     await flush()
 
     expect(nodesByType(commits.at(-1)!, 'Action')[0]?.props.title).toBe('Create Snippet')
+  })
+})
+
+describe('unimplemented namespace members', () => {
+  /**
+   * The failure these prevent: a missing member is `undefined`, React
+   * throws "Element type is invalid", and the whole command fails to
+   * mount. 49 of 180 sampled extensions used at least one such member.
+   */
+  it('renders an unknown Form.* as an inert note instead of crashing', async () => {
+    const { commits, onCommit } = collect()
+    // @ts-expect-error deliberately a Form member this shim doesn't implement
+    mount(createElement(Form, null, createElement(Form.LinkAccessory, { id: 'link', title: 'Link' })), onCommit)
+    await flush()
+
+    const nodes = nodesByType(commits.at(-1)!, 'Form.Unsupported')
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]?.props.name).toBe('LinkAccessory')
+  })
+
+  it('renders an unknown List.* as nothing, without disturbing its siblings', async () => {
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        List,
+        null,
+        // @ts-expect-error deliberately a List member this shim doesn't implement
+        createElement(List.SomethingNew, {}),
+        createElement(List.Item, { title: 'Real row' }),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    expect(nodesByType(commits.at(-1)!, 'List.Item')).toHaveLength(1)
+  })
+
+  it('mounts a MenuBarExtra tree', async () => {
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        MenuBarExtra,
+        { title: 'Status' },
+        createElement(MenuBarExtra.Section, { title: 'Recent' }, createElement(MenuBarExtra.Item, { title: 'Open' })),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    expect(nodesByType(commits.at(-1)!, 'MenuBarExtra')).toHaveLength(1)
+    expect(nodesByType(commits.at(-1)!, 'MenuBarExtra.Item')[0]?.props.title).toBe('Open')
+  })
+})
+
+describe('Form.DatePicker value type', () => {
+  /**
+   * The bug this prevents: `Form.DatePicker`'s value is a `Date` on the
+   * extension's side, but props cross to the renderer as JSON. Sending a
+   * bare ISO string meant `onSubmit` handed the extension a *string*, and
+   * the very first thing an extension does is `values.when.getTime()`.
+   */
+  it('hands onSubmit a real Date, not the string it crossed as', async () => {
+    let received: Record<string, unknown> | undefined
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(
+        Form,
+        {
+          actions: createElement(
+            ActionPanel,
+            null,
+            createElement(Action.SubmitForm, {
+              title: 'Go',
+              onSubmit: (values: Record<string, unknown>) => {
+                received = values
+              },
+            }),
+          ),
+        },
+        createElement(Form.DatePicker, { id: 'when', title: 'When' }),
+      ),
+      onCommit,
+    )
+    await flush()
+
+    const submit = nodesByType(commits.at(-1)!, 'Action').find((n) => n.props.__variant === 'submit-form')
+    const callbackId = (submit?.props.onSubmit as { __callback: string }).__callback
+    invokeCallback(callbackId, [{ when: { __date: '2026-08-28T00:00:00.000Z' }, note: 'plain' }])
+
+    expect(received?.when).toBeInstanceOf(Date)
+    expect((received?.when as Date).toISOString()).toBe('2026-08-28T00:00:00.000Z')
+    // Everything else passes through untouched.
+    expect(received?.note).toBe('plain')
+  })
+
+  it('hands over null for a date that was never picked', async () => {
+    let received: Record<string, unknown> | undefined
+    const { commits, onCommit } = collect()
+    mount(
+      createElement(Form, {
+        actions: createElement(
+          ActionPanel,
+          null,
+          createElement(Action.SubmitForm, {
+            title: 'Go',
+            onSubmit: (values: Record<string, unknown>) => {
+              received = values
+            },
+          }),
+        ),
+      }),
+      onCommit,
+    )
+    await flush()
+
+    const submit = nodesByType(commits.at(-1)!, 'Action').find((n) => n.props.__variant === 'submit-form')
+    invokeCallback((submit?.props.onSubmit as { __callback: string }).__callback, [{ when: { __date: null } }])
+
+    expect(received?.when).toBeNull()
   })
 })

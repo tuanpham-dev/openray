@@ -310,14 +310,56 @@ pub fn system_theme(app: &AppHandle) -> String {
     palette_window(app).and_then(|w| w.theme()).map(|t| t.to_string()).unwrap_or_else(|_| "light".to_string())
 }
 
-pub fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
+/// Which pane Settings should open on.
+///
+/// `openExtensionPreferences()` / `openCommandPreferences()` name a target
+/// rather than dumping the user on General and letting them hunt — see
+/// `api::extensions`' bridge handlers.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SettingsTarget<'a> {
+    #[default]
+    General,
+    Extension(&'a str),
+    Command {
+        extension_id: &'a str,
+        command_name: &'a str,
+    },
+}
+
+impl SettingsTarget<'_> {
+    /// The frontend reads these off the hash — see `SettingsWindow.tsx`.
+    fn to_url(self) -> String {
+        match self {
+            SettingsTarget::General => "index.html#/settings".to_string(),
+            SettingsTarget::Extension(id) => {
+                format!("index.html#/settings?extension={}", urlencoding::encode(id))
+            }
+            SettingsTarget::Command { extension_id, command_name } => format!(
+                "index.html#/settings?extension={}&command={}",
+                urlencoding::encode(extension_id),
+                urlencoding::encode(command_name)
+            ),
+        }
+    }
+}
+
+pub fn open_settings_window(app: &AppHandle, target: SettingsTarget<'_>) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
         window.show()?;
         window.set_focus()?;
+        // An already-open window is re-pointed rather than left where it
+        // was: an extension asking for its own preferences while Settings
+        // happens to be open on another pane would otherwise look like the
+        // call did nothing.
+        if !matches!(target, SettingsTarget::General) {
+            let _ = window.eval(format!("window.location.hash = {}", serde_json::json!(
+                target.to_url().trim_start_matches("index.html#")
+            )));
+        }
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(app, SETTINGS_WINDOW_LABEL, WebviewUrl::App("index.html#/settings".into()))
+    WebviewWindowBuilder::new(app, SETTINGS_WINDOW_LABEL, WebviewUrl::App(target.to_url().into()))
         .title("OpenRay Settings")
         .inner_size(980.0, 620.0)
         .min_inner_size(800.0, 520.0)

@@ -154,3 +154,27 @@ export async function showToast(
   await toast.show()
   return toast
 }
+
+/**
+ * The failure-toast shorthand from `@raycast/utils`.
+ *
+ * Extensions call this in every `catch`, and 33 of 180 sampled extensions
+ * import it. As a stub it swallowed the error entirely — a failed request
+ * or a bad path produced no toast, no log line, nothing at all, which is
+ * the worst possible way for an extension to fail.
+ */
+export async function showFailureToast(
+  error: unknown,
+  options?: { title?: string; message?: string; primaryAction?: ToastActionOptions },
+): Promise<Toast> {
+  // `exactOptionalPropertyTypes` is on, so an absent action must be an
+  // absent key rather than an explicit `undefined`.
+  const toast: ToastOptions = {
+    style: Toast.Style.Failure,
+    // Raycast's own default when the caller doesn't name one.
+    title: options?.title ?? 'Something went wrong',
+    message: options?.message ?? (error instanceof Error ? error.message : String(error)),
+  }
+  if (options?.primaryAction) toast.primaryAction = options.primaryAction
+  return showToast(toast)
+}

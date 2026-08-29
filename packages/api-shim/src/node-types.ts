@@ -34,6 +34,15 @@ export const NodeType = {
   FormDropdown: 'Form.Dropdown',
   FormDropdownItem: 'Form.Dropdown.Item',
   FormDescription: 'Form.Description',
+  FormFilePicker: 'Form.FilePicker',
+  FormDatePicker: 'Form.DatePicker',
+  FormTagPicker: 'Form.TagPicker',
+  FormTagPickerItem: 'Form.TagPicker.Item',
+  FormDropdownSection: 'Form.Dropdown.Section',
+  /** A `Form.*` member this shim doesn't implement — rendered as an inert
+   *  note in the form rather than crashing the command. See
+   *  `namespace-fallback.ts`. */
+  FormUnsupported: 'Form.Unsupported',
   FormSeparator: 'Form.Separator',
 
   /**
@@ -44,6 +53,13 @@ export const NodeType = {
    * from `@openray/extras` (`openray.cts`), never `@raycast/api`.
    */
   MarkdownEditor: 'MarkdownEditor',
+
+  /** A `menu-bar` command's root, and its menu contents — rendered into
+   *  the system tray by `application::menu_bar`, not into the palette. */
+  MenuBarExtra: 'MenuBarExtra',
+  MenuBarExtraItem: 'MenuBarExtra.Item',
+  MenuBarExtraSection: 'MenuBarExtra.Section',
+  MenuBarExtraSubmenu: 'MenuBarExtra.Submenu',
 
   ActionPanel: 'ActionPanel',
   ActionPanelSection: 'ActionPanel.Section',

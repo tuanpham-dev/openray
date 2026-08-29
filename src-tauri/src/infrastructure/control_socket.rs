@@ -287,6 +287,9 @@ pub fn spawn(app: &AppHandle) {
                 };
                 let state = app.try_state::<AppState>().ok_or("app state not managed")?;
                 crate::application::dev_extensions::stop(&state, &id).await;
+                // Same reason as `remove_dev_extension`: a menu-bar
+                // command's tray icon has no view teardown to ride on.
+                crate::application::menu_bar::remove(app, &id);
                 state.extensions.unregister(&id).map_err(|e| e.to_string())?;
                 state.command_settings.delete_for_extension(&id).map_err(|e| e.to_string())?;
                 state.root_commands.clear_extension(&id);

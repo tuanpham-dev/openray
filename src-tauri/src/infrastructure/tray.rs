@@ -27,7 +27,7 @@ pub fn build(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                 let _ = window::toggle_palette(app);
             }
             "settings" => {
-                let _ = window::open_settings_window(app);
+                let _ = window::open_settings_window(app, window::SettingsTarget::General);
             }
             "quit" => app.exit(0),
             _ => {}

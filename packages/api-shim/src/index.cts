@@ -44,13 +44,35 @@ import {
   getDefaultApplication,
   confirmAlert,
   updateCommandMetadata,
+  openExtensionPreferences,
+  openCommandPreferences,
   Alert,
   PopToRootType,
 } from './api/system'
 import { AI, OAuth, UnsupportedError } from './api/unsupported'
 import { Icon, Color, Image } from './api/icon'
+import { MenuBarExtra } from './components/MenuBarExtra'
+import { Keyboard } from './api/keyboard'
+import { launchCommand } from './api/launch'
 
-const KNOWN_EXPORTS = ['MenuBarExtra', 'Keyboard']
+/**
+ * Real `@raycast/api` names this shim does not implement, listed so an
+ * `import { X }` of one resolves to a logging stub rather than `undefined`
+ * — see `stubFallback`'s `has`/`ownKeys`, which is what esbuild's
+ * `__copyProps` consults when it builds the extension's import bindings.
+ *
+ * Drawn from what real extensions actually import (a 180-extension sample
+ * of raycast/extensions), so the list covers the names that come up rather
+ * than Raycast's whole surface. Remove a name here when it becomes real —
+ * `MenuBarExtra` and `Keyboard` were both dropped when they did.
+ */
+const KNOWN_EXPORTS = [
+  'BrowserExtension',
+  'captureException',
+  'Tool',
+  'Application',
+  'FileSystemItem',
+]
 
 /**
  * Stub diagnostics go to stderr, where the extension host picks them up as
@@ -158,6 +180,8 @@ module.exports = {
   getDefaultApplication,
   confirmAlert,
   updateCommandMetadata,
+  openExtensionPreferences,
+  openCommandPreferences,
   Alert,
   PopToRootType,
   AI,
@@ -166,4 +190,7 @@ module.exports = {
   Icon,
   Color,
   Image,
+  MenuBarExtra,
+  Keyboard,
+  launchCommand,
 }

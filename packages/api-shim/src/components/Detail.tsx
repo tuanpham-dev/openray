@@ -1,6 +1,7 @@
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { NodeType } from '../node-types'
 import { actionsSlot } from './host'
+import { withFallbacks } from './namespace-fallback'
 
 export interface DetailMetadataLabelProps {
   title: string
@@ -64,8 +65,23 @@ export interface DetailProps {
   metadata?: ReactNode
 }
 
-export function Detail(props: DetailProps): ReactElement {
+function DetailBase(props: DetailProps): ReactElement {
   const { actions, metadata, ...rest } = props
   return createElement(NodeType.Detail, rest, actionsSlot(actions), metadata ?? null)
 }
-Detail.Metadata = DetailMetadata
+DetailBase.Metadata = DetailMetadata
+
+/**
+ * A `Detail.*` member this shim doesn't implement renders nothing.
+ *
+ * Unlike `Form`, these namespaces have no inert visual slot — the
+ * renderer collects `Detail.Item`/`Detail.Section` children by type, so an
+ * unknown node would either be ignored anyway or disturb that collection.
+ * Rendering `null` keeps the command mounting, which is the whole point.
+ */
+const detailWithFallbacks = withFallbacks(DetailBase, () => {
+  return (): null => null
+})
+
+/** The `Detail` extensions actually see. */
+export const Detail = detailWithFallbacks

@@ -324,6 +324,12 @@ pub struct ExtensionManifest {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
+    /// Which operating systems the author says this supports. Absent means
+    /// *unknown* here, not macOS-only as Raycast reads it — most of the
+    /// catalogue simply predates the field. See
+    /// `application::platform_support`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platforms: Option<Vec<String>>,
     pub commands: Vec<ExtensionCommandManifest>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferences: Option<Vec<ExtensionPreference>>,

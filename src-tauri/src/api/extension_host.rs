@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::application::state::AppState;
 use crate::infrastructure::window;
@@ -100,7 +100,16 @@ pub async fn run_extension_command(
 /// mounts (T9) there's no longer a guaranteed *next* `runCommand` call to
 /// implicitly clean this one up.
 #[tauri::command]
-pub async fn unmount_extension_command(state: State<'_, AppState>, extension_id: String, command_name: String) -> Result<(), String> {
+pub async fn unmount_extension_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    extension_id: String,
+    command_name: String,
+) -> Result<(), String> {
+    // A menu-bar command's output lives in the tray, so unmounting it has
+    // to take that icon away too — otherwise a stopped command leaves a
+    // dead menu behind that still looks live.
+    crate::application::menu_bar::remove(&app, &extension_id);
     state
         .extension_host
         .notify("extension.unmountCommand", Some(json!({ "extensionId": extension_id, "commandName": command_name })))

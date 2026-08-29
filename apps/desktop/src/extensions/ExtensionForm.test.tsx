@@ -169,3 +169,4 @@ describe('ExtensionForm submit actions', () => {
     expect(invoked).toHaveLength(1)
   })
 })
+

@@ -2,8 +2,9 @@ import { createElement, type ReactElement, type ReactNode } from 'react'
 import { NodeType } from '../node-types'
 import { useNavigation } from '../hooks'
 import { Clipboard } from '../api/clipboard'
-import { open as openTarget, showHUD } from '../api/system'
+import { open as openTarget, showHUD, showInFinder } from '../api/system'
 import { Icon } from '../api/icon'
+import { withFallbacks } from './namespace-fallback'
 
 export interface ActionProps {
   title: string
@@ -98,12 +99,39 @@ export interface ActionSubmitFormProps {
   onSubmit?: (values: Record<string, unknown>) => void | boolean | Promise<void | boolean>
   shortcut?: { modifiers: string[]; key: string }
 }
+/**
+ * Turns the renderer's tagged date values back into `Date` objects.
+ *
+ * `Form.DatePicker`'s value is a `Date` on the extension's side, but every
+ * prop crosses to the renderer as JSON. The renderer sends `{__date: iso}`
+ * so the type is recoverable here — a bare string would reach the
+ * extension as a string and break `values.when.getTime()`, which is
+ * exactly how an extension uses it.
+ */
+function reviveValues(values: unknown): unknown {
+  if (!values || typeof values !== 'object') return values
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(values as Record<string, unknown>)) {
+    if (value && typeof value === 'object' && '__date' in (value as object)) {
+      const iso = (value as { __date: string | null }).__date
+      out[key] = iso ? new Date(iso) : null
+    } else {
+      out[key] = value
+    }
+  }
+  return out
+}
+
 function ActionSubmitForm(props: ActionSubmitFormProps): ReactElement {
+  const { onSubmit, ...rest } = props
   return createElement(NodeType.Action, {
-    ...props,
+    ...rest,
     title: props.title ?? 'Submit Form',
     icon: props.icon ?? Icon.ArrowRight,
     __variant: 'submit-form',
+    ...(onSubmit
+      ? { onSubmit: (values: Record<string, unknown>) => onSubmit(reviveValues(values) as Record<string, unknown>) }
+      : {}),
   })
 }
 
@@ -154,6 +182,55 @@ ActionBase.CopyToClipboard = ActionCopyToClipboard
 ActionBase.Paste = ActionPaste
 ActionBase.Push = ActionPush
 ActionBase.SubmitForm = ActionSubmitForm
+export interface ActionOpenProps {
+  target: string
+  /** An app to open with — `open()` already takes one. */
+  application?: string
+  title?: string
+  icon?: string
+  shortcut?: { modifiers: string[]; key: string }
+  onOpen?: (target: string) => void
+}
+/** Raycast's generic "open this thing", used by 11 of 180 sampled
+ *  extensions — a file, folder or URL, optionally in a named app. */
+function ActionOpen(props: ActionOpenProps): ReactElement {
+  const { target, application, onOpen, ...rest } = props
+  return createElement(NodeType.Action, {
+    ...rest,
+    title: props.title ?? 'Open',
+    icon: props.icon ?? Icon.Link,
+    __variant: 'open',
+    onAction: () => {
+      void openTarget(target, application).then(() => onOpen?.(target))
+    },
+  })
+}
+
+export interface ActionShowInFinderProps {
+  path: string
+  title?: string
+  icon?: string
+  shortcut?: { modifiers: string[]; key: string }
+  onShow?: (path: string) => void
+}
+/** Reveals a path in the system file manager. Named for Finder because
+ *  Raycast is, but `showInFinder` already resolves to whatever this
+ *  platform actually uses. */
+function ActionShowInFinder(props: ActionShowInFinderProps): ReactElement {
+  const { path, onShow, ...rest } = props
+  return createElement(NodeType.Action, {
+    ...rest,
+    title: props.title ?? 'Show in Finder',
+    icon: props.icon ?? Icon.Folder,
+    __variant: 'show-in-finder',
+    onAction: () => {
+      void showInFinder(path).then(() => onShow?.(path))
+    },
+  })
+}
+
+ActionBase.Open = ActionOpen
+ActionBase.ShowInFinder = ActionShowInFinder
 ActionBase.CreateSnippet = ActionCreateSnippet
 
 /**
@@ -173,26 +250,16 @@ ActionBase.CreateSnippet = ActionCreateSnippet
  * already defined, so `Style`, `prototype`, `$$typeof` and symbol lookups
  * behave exactly as before.
  */
-const actionWithFallbacks = new Proxy(ActionBase, {
-  get(target, prop, receiver) {
-    const existing = Reflect.get(target, prop, receiver)
-    if (existing !== undefined || typeof prop !== 'string') return existing
-    if (!/^[A-Z]/.test(prop)) return existing
-
-    const fallback = (props: { title?: string; icon?: string; shortcut?: unknown }): ReactElement =>
-      createElement(NodeType.Action, {
-        ...props,
-        title: props.title ?? prop,
-        __variant: 'unsupported',
-        onAction: () => {
-          void showHUD(`"Action.${prop}" isn't supported yet`)
-        },
-      })
-    // Cached on the target so repeated renders keep one component
-    // identity — a fresh function each time would remount the row.
-    Object.defineProperty(target, prop, { value: fallback, configurable: true })
-    return fallback
-  },
+const actionWithFallbacks = withFallbacks(ActionBase, (name) => {
+  return (props: { title?: string; icon?: string; shortcut?: unknown }): ReactElement =>
+    createElement(NodeType.Action, {
+      ...props,
+      title: props.title ?? name,
+      __variant: 'unsupported',
+      onAction: () => {
+        void showHUD(`"Action.${name}" isn't supported yet`)
+      },
+    })
 })
 
 /** The `Action` extensions actually see. */

@@ -33,14 +33,42 @@ import {
 import '../../theme/tokens.css'
 import './settings.css'
 
+/**
+ * The pane named by the window's own URL.
+ *
+ * `openExtensionPreferences()` / `openCommandPreferences()` deep-link here
+ * (`#/settings?extension=<id>&command=<name>`) rather than dropping the
+ * user on General to hunt for the extension themselves — see
+ * `infrastructure::window::SettingsTarget`, which builds these.
+ */
+function selectionFromHash(): SettingsSelection {
+  const query = window.location.hash.split('?')[1]
+  if (!query) return { kind: 'general' }
+  const params = new URLSearchParams(query)
+  const extensionId = params.get('extension')
+  if (!extensionId) return { kind: 'general' }
+  const commandName = params.get('command')
+  if (commandName) return { kind: 'command', extensionId, commandName }
+  return { kind: 'extension', id: extensionId }
+}
+
 export function SettingsWindow() {
-  const [selection, setSelection] = useState<SettingsSelection>({ kind: 'general' })
+  const [selection, setSelection] = useState<SettingsSelection>(selectionFromHash)
   const [settings, setSettings] = useState<Settings | null>(null)
   const [extensions, setExtensions] = useState<ExtensionEntry[]>([])
   const [commands, setCommands] = useState<SettingsCommand[]>([])
   const [commandSettings, setCommandSettingsState] = useState<Record<string, CommandSettingsEntry>>({})
   const [devSessions, setDevSessions] = useState<DevSession[]>([])
   const [devBuild, setDevBuild] = useState<DevBuildEvent | null>(null)
+
+  // A second `openExtensionPreferences()` while this window is already
+  // open re-points it (the Rust side rewrites the hash), which is only
+  // visible if we listen for it.
+  useEffect(() => {
+    const onHashChange = () => setSelection(selectionFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   const refresh = () =>
     Promise.all([listExtensions(), listSettingsCommands(), listCommandSettings(), listDevExtensions()]).then(
@@ -136,7 +164,13 @@ export function SettingsWindow() {
     await refresh()
   }
 
-  const selectedExtension = selection.kind === 'extension' ? extensions.find((ext) => ext.id === selection.id) : undefined
+  // A `command` selection renders that command's own extension pane, with
+  // its preference group highlighted — the groups already exist there, so
+  // deep-linking beats building a second surface that shows the same rows.
+  const selectedExtensionId =
+    selection.kind === 'extension' ? selection.id : selection.kind === 'command' ? selection.extensionId : undefined
+  const selectedExtension = selectedExtensionId ? extensions.find((ext) => ext.id === selectedExtensionId) : undefined
+  const highlightCommand = selection.kind === 'command' ? selection.commandName : undefined
 
   return (
     <ThemeProvider>
@@ -165,6 +199,7 @@ export function SettingsWindow() {
             <InstallExtensionView onInstalled={(id) => void refresh().then(() => setSelection({ kind: 'extension', id }))} />
           ) : selectedExtension ? (
             <ExtensionSettingsView
+              highlightCommand={highlightCommand}
               extension={selectedExtension}
               commands={commands}
               commandSettings={commandSettings}

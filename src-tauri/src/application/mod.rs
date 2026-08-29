@@ -13,6 +13,8 @@ pub mod hotkey_dispatch;
 pub mod inline_query;
 pub mod navigation;
 pub mod root_commands;
+pub mod menu_bar;
+pub mod platform_support;
 pub mod registry;
 pub mod registry_sources;
 pub mod screenshots;

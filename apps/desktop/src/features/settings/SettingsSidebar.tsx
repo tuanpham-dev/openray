@@ -11,9 +11,15 @@ export type SettingsSelection =
   | { kind: 'applications' }
   | { kind: 'install' }
   | { kind: 'extension'; id: string }
+  /** One command's own preferences — see `CommandPreferencesView`. */
+  | { kind: 'command'; extensionId: string; commandName: string }
 
 function selectionKey(selection: SettingsSelection): string {
-  return selection.kind === 'extension' ? `extension:${selection.id}` : selection.kind
+  if (selection.kind === 'extension') return `extension:${selection.id}`
+  // A command pane highlights its own extension in the sidebar — the
+  // command isn't a sidebar row of its own.
+  if (selection.kind === 'command') return `extension:${selection.extensionId}`
+  return selection.kind
 }
 
 interface SettingsSidebarProps {

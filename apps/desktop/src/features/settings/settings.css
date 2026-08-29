@@ -1398,3 +1398,21 @@ button.openray-settings-browse-button:hover {
   color: var(--openray-text-secondary);
   white-space: nowrap;
 }
+
+/* The preference group `openCommandPreferences()` deep-linked to. Fades
+   after landing so it points the eye once without becoming permanent
+   decoration on a pane the user then keeps scrolling. */
+.openray-extension-prefs-group--highlight {
+  animation: openray-prefs-highlight 2.4s ease-out;
+  border-radius: 8px;
+}
+
+@keyframes openray-prefs-highlight {
+  0%,
+  40% {
+    background: var(--openray-selected-bg);
+  }
+  100% {
+    background: transparent;
+  }
+}

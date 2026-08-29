@@ -1,4 +1,5 @@
 import { getHostBridge } from '../bridge'
+import { getCommandContext } from './command-context'
 
 export interface Application {
   name: string
@@ -85,4 +86,31 @@ export async function confirmAlert(options: Alert.Options): Promise<boolean> {
 
 export async function updateCommandMetadata(metadata: { subtitle?: string | null }): Promise<void> {
   await getHostBridge().call('host.system.updateCommandMetadata', metadata)
+}
+
+/**
+ * Opens this extension's own preferences in Settings.
+ *
+ * 28 of 180 sampled extensions call it — almost always from an action row
+ * offered after a preference turns out to be missing or wrong, which as a
+ * stub did nothing at all and left the user with no way to reach the
+ * setting they'd just been told about.
+ *
+ * The extension is identified from the command context rather than from an
+ * argument: an extension must not be able to open a *different* one's
+ * preferences by naming it.
+ */
+export async function openExtensionPreferences(): Promise<void> {
+  await getHostBridge().call('host.system.openExtensionPreferences', {
+    extensionId: getCommandContext().extensionId,
+  })
+}
+
+/** As above, but scrolls to the calling command's own preference group. */
+export async function openCommandPreferences(): Promise<void> {
+  const context = getCommandContext()
+  await getHostBridge().call('host.system.openCommandPreferences', {
+    extensionId: context.extensionId,
+    commandName: context.commandName,
+  })
 }

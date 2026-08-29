@@ -620,6 +620,7 @@ mod tests {
             icon: None,
             author: None,
             categories: None,
+            platforms: None,
             commands: vec![
                 ExtensionCommandManifest {
                     name: "search".into(),

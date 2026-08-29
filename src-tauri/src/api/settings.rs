@@ -42,6 +42,10 @@ pub fn update_settings(app: AppHandle, state: State<AppState>, settings: Setting
         if let Some(tray) = app.tray_by_id(crate::infrastructure::tray::TRAY_ID) {
             let _ = tray.set_visible(show_tray_icon);
         }
+        // Extensions contributing their own tray icons follow the same
+        // setting — hidden without losing their trees, so nothing has to
+        // be relaunched when it's turned back on.
+        crate::application::menu_bar::set_visible(&app, show_tray_icon);
     }
 
     // T29: unlike native `CommandProvider::commands()` (called fresh on
@@ -126,7 +130,7 @@ pub fn update_hotkey(app: AppHandle, state: State<AppState>, hotkey: String) -> 
 
 #[tauri::command]
 pub fn open_settings(app: AppHandle) -> Result<(), String> {
-    window::open_settings_window(&app).map_err(|e| e.to_string())
+    window::open_settings_window(&app, window::SettingsTarget::General).map_err(|e| e.to_string())
 }
 
 /// Every command in the registry (apps, builtins, quicklinks, snippets,
