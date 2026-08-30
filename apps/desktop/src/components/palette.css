@@ -192,6 +192,89 @@
   word-break: break-word;
 }
 
+/* Full-page Detail (pushed via `Action.Push`).
+
+   Two columns: the content reads down the left, the facts sit to the right,
+   the way a store listing does. `DetailBody` renders the markdown and the
+   metadata as siblings, so the grid goes on their shared parent and neither
+   component needs to know which layout it is in.
+
+   The right column is fixed rather than fractional — it holds short
+   label/value pairs, and letting it grow with the window only stretches the
+   gap between a label and its value. */
+/* Two classes, deliberately: `.openray-settings-content` (settings.css) sets
+   `display: flex; flex-direction: column` at equal specificity, and load
+   order decided the winner — which stacked the metadata below the fold
+   instead of beside the content. */
+.openray-settings-content.openray-detail-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 28px;
+  align-items: start;
+  padding: 20px 24px;
+}
+
+/* The page itself scrolls, so the markdown grows to its content instead of
+   becoming a second, much shorter scroll area nested inside it. */
+.openray-detail-page .openray-detail-markdown {
+  flex: none;
+  min-height: auto;
+  overflow-y: visible;
+}
+
+/* The screenshot strip spans the full width — its own row above both
+   columns — while the prose beneath it stays in the left one.
+   
+   Done with a negative right margin rather than by dissolving the markdown
+   wrapper into the grid (`display: contents`): that made every block its own
+   grid item, and auto-placement then interleaved them with the metadata
+   instead of keeping the two columns intact. Bleeding one child rightwards
+   leaves the wrapper — and the rest of the layout — exactly as it was.
+   
+   The offset is the metadata column plus the gap, so the strip ends where
+   the page padding does. */
+.openray-detail-page .openray-detail-markdown > p:first-child {
+  margin-right: -328px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding-bottom: 8px;
+}
+
+.openray-detail-page .openray-detail-markdown > p:first-child img {
+  max-height: 150px;
+  width: auto;
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 8px;
+}
+
+/* Pushed below the strip so the bleed has somewhere to go. 150px of image
+   plus its scrollbar padding and the paragraph's own margin — a constant,
+   because the image height is capped at a constant. */
+.openray-detail-page .openray-detail-info {
+  grid-column: 2;
+  margin-top: 182px;
+}
+
+/* Section labels ("Description", "Commands") read as quiet headings, not as
+   competing titles — the view already has one in the header bar. */
+.openray-detail-page .openray-detail-markdown h2 {
+  margin: 18px 0 6px;
+  font-size: calc(11px * var(--openray-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--openray-text-tertiary);
+}
+
+/* A command's name sits tight above its own description. */
+.openray-detail-page .openray-detail-markdown h2 + p {
+  margin-bottom: 2px;
+}
+
+
+
 .openray-detail-markdown > :first-child {
   margin-top: 0;
 }
@@ -651,6 +734,21 @@ button.openray-tag:hover {
   font-weight: 450;
   letter-spacing: -0.1px;
   white-space: nowrap;
+  /* Ellipsize like the subtitle beside it already did. Without `min-width`
+     a flex item refuses to shrink below its content, so `nowrap` alone made
+     a long title push the accessories off the row instead of truncating —
+     clipboard entries (a pasted URL, a whole shell command) hit this
+     constantly. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Shrinks only once the subtitle has given up all the room it can. Both
+     ellipsize, but a truncated *title* leaves a row you cannot identify
+     ("Chrome Pro…"), while a truncated description still reads. Weighting
+     the shrink rather than pinning the title means a clipboard entry — where
+     the title *is* the content and there is little subtitle to sacrifice —
+     still truncates instead of overflowing. */
+  flex-shrink: 1;
 }
 
 .openray-list-item-subtitle {
@@ -659,6 +757,40 @@ button.openray-tag:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  /* See `.openray-list-item-title` — the subtitle absorbs the shrinking. */
+  flex-shrink: 100;
+}
+
+/* Two-line rows (`List layout="detailed"`). The Store uses them because an
+   extension's description is a sentence, not a label — on one line it either
+   squeezes the title out or gets cut to nothing. Stacking gives the
+   description the full row width and the title its own line.
+
+   Icon and accessories centre against the pair of lines rather than aligning
+   to the title: they belong to the whole row, and top-aligning them left the
+   icon floating above an obvious optical centre. */
+.openray-list-item--detailed {
+  align-items: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.openray-list-item--detailed .openray-list-item-main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Both lines truncate independently now that neither is competing with the
+   other for the same horizontal run. */
+.openray-list-item--detailed .openray-list-item-title,
+.openray-list-item--detailed .openray-list-item-subtitle {
+  flex-shrink: 1;
+  max-width: 100%;
 }
 
 .openray-list-item-alias {
@@ -1086,6 +1218,17 @@ button.openray-tag:hover {
 .openray-form-button--primary {
   background: var(--openray-accent);
   border-color: var(--openray-accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* Destructive confirm (uninstall, remove) — the same shape as --primary so
+   the two never look like different kinds of control, but carrying the
+   danger colour rather than the accent, since the accent is what every
+   harmless primary action in the app already uses. */
+.openray-form-button--danger {
+  background: var(--openray-danger);
+  border-color: var(--openray-danger);
   color: #fff;
   font-weight: 500;
 }

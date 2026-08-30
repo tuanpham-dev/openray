@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
@@ -61,10 +61,46 @@ export async function publish(dirs, outDir) {
         file: packed.file,
         sha256: packed.sha256,
       }
+      // The command list, not just a count: the Store's detail view lists
+      // them by name and description, and the row's tooltip only needs
+      // `.length`. Trimmed to the three fields that get displayed so a
+      // catalog doesn't carry preference schemas nobody reads.
+      if (Array.isArray(manifest.commands)) {
+        entry.commands = manifest.commands.map((command) => ({
+          name: command.name,
+          title: command.title ?? command.name,
+          ...(command.description ? { description: command.description } : {}),
+        }))
+      }
       if (manifest.description) entry.description = manifest.description
       if (manifest.author) entry.author = manifest.author
       if (Array.isArray(manifest.categories)) entry.categories = manifest.categories
       if (Array.isArray(manifest.platforms)) entry.platforms = manifest.platforms
+
+      // Screenshots follow Raycast's own convention: a `metadata/` folder
+      // beside the manifest. They are copied out rather than packed into the
+      // archive because they are big — a single Raycast extension's are
+      // routinely 5 MB — and nobody should download them to *install*
+      // something. Sorted so the order is the author's numbering
+      // (`name-1.png`, `name-2.png`), not the filesystem's.
+      const metadataDir = join(source, 'metadata')
+      if (existsSync(metadataDir)) {
+        const shots = readdirSync(metadataDir)
+          .filter((file) => /\.(png|jpe?g|webp|gif)$/i.test(file))
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        // Renumbered rather than prefixed: Raycast's convention already names
+        // each file after the extension (`linear-1.png`), so keeping the
+        // original would produce `foo-metadata-foo-1.png`. The catalog only
+        // needs a name unique within the registry, and position is the only
+        // thing the order depends on.
+        const copied = []
+        shots.forEach((file, index) => {
+          const name = `${packed.id}-metadata-${index + 1}${extname(file).toLowerCase()}`
+          copyFileSync(join(metadataDir, file), join(out, name))
+          copied.push(name)
+        })
+        if (copied.length > 0) entry.screenshots = copied
+      }
 
       // README and icon are copied out so a catalog can render a rich
       // listing without unpacking every archive.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Toggle } from './Toggle'
 import { CommandList } from './CommandList'
+import { ConfirmDialog } from './ConfirmDialog'
 import { ExtensionPrefsForm } from './ExtensionPrefsForm'
 import { BUILTIN_PREFS } from './builtinPrefs'
 import { THEME_ICONS, ThemeIcon } from './extensionIcons'
@@ -56,6 +57,37 @@ export function ExtensionSettingsView({
   onRemoveDev,
 }: ExtensionSettingsViewProps) {
   const isDev = extension.source === 'dev'
+
+  /*
+   * Both removals confirm because the button sits inches from the Enable
+   * toggle on the same row and neither has an undo. What each costs differs,
+   * so the two prompts say different things rather than sharing one vague
+   * warning.
+   *
+   * The prompt is this app's own modal, not `window.confirm` — in the
+   * WebKitGTK webview this ships in, that returns truthy without ever drawing
+   * anything, so a guard written against it approves everything silently.
+   */
+  const [pendingRemoval, setPendingRemoval] = useState<'uninstall' | 'dev' | null>(null)
+
+  // Uninstall deletes <extensionsRoot>/<id> and, via
+  // `command_settings.delete_for_extension`, every alias and hotkey bound to
+  // its commands. What it deliberately does *not* touch is
+  // `extension_storage`, so anything the extension saved survives a reinstall
+  // — worth saying, because "uninstall" reads like it takes the data too.
+  const uninstallMessage =
+    `Its files are deleted, along with any aliases and hotkeys you assigned to its commands. ` +
+    `Data it has stored is kept, so reinstalling restores it.` +
+    (extension.sourceUrl ? ` You can reinstall it from ${extension.sourceUrl}.` : '')
+
+  // Removing a dev extension touches no files at all — that is the whole
+  // reason it exists separately from Uninstall, which refuses on dev
+  // extensions precisely so it can never delete an author's source tree.
+  const removeDevMessage =
+    `OpenRay stops loading it and forgets the aliases and hotkeys you assigned to its commands.` +
+    (extension.path ? ` The folder at ${extension.path} is left alone.` : ' No files are deleted.') +
+    ` Add the folder again to bring it back.`
+
   const ownCommands = useMemo(
     () => commands.filter((command) => parseExtensionCommandId(command.id)?.extensionId === extension.id),
     [commands, extension.id],
@@ -106,7 +138,7 @@ export function ExtensionSettingsView({
         <div className="openray-extension-view-actions">
           {isDev ? (
             <>
-              <button type="button" className="openray-extensions-uninstall" onClick={() => onRemoveDev(extension.id)}>
+              <button type="button" className="openray-extensions-uninstall" onClick={() => setPendingRemoval('dev')}>
                 Remove
               </button>
               {devDir ? (
@@ -123,7 +155,7 @@ export function ExtensionSettingsView({
             </>
           ) : (
             extension.source !== 'builtin' && (
-              <button type="button" className="openray-extensions-uninstall" onClick={() => onUninstall(extension.id)}>
+              <button type="button" className="openray-extensions-uninstall" onClick={() => setPendingRemoval('uninstall')}>
                 Uninstall
               </button>
             )
@@ -170,6 +202,34 @@ export function ExtensionSettingsView({
           <h3>Commands</h3>
           <CommandList commands={ownCommands} commandSettings={commandSettings} onAlias={onAlias} onHotkey={onHotkey} onEnabled={onEnabled} />
         </section>
+      )}
+
+      {pendingRemoval === 'uninstall' && (
+        <ConfirmDialog
+          title={`Uninstall ${extension.title}?`}
+          message={uninstallMessage}
+          confirmLabel="Uninstall"
+          destructive
+          onCancel={() => setPendingRemoval(null)}
+          onConfirm={() => {
+            setPendingRemoval(null)
+            onUninstall(extension.id)
+          }}
+        />
+      )}
+
+      {pendingRemoval === 'dev' && (
+        <ConfirmDialog
+          title={`Remove ${extension.title}?`}
+          message={removeDevMessage}
+          confirmLabel="Remove"
+          destructive
+          onCancel={() => setPendingRemoval(null)}
+          onConfirm={() => {
+            setPendingRemoval(null)
+            onRemoveDev(extension.id)
+          }}
+        />
       )}
     </div>
   )

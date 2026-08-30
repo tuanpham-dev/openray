@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ConfirmDialog } from './ConfirmDialog'
 import { Toggle } from './Toggle'
 import {
   addRegistrySource,
@@ -55,10 +56,12 @@ export function RegistriesSection() {
     }
   }
 
+  // The confirmation is this app's own modal. It used to be `window.confirm`,
+  // which in this WebKitGTK webview returns truthy without drawing anything —
+  // so this guard was silently approving every removal since it was written.
+  const [pendingRemove, setPendingRemove] = useState<RegistrySource | null>(null)
+
   const remove = async (source: RegistrySource) => {
-    if (!window.confirm(`Remove ${source.name ?? source.url}?\n\nExtensions already installed from it stay installed, but stop receiving updates.`)) {
-      return
-    }
     await removeRegistrySource(source.url)
     await refresh()
   }
@@ -117,12 +120,27 @@ export function RegistriesSection() {
                   onChange={(checked) => toggleEnabled(source, checked)}
                 />
               </label>
-              <button type="button" className="openray-extensions-uninstall" onClick={() => void remove(source)}>
+              <button type="button" className="openray-extensions-uninstall" onClick={() => setPendingRemove(source)}>
                 Remove
               </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {pendingRemove && (
+        <ConfirmDialog
+          title={`Remove ${pendingRemove.name ?? pendingRemove.url}?`}
+          message="Extensions already installed from it stay installed, but stop receiving updates."
+          confirmLabel="Remove"
+          destructive
+          onCancel={() => setPendingRemove(null)}
+          onConfirm={() => {
+            const source = pendingRemove
+            setPendingRemove(null)
+            void remove(source)
+          }}
+        />
       )}
     </>
   )

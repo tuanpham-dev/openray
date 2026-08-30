@@ -1208,6 +1208,29 @@ button.openray-settings-browse-button:hover {
   white-space: nowrap;
 }
 
+/* Confirmation dialog text, sized up from the pane's own 12/13px.
+
+   A confirmation is read once, under time pressure, and it is the only
+   thing on screen — the reasons the rest of the pane keeps text small
+   (density, many rows at once) don't apply to it. Scaled by
+   `--openray-font-scale` so it follows Settings → Text Size, which the
+   palette already honours everywhere and this window currently honours
+   nowhere. */
+.openray-confirm-dialog .openray-modal-title {
+  font-size: calc(15px * var(--openray-font-scale, 1));
+}
+
+.openray-confirm-dialog .openray-settings-control-hint {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  line-height: 1.5;
+  color: var(--openray-text-secondary);
+}
+
+.openray-confirm-dialog .openray-form-button {
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  padding: 7px 16px;
+}
+
 /* ---------- Modal (Import / Export passphrase prompt) ---------- */
 
 /* Covers the settings window rather than the pane: the prompt blocks the

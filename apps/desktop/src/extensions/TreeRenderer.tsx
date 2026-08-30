@@ -276,7 +276,20 @@ function collectListEntries(node: UiNode, nodes: Record<string, UiNode>): ListEn
   return entries
 }
 
-function ExtensionListItemRow({ node, selected, onSelect, onActivate }: { node: UiNode; selected: boolean; onSelect: () => void; onActivate: () => void }) {
+function ExtensionListItemRow({
+  node,
+  selected,
+  detailed,
+  onSelect,
+  onActivate,
+}: {
+  node: UiNode
+  selected: boolean
+  /** Two-line row — see `List`'s `layout` prop. */
+  detailed: boolean
+  onSelect: () => void
+  onActivate: () => void
+}) {
   const title = propString(node, 'title') ?? ''
   const subtitle = propString(node, 'subtitle')
   const icon = node.props.icon
@@ -284,7 +297,7 @@ function ExtensionListItemRow({ node, selected, onSelect, onActivate }: { node: 
   return (
     <div
       ref={ref}
-      className={`openray-list-item${selected ? ' openray-list-item--selected' : ''}`}
+      className={`openray-list-item${selected ? ' openray-list-item--selected' : ''}${detailed ? ' openray-list-item--detailed' : ''}`}
       onMouseEnter={() => {
         if (isHoverSelectionEnabled()) onSelect()
       }}
@@ -295,8 +308,17 @@ function ExtensionListItemRow({ node, selected, onSelect, onActivate }: { node: 
       ) : (
         <span className="openray-list-item-icon openray-list-item-icon-fallback">{title.charAt(0).toUpperCase()}</span>
       )}
-      <span className="openray-list-item-title">{title}</span>
-      {subtitle && <span className="openray-list-item-subtitle">{subtitle}</span>}
+      {detailed ? (
+        <span className="openray-list-item-main">
+          <span className="openray-list-item-title">{title}</span>
+          {subtitle && <span className="openray-list-item-subtitle">{subtitle}</span>}
+        </span>
+      ) : (
+        <>
+          <span className="openray-list-item-title">{title}</span>
+          {subtitle && <span className="openray-list-item-subtitle">{subtitle}</span>}
+        </>
+      )}
       <ListItemAccessories raw={node.props.accessories} />
     </div>
   )
@@ -525,6 +547,7 @@ function ExtensionList({
   }, [filtered.length, emptyView, dropdownOpen])
 
   let lastSectionTitle: string | undefined
+  const detailedRows = propString(node, 'layout') === 'detailed'
   const rows = (
     <div className="openray-result-list">
       {filtered.length === 0 && (emptyView ? <EmptyViewContent node={emptyView} /> : <div className="openray-empty-view">No results</div>)}
@@ -537,6 +560,7 @@ function ExtensionList({
             <ExtensionListItemRow
               node={entry.item}
               selected={index === selectedIndex}
+              detailed={detailedRows}
               onSelect={() => setSelectedIndex(index)}
               onActivate={() => onActivate(index)}
             />
@@ -1004,11 +1028,15 @@ function ExtensionDetail({
   nodes,
   title,
   icon,
+  onBack,
 }: {
   node: UiNode
   nodes: Record<string, UiNode>
   title?: string
   icon?: string | null
+  /** Present when this view was pushed onto a navigation stack — a Detail
+   *  reached via `Action.Push` needs the same way back a Form does. */
+  onBack?: () => void
 }) {
   const actionsSlot = findActionsSlot(node, nodes)
   const actions = actionsFromSlot(actionsSlot, nodes)
@@ -1028,9 +1056,26 @@ function ExtensionDetail({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [actions])
 
+  const navigationTitle = propString(node, 'navigationTitle')
+
   return (
     <div className="palette">
-      <div className="openray-settings-content" style={{ overflowY: 'auto', flex: 1 }}>
+      {/* Same top bar a Form gets, and for the same reason: a Detail has no
+          search field, but a pushed one still needs the way back and its own
+          name. */}
+      {onBack && (
+        <div className="openray-form-header">
+          <BackButton onClick={onBack} />
+          <span className="openray-form-header-title">{navigationTitle ?? title}</span>
+          {propBoolean(node, 'isLoading') && <span className="openray-toast-spinner" aria-label="Loading" />}
+        </div>
+      )}
+      {/* `openray-detail-page` marks the full-page case. `DetailBody` gives
+          the markdown its own scroll pane and pins the metadata beneath —
+          correct inside a List, where the pane has a fixed height, but here
+          the outer container already scrolls, so the inner one collapses to
+          a sliver and clips tall content (a screenshot showed ~75px of 260). */}
+      <div className="openray-settings-content openray-detail-page" style={{ overflowY: 'auto', flex: 1 }}>
         <DetailBody node={node} nodes={nodes} />
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
@@ -1561,7 +1606,7 @@ export function ExtensionView({
     case 'Grid':
       return <ExtensionGrid key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
     case 'Detail':
-      return <ExtensionDetail key={root.id} node={root} nodes={nodes} title={title} icon={icon} />
+      return <ExtensionDetail key={root.id} node={root} nodes={nodes} title={title} icon={icon} onBack={onBack} />
     case 'Form':
       return <ExtensionForm key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
     case 'MarkdownEditor':
