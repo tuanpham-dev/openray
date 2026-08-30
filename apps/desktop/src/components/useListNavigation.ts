@@ -27,6 +27,24 @@ export function altHorizontalDirection(event: KeyboardEvent): 1 | -1 | null {
   return null
 }
 
+/** The scrollable ancestor a row actually moves within, or null when the
+ *  row sits in a list short enough never to have scrolled. */
+function scrollParent(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const overflowY = getComputedStyle(node).overflowY
+    if (overflowY === 'auto' || overflowY === 'scroll') return node
+  }
+  return null
+}
+
+/** Whether `element` would be fully in view with `scroller` wound back to
+ *  the very top — i.e. scrolling to it is the same as scrolling home. */
+function visibleAtScrollTop(scroller: HTMLElement, element: HTMLElement): boolean {
+  const offsetTop =
+    element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - scroller.clientTop + scroller.scrollTop
+  return offsetTop + element.offsetHeight <= scroller.clientHeight
+}
+
 /**
  * Keeps the selected row visible. Keyboard navigation only moves an index,
  * so a selection that lands off-screen has to be scrolled to explicitly.
@@ -34,12 +52,28 @@ export function altHorizontalDirection(event: KeyboardEvent): 1 | -1 | null {
  * `nearest` is what keeps this from fighting the mouse: when the row is
  * already visible — the hover-to-select case, including hovering while
  * wheel-scrolling — it resolves to no scroll at all.
+ *
+ * A row that fits on screen with the list wound fully back is scrolled to
+ * home instead of to itself. `nearest` stops at the row's own top edge,
+ * which parks whatever sits above it inside the scroller — the group
+ * heading ("Suggestions"/"Results"/"Actions") — just out of view. The
+ * palette shows this off best: hide it mid-list and reopen, and popping
+ * back to the first row would otherwise restore the rows without their
+ * label.
  */
 export function useScrollIntoViewWhenSelected<T extends HTMLElement>(selected: boolean) {
   const ref = useRef<T>(null)
 
   useEffect(() => {
-    if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
+    const element = ref.current
+    if (!selected || !element) return
+
+    const scroller = scrollParent(element)
+    if (scroller && visibleAtScrollTop(scroller, element)) {
+      scroller.scrollTop = 0
+      return
+    }
+    element.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
   return ref
