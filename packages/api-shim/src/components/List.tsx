@@ -102,6 +102,12 @@ export interface ListProps {
   filtering?: boolean
   navigationTitle?: string
   searchBarAccessory?: ReactNode
+  /**
+   * `"detailed"` gives each row two lines — title above, subtitle beneath —
+   * for lists whose subtitle is prose rather than a short label. The default
+   * single line keeps root search dense, which is what it wants.
+   */
+  layout?: 'default' | 'detailed'
   selectedItemId?: string
   onSelectionChange?: (id: string | null) => void
   actions?: ReactNode

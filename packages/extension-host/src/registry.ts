@@ -27,6 +27,9 @@ interface CatalogEntry {
   sha256?: string
   icon?: string
   readme?: string
+  /** Screenshots from the extension's `metadata/` folder, in author order. */
+  screenshots?: string[]
+  commands?: { name: string; title: string; description?: string }[]
   categories?: string[]
   /** Manifest `platforms`, when the extension declares any. */
   platforms?: string[]
@@ -181,10 +184,31 @@ export function parseCatalog(raw: string, sourceUrl: string, fromCache: boolean)
       ...(typeof entry.author === 'string' ? { author: entry.author } : {}),
       ...(typeof entry.version === 'string' ? { version: entry.version } : {}),
       ...(typeof entry.apiVersion === 'string' ? { apiVersion: entry.apiVersion } : {}),
+      // Parsed defensively like every other field — a catalog is remote
+      // data, so each entry is kept only if it has the shape we render.
+      ...(Array.isArray(entry.commands)
+        ? {
+            commands: (entry.commands as unknown[])
+              .filter((c): c is Record<string, unknown> => typeof c === 'object' && c !== null)
+              .filter((c) => typeof c.name === 'string')
+              .map((c) => ({
+                name: c.name as string,
+                title: typeof c.title === 'string' ? c.title : (c.name as string),
+                ...(typeof c.description === 'string' ? { description: c.description } : {}),
+              })),
+          }
+        : {}),
       file: resolveEntryUrl(base, entry.file),
       ...(typeof entry.sha256 === 'string' ? { sha256: entry.sha256.toLowerCase() } : {}),
       ...(typeof entry.icon === 'string' ? { icon: resolveEntryUrl(base, entry.icon) } : {}),
       ...(typeof entry.readme === 'string' ? { readme: resolveEntryUrl(base, entry.readme) } : {}),
+      ...(Array.isArray(entry.screenshots)
+        ? {
+            screenshots: entry.screenshots
+              .filter((shot): shot is string => typeof shot === 'string')
+              .map((shot) => resolveEntryUrl(base, shot)),
+          }
+        : {}),
       ...(Array.isArray(entry.categories) ? { categories: entry.categories.filter((c): c is string => typeof c === 'string') } : {}),
       ...(Array.isArray(entry.platforms) ? { platforms: entry.platforms.filter((p): p is string => typeof p === 'string') } : {}),
     })

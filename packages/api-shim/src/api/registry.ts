@@ -31,8 +31,12 @@ export interface CatalogEntry {
   sha256?: string
   icon?: string
   readme?: string
+  /** Screenshot URLs, already resolved against the registry base. */
+  screenshots?: string[]
   categories?: string[]
   platforms?: string[]
+  /** The commands the extension contributes, from its manifest. */
+  commands?: { name: string; title: string; description?: string }[]
 }
 
 export interface Catalog {

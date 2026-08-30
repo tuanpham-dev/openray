@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Action, ActionPanel, Icon, List, confirmAlert, showToast, Toast } from '@raycast/api'
+import { StoreDetail } from './detail'
 import {
   classifyInstall,
   fetchCatalog,
@@ -213,30 +214,23 @@ export default function Command() {
     )
   }
 
-  const detail = (row: Row) => {
-    const lines = [
-      `# ${row.entry.title}`,
-      row.entry.description ?? '',
-      '',
-      row.entry.version ? `**Version** ${row.entry.version}` : '',
-      row.entry.author ? `**Author** ${row.entry.author}` : '',
-      `**From** ${row.catalog.name ?? row.catalog.sourceUrl}`,
-      row.installed?.version ? `**Installed** ${row.installed.version}` : '',
-      '',
-      // Honest about what the digest does and doesn't prove — it pins the
-      // file to the catalog, not to any particular publisher.
-      row.entry.sha256 ? '_Verified against the catalog’s checksum on download._' : '_This catalog declares no checksum._',
-    ]
-    return lines.filter(Boolean).join('\n')
-  }
-
   const actionsFor = (row: Row) => (
     <ActionPanel>
+      {/* First action = Enter. Opening the details is the safe, informative
+          default for a row you have only just found; installing is one more
+          keystroke from there, and is never what Enter does by accident. */}
+      <Action.Push
+        title="Show Details"
+        icon={Icon.Globe}
+        target={
+          <StoreDetail row={row} busy={busy === row.entry.name} onInstall={() => void install(row)} onUninstall={() => void remove(row)} />
+        }
+      />
       {row.updatable && <Action title={`Update to ${row.entry.version}`} onAction={() => void install(row)} />}
       {!row.installed && <Action title="Install" onAction={() => void install(row)} />}
       {row.installed && !row.updatable && <Action title="Reinstall" onAction={() => void install(row)} />}
       {row.installed && row.installed.source !== 'builtin' && (
-        <Action title="Uninstall" onAction={() => void remove(row)} />
+        <Action title="Uninstall" style="destructive" onAction={() => void remove(row)} />
       )}
       <Action title="Refresh Catalogs" onAction={() => void load()} />
     </ActionPanel>
@@ -250,16 +244,26 @@ export default function Command() {
       icon={row.entry.icon ?? Icon.Download}
       accessories={[
         ...(busy === row.entry.name ? [{ text: 'Working…' }] : []),
-        ...(row.entry.version ? [{ text: row.entry.version }] : []),
+        // Command count as a glyph with the number behind a tooltip, the way
+        // the row stays scannable: the icon says "this contributes commands",
+        // hovering says how many. Absent for a catalog published before
+        // `commands` was carried, rather than shown as a misleading zero.
+        ...(row.entry.commands
+          ? [{ icon: Icon.Terminal, tooltip: `${row.entry.commands} command${row.entry.commands === 1 ? '' : 's'}` }]
+          : []),
+        ...(row.updatable ? [{ text: `Update → ${row.entry.version}` }] : []),
+        // Installed reads as a mark, not a word — it is a state you scan for
+        // down a column, and the version beside it already carries the detail.
+        ...(row.installed && !row.updatable ? [{ icon: Icon.CheckCircle, tooltip: 'Installed' }] : []),
+        ...(row.entry.version ? [{ text: `v${row.entry.version}` }] : []),
         { text: row.catalog.name ?? row.catalog.sourceUrl },
       ]}
-      detail={<List.Item.Detail markdown={detail(row)} />}
       actions={actionsFor(row)}
     />
   )
 
   return (
-    <List isLoading={rows === null} isShowingDetail searchBarPlaceholder="Search extensions…">
+    <List isLoading={rows === null} layout="detailed" searchBarPlaceholder="Search Store for extensions…">
       {offlineSources.length > 0 && (
         <List.Section title={`Showing cached results for ${offlineSources.join(', ')}`}>{[]}</List.Section>
       )}

@@ -334,6 +334,15 @@ export function HashIcon(props: IconProps) {
   )
 }
 
+export function CheckCircleIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="8.5 12.5 11 15 15.5 9.5" />
+    </Svg>
+  )
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <Svg {...props}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Action, ActionPanel, List, confirmAlert, open, showHUD } from '@raycast/api'
 import {
   type ClipboardHistoryEntry,
@@ -46,6 +46,33 @@ const FILTERS: { value: Filter; title: string }[] = [
   { value: 'email', title: 'Emails' },
   { value: 'number', title: 'Numbers' },
 ]
+
+/**
+ * Which dated section an entry belongs under.
+ *
+ * Boundaries are *calendar* ones, not rolling 24-hour windows: something
+ * copied at 11pm last night reads as "Yesterday" the next morning, not as
+ * "Today" for another hour. `startOfDay` is recomputed per call rather than
+ * cached, so a list left open across midnight regroups correctly on its next
+ * render instead of insisting it is still the previous day.
+ */
+const PERIODS = ['Today', 'Yesterday', 'This Week', 'This Month', 'Older'] as const
+type Period = (typeof PERIODS)[number]
+
+function entryPeriod(entry: ClipboardHistoryEntry, now: Date): Period {
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const copied = entry.createdAt * 1000
+  const day = 86_400_000
+
+  if (copied >= startOfDay) return 'Today'
+  if (copied >= startOfDay - day) return 'Yesterday'
+  // "This Week" counts back seven days rather than to a locale's week start:
+  // the point is recency, and a Monday boundary would leave Sunday's copies
+  // stranded under "This Month" the moment the week ticks over.
+  if (copied >= startOfDay - 7 * day) return 'This Week'
+  if (copied >= startOfDay - 30 * day) return 'This Month'
+  return 'Older'
+}
 
 function entryKind(entry: ClipboardHistoryEntry): EntryKind {
   if (entry.kind === 'image' || entry.kind === 'file') return entry.kind
@@ -175,6 +202,21 @@ export default function ClipboardHistoryCommand() {
 
   const filtered = filter === 'all' ? entries : entries.filter((entry) => entryKind(entry) === filter)
 
+  // Grouped for display only — `filtered` stays the flat, already-sorted list
+  // the backend returned, so ordering within a section is untouched and an
+  // empty period simply never renders a header.
+  const grouped = useMemo(() => {
+    const now = new Date()
+    const buckets = new Map<Period, ClipboardHistoryEntry[]>()
+    for (const entry of filtered) {
+      const period = entryPeriod(entry, now)
+      const bucket = buckets.get(period)
+      if (bucket) bucket.push(entry)
+      else buckets.set(period, [entry])
+    }
+    return PERIODS.map((period) => ({ period, entries: buckets.get(period) ?? [] })).filter((g) => g.entries.length > 0)
+  }, [filtered])
+
   const paste = async (entry: ClipboardHistoryEntry) => {
     if (entry.kind === 'image') await pasteImageClipboardHistoryEntry(entry.id)
     else await pasteClipboardHistoryEntry(entry.id)
@@ -196,6 +238,51 @@ export default function ClipboardHistoryCommand() {
     await refresh()
   }
 
+  const renderEntry = (entry: ClipboardHistoryEntry) => {
+    const kind = entryKind(entry)
+    const color = entryColor(entry, kind)
+    const value = entry.text.trim()
+    return (
+      <List.Item
+        key={entry.id}
+        id={entry.id}
+        title={previewTitle(entry, kind)}
+        subtitle={rowSubtitle(entry, kind)}
+        icon={rowIcon(entry, kind, color)}
+        detail={<List.Item.Detail markdown={detailMarkdown(entry, kind)} metadata={<DetailMetadata entry={entry} kind={kind} color={color} />} />}
+        actions={
+          <ActionPanel>
+            <Action title="Paste" icon="clipboard" onAction={() => void paste(entry)} />
+            {entry.kind !== 'image' && (
+              <Action.CopyToClipboard title="Copy" content={entry.text} shortcut={{ modifiers: ['cmd'], key: 'c' }} />
+            )}
+            {/* Type-specific entries, the way native's preview offered
+                them — a link opens, a file opens, a colour copies in
+                either notation. */}
+            {kind === 'url' && <Action.OpenInBrowser title="Open in Browser" url={value} />}
+            {kind === 'file' && <Action title="Open File" icon="file" onAction={() => void open(value)} />}
+            {kind === 'email' && <Action title="Compose Email" icon="mail" onAction={() => void open(`mailto:${value}`)} />}
+            {color && (
+              <>
+                <Action.CopyToClipboard title="Copy as HEX" content={toHex(color)} />
+                <Action.CopyToClipboard title="Copy as RGB" content={toRgbString(color)} />
+              </>
+            )}
+            <Action title="Delete" style="destructive" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void remove(entry)} />
+            <ActionPanel.Section>
+              <Action
+                title="Clear All"
+                style="destructive"
+                shortcut={{ modifiers: ['cmd', 'shift'], key: 'backspace' }}
+                onAction={() => void clearAll()}
+              />
+            </ActionPanel.Section>
+          </ActionPanel>
+        }
+      />
+        )
+  }
+
   return (
     <List
       isLoading={isLoading}
@@ -210,50 +297,11 @@ export default function ClipboardHistoryCommand() {
       }
     >
       <List.EmptyView title="No Clipboard History" description="Copy something to see it here." />
-      {filtered.map((entry) => {
-        const kind = entryKind(entry)
-        const color = entryColor(entry, kind)
-        const value = entry.text.trim()
-        return (
-          <List.Item
-            key={entry.id}
-            id={entry.id}
-            title={previewTitle(entry, kind)}
-            subtitle={rowSubtitle(entry, kind)}
-            icon={rowIcon(entry, kind, color)}
-            detail={<List.Item.Detail markdown={detailMarkdown(entry, kind)} metadata={<DetailMetadata entry={entry} kind={kind} color={color} />} />}
-            actions={
-              <ActionPanel>
-                <Action title="Paste" icon="clipboard" onAction={() => void paste(entry)} />
-                {entry.kind !== 'image' && (
-                  <Action.CopyToClipboard title="Copy" content={entry.text} shortcut={{ modifiers: ['cmd'], key: 'c' }} />
-                )}
-                {/* Type-specific entries, the way native's preview offered
-                    them — a link opens, a file opens, a colour copies in
-                    either notation. */}
-                {kind === 'url' && <Action.OpenInBrowser title="Open in Browser" url={value} />}
-                {kind === 'file' && <Action title="Open File" icon="file" onAction={() => void open(value)} />}
-                {kind === 'email' && <Action title="Compose Email" icon="mail" onAction={() => void open(`mailto:${value}`)} />}
-                {color && (
-                  <>
-                    <Action.CopyToClipboard title="Copy as HEX" content={toHex(color)} />
-                    <Action.CopyToClipboard title="Copy as RGB" content={toRgbString(color)} />
-                  </>
-                )}
-                <Action title="Delete" style="destructive" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void remove(entry)} />
-                <ActionPanel.Section>
-                  <Action
-                    title="Clear All"
-                    style="destructive"
-                    shortcut={{ modifiers: ['cmd', 'shift'], key: 'backspace' }}
-                    onAction={() => void clearAll()}
-                  />
-                </ActionPanel.Section>
-              </ActionPanel>
-            }
-          />
-        )
-      })}
+      {grouped.map(({ period, entries: inPeriod }) => (
+        <List.Section key={period} title={period}>
+          {inPeriod.map(renderEntry)}
+        </List.Section>
+      ))}
     </List>
   )
 }
