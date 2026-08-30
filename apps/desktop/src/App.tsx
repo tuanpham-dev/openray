@@ -355,6 +355,13 @@ function Palette() {
         setView({ type: 'search' })
         setQuery('')
         setArgumentValues({})
+        // Popping to root rewinds the list's own scroll too. The webview
+        // survives a hide, so a palette left scrolled mid-list comes back
+        // scrolled there — with the "Suggestions" heading above the first
+        // row out of view — whenever the reset doesn't happen to move the
+        // selection (it was already on the first row).
+        const list = document.querySelector<HTMLElement>('.openray-result-list')
+        if (list) list.scrollTop = 0
       }
     })
     return () => {
