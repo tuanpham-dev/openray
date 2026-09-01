@@ -39,6 +39,20 @@ const requireFromApiShim = createRequire(join(apiShimSrcDir, 'index.cts'))
 
 export default defineConfig({
   plugins: [typescriptCommonJs],
+  test: {
+    // dev.test.ts's `nextBuild` helper polls for a real filesystem-watcher
+    // rebuild with its own 10s default budget — a genuine wait on a real
+    // subprocess/watch pipeline, not a hung test. Vitest's global 5000ms
+    // default was shorter than that budget, so a build that legitimately
+    // took 5-10s under concurrent load (several `pnpm -r` packages' test
+    // suites, or a parallel `cargo build`, running at once) got killed by
+    // the *test* timeout before `nextBuild`'s own timeout ever got a
+    // chance to — seen flake 3 times in one session, always passing in
+    // well under a second run in isolation. Matching this to what the
+    // helper already expects removes the false failure without loosening
+    // what the test actually asserts.
+    testTimeout: 10_000,
+  },
   resolve: {
     alias: {
       react: requireFromApiShim.resolve('react'),
