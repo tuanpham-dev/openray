@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { existsSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { dirname } from 'node:path'
 import { Action, ActionPanel, Clipboard, List, open, showInFinder, showToast, Toast } from '@raycast/api'
@@ -11,12 +12,26 @@ function isAvailable(bin: string): boolean {
 }
 
 /** No native bridge method for this — Node's own `child_process` is
- *  enough (the extension host is a real Node sidecar). Tries `$TERMINAL`
- *  first, then a short list of common Linux terminal emulators; `cwd` on
- *  the spawned process is enough to open at the right directory without
- *  needing per-terminal working-directory flags. */
+ *  enough (the extension host is a real Node sidecar). On macOS, `open -a`
+ *  a real terminal app (preferring iTerm when installed) rather than
+ *  probing PATH with `which` — the candidates below are Terminal
+ *  *binaries*, which isn't how a macOS `.app` bundle is launched. Falls
+ *  through to the Linux candidate list otherwise: `$TERMINAL` first, then
+ *  a short list of common Linux terminal emulators; `cwd` on the spawned
+ *  process is enough to open at the right directory without needing
+ *  per-terminal working-directory flags.
+ *
+ *  Windows isn't covered here — untestable from this dev machine, and a
+ *  wrong guess would be worse than today's honest "no terminal found". */
 async function openInTerminal(path: string): Promise<boolean> {
   const dir = dirname(path)
+
+  if (process.platform === 'darwin') {
+    const app = existsSync('/Applications/iTerm.app') ? 'iTerm' : 'Terminal'
+    spawn('open', ['-a', app, dir], { detached: true, stdio: 'ignore' }).unref()
+    return true
+  }
+
   const candidates = [process.env.TERMINAL, 'x-terminal-emulator', 'gnome-terminal', 'konsole', 'alacritty', 'kitty', 'xterm'].filter(
     (t): t is string => Boolean(t) && isAvailable(t),
   )
