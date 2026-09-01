@@ -17,6 +17,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 
+# Compiles the native macOS Vision OCR shim (vision_ocr.m); macOS-only.
+[target.'cfg(target_os = "macos")'.build-dependencies]
+cc = "1"
+
 [features]
 # Standard Tauri feature: when enabled (by `cargo build --features custom-protocol`,
 # which is what `tauri build`/a packaged run does), the app loads the bundled
@@ -96,15 +100,14 @@ tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.
 # (`clipboard_multi/macos.rs`) — multi-representation clipboard write.
 objc2-app-kit = { version = "0.3", features = ["NSScreen", "NSPasteboard", "NSPasteboardItem"] }
 objc2-core-foundation = { version = "0.3", features = ["CFString", "CFDictionary", "CFNumber"] }
-# Screenshots' macOS OCR backend (`platform/ocr/macos.rs`):
-# VNImageRequestHandler/VNRecognizeTextRequest, plus the Foundation types
-# (NSURL, NSString, NSArray, NSDictionary) that API is expressed in terms
-# of.
 objc2 = "0.6"
 # NSData: Screenshots' "Auto" paste format (`clipboard_multi/macos.rs`)
 # writes raw PNG bytes to the pasteboard as an `NSData`.
 objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSDictionary", "NSData"] }
-objc2-vision = { version = "0.3", features = ["VNRequest", "VNRequestHandler", "VNRecognizeTextRequest", "VNObservation"] }
+# Screenshots' OCR backend (`platform/ocr/macos.rs`) went native (a
+# compiled Vision shim, vision_ocr.m, called via a C ABI — see build.rs)
+# after the objc2-vision-based version was found hanging indefinitely on
+# real hardware; no Vision binding needed from Rust anymore.
 
 [target.'cfg(target_os = "windows")'.dependencies]
 lnk = "0.6.4"
@@ -120,7 +123,12 @@ lnk = "0.6.4"
 # format (`clipboard_multi/windows.rs`) — the classic
 # OpenClipboard/SetClipboardData flow and the GlobalAlloc/GlobalLock
 # global-memory handles it writes into.
-windows = { version = "0.62.2", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Win32_System_DataExchange", "Win32_System_Memory"] }
+# Win32_System_Com: `ocr/windows.rs` explicitly `CoInitializeEx`s its OCR
+# worker thread as MTA — the WinRT `IAsyncOperation::get()` calls
+# `OcrEngine`/`BitmapDecoder` make block waiting for a completion callback
+# that an implicitly-STA thread (Rust's default) never pumps, hanging
+# forever; a sibling project hit and documented this exact deadlock.
+windows = { version = "0.62.2", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Com"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13.13", features = ["global_shortcuts"] }
