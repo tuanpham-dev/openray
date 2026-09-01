@@ -1327,7 +1327,7 @@ function ExtensionForm({
         </div>
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer primaryActionLabel={actions[0]?.title ?? 'Submit'} context={title} contextIcon={icon} />
+      <Footer primaryActionLabel={actions[0]?.title ?? 'Submit'} primaryActionNeedsCmd context={title} contextIcon={icon} />
     </div>
   )
 }

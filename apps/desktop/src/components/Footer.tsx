@@ -2,6 +2,13 @@ import { IconGlyph } from './IconGlyph'
 
 interface FooterProps {
   primaryActionLabel?: string
+  /** True for a Form's submit action, the one case whose primary action
+   *  actually fires on ⌘↵ rather than plain ↵ (see `ExtensionForm`'s
+   *  key handler in `TreeRenderer.tsx` — plain Enter has to stay free for
+   *  a text field's own editing, unlike a List/Grid row). Found live:
+   *  the hint read "Create Quicklink ↵" and plain Enter silently did
+   *  nothing, since it actually needed ⌘↵ — the hint just never said so. */
+  primaryActionNeedsCmd?: boolean
   /** Name of the current sub-view, shown in place of the app name — the
    *  way Raycast labels the footer with the running command. */
   context?: string
@@ -11,7 +18,7 @@ interface FooterProps {
   contextIcon?: string | null
 }
 
-export function Footer({ primaryActionLabel = 'Open', context, contextIcon }: FooterProps) {
+export function Footer({ primaryActionLabel = 'Open', primaryActionNeedsCmd = false, context, contextIcon }: FooterProps) {
   return (
     <div className="openray-footer">
       <span className="openray-footer-brand">
@@ -27,7 +34,8 @@ export function Footer({ primaryActionLabel = 'Open', context, contextIcon }: Fo
       </span>
       <div className="openray-footer-actions">
         <span className="openray-footer-hint">
-          {primaryActionLabel} <kbd>↵</kbd>
+          {primaryActionLabel} {primaryActionNeedsCmd && <kbd>⌘</kbd>}
+          <kbd>↵</kbd>
         </span>
         <span className="openray-footer-divider" />
         <span className="openray-footer-hint">
