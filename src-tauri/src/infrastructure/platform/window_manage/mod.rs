@@ -19,6 +19,8 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+use tauri::AppHandle;
+
 /// A window frame in screen coordinates. Distinct from
 /// `@openray/window-layout`'s own `Rect` — that's the pure-math type on
 /// the TypeScript side; `extension_bridge.rs`'s `host.window.*` handlers
@@ -104,15 +106,18 @@ pub fn set_frame(id: &str, rect: Rect) -> bool {
 }
 
 /// The usable area (screen minus taskbar/dock/menu bar) of the display
-/// showing the target, or `None` if it can't be determined.
-pub fn work_area(id: &str) -> Option<Rect> {
+/// showing the target, or `None` if it can't be determined. Takes `app`
+/// only for macOS's sake — `NSScreen` is main-thread-only AppKit, unlike
+/// every other call here, so that backend alone needs to marshal onto the
+/// main thread (see `window_manage/macos.rs`'s doc comment on `work_area`).
+pub fn work_area(#[cfg_attr(not(target_os = "macos"), allow(unused_variables))] app: &AppHandle, id: &str) -> Option<Rect> {
     #[cfg(target_os = "linux")]
     {
         linux::work_area(id)
     }
     #[cfg(target_os = "macos")]
     {
-        macos::work_area(id)
+        macos::work_area(app, id)
     }
     #[cfg(target_os = "windows")]
     {
@@ -126,14 +131,15 @@ pub fn work_area(id: &str) -> Option<Rect> {
 /// — `hop_display` just needs each display's own bounds to preserve
 /// relative position) and to decide whether those two commands should even
 /// be listed (hidden below two displays).
-pub fn displays() -> Vec<Rect> {
+/// Takes `app` for the same reason `work_area` does — see there.
+pub fn displays(#[cfg_attr(not(target_os = "macos"), allow(unused_variables))] app: &AppHandle) -> Vec<Rect> {
     #[cfg(target_os = "linux")]
     {
         linux::displays()
     }
     #[cfg(target_os = "macos")]
     {
-        macos::displays()
+        macos::displays(app)
     }
     #[cfg(target_os = "windows")]
     {
