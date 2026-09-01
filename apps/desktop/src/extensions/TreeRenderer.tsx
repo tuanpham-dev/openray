@@ -28,6 +28,22 @@ import { MarkdownEditorCore } from '../components/markdown-editor/MarkdownEditor
 import { FormatBar } from '../components/markdown-editor/FormatBar'
 import '../components/markdown-editor/markdown-editor.css'
 
+/** Debounce for the `onSearchTextChange` round trip to the extension host
+ *  (List's and Grid's search effects below) — each keystroke's own effect
+ *  fired an independent, unordered `invokeExtensionCallback` round trip
+ *  with no way to tell a stale response from the latest one apart once it
+ *  lands, so `useControlledProp`'s "apply whatever differs from what we
+ *  last saw" guard could apply an *older* echo that happened to arrive
+ *  after a newer one already had — the extension's own `searchText` state
+ *  visibly ping-ponged between an in-progress and the final query, which
+ *  re-fired this same effect on every bounce (each application is itself
+ *  a "change"), snowballing into hundreds of redundant round trips and a
+ *  real, visible flash. A short debounce keeps at most one request
+ *  in flight per pause in typing, matching `FileSearchList.tsx`'s own
+ *  `SEARCH_DEBOUNCE_MS` convention for the identical class of problem.
+ */
+const SEARCH_TEXT_CALLBACK_DEBOUNCE_MS = 120
+
 function callbackId(prop: unknown): string | null {
   if (prop && typeof prop === 'object' && '__callback' in (prop as Record<string, unknown>)) {
     return (prop as { __callback: string }).__callback
@@ -481,7 +497,9 @@ function ExtensionList({
   }, [entries, searchText, shouldFilter])
 
   useEffect(() => {
-    if (searchCallback) void invokeExtensionCallback(searchCallback, [searchText])
+    if (!searchCallback) return
+    const timer = setTimeout(() => void invokeExtensionCallback(searchCallback, [searchText]), SEARCH_TEXT_CALLBACK_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
   }, [searchCallback, searchText])
 
   const onActivate = useCallback(
@@ -709,7 +727,9 @@ function ExtensionGrid({
   }, [selectedIndex, scrollIndexIntoView, hasSections])
 
   useEffect(() => {
-    if (searchCallback) void invokeExtensionCallback(searchCallback, [searchText])
+    if (!searchCallback) return
+    const timer = setTimeout(() => void invokeExtensionCallback(searchCallback, [searchText]), SEARCH_TEXT_CALLBACK_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
   }, [searchCallback, searchText])
 
   // Reselect the top result whenever the query — or the search bar's own
