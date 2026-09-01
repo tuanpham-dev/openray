@@ -132,6 +132,17 @@ describe('layout', () => {
     approxEq(r.h, 900)
   })
 
+  test('reasonable size is centered in the work area, not anchored to its origin', () => {
+    // A work area under the 1025×900 cap so w/h land at the plain 60%
+    // fraction, making the expected centered position easy to state.
+    const small: Rect = { x: 200, y: 100, w: 1200, h: 800 }
+    const r = targetFrame({ kind: 'reasonable-size' }, CURRENT, small, 0, 0)
+    approxEq(r.w, small.w * 0.6)
+    approxEq(r.h, small.h * 0.6)
+    approxEq(r.x, small.x + (small.w - r.w) / 2)
+    approxEq(r.y, small.y + (small.h - r.h) / 2)
+  })
+
   test('almost maximize is ninety percent centered', () => {
     const r = targetFrame({ kind: 'almost-maximize' }, CURRENT, WORK, 0, 0)
     approxEq(r.w, 1728)
