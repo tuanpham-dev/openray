@@ -14,9 +14,22 @@
 //! active application. These are two independent AppKit mechanisms — key
 //! window vs. active app — and Spotlight-style panels rely on exactly this
 //! split.
+//!
+//! That split only actually works with one more piece `tauri_panel!`'s
+//! `config:` block has no slot for: the `NSWindowStyleMaskNonactivatingPanel`
+//! style-mask bit. Without it, `-makeKeyWindow` (what `show()` below calls)
+//! does not hand real keyboard focus to a panel belonging to a background
+//! (non-active) app — the panel orders to the front and *looks* focused,
+//! but the OS keeps routing keystrokes to whatever app was actually active,
+//! same as if nothing but `orderFrontRegardless` had been called. Found
+//! live: `openray run` on a view-mode command showed the palette, but
+//! typing landed in the terminal that ran the CLI command, not the search
+//! field — `install` below now sets this bit explicitly right after
+//! conversion, the one time it needs setting.
 
 use std::sync::mpsc;
 
+use objc2_app_kit::NSWindowStyleMask;
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_nspanel::{tauri_panel, CollectionBehavior, ManagerExt, WebviewWindowExt};
 
@@ -40,7 +53,14 @@ tauri_panel! {
 /// while visible would be observable (a flicker) rather than merely
 /// pointless.
 pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
+    // Read the style mask `to_panel` inherits from the plain WebviewWindow
+    // (Tauri's own `decorations`/`resizable` config already shaped it) so
+    // this only *adds* the non-activating bit rather than clobbering it.
+    let ns_window = window.ns_window()?;
+    let existing_mask = unsafe { (*ns_window.cast::<objc2_app_kit::NSWindow>()).styleMask() };
+
     let panel = window.to_panel::<PalettePanel>()?;
+    panel.set_style_mask(existing_mask | NSWindowStyleMask::NonactivatingPanel);
     // Visible above the currently active fullscreen space too — a global
     // launcher that only worked on whichever space happened to be active
     // when it was last hidden would be a constant surprise.
