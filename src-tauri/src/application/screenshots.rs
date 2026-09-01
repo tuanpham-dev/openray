@@ -263,6 +263,24 @@ impl ScreenshotsProvider {
         let dir = thumbs_dir(&self.app);
 
         std::thread::spawn(move || {
+            // A guard, not a plain `store(false, ..)` at the end — a panic
+            // partway through (a bad thumbnail, say) would otherwise skip
+            // that final line and leave `indexing` stuck `true` forever,
+            // permanently turning `spawn_index_sweep` into a silent no-op
+            // for the rest of the process's life. Found live: `extract_text`
+            // itself has no timeout on the underlying platform call, so a
+            // *hang* (not just a panic) here was possible before the OCR
+            // rewrite that stopped Vision from touching the file directly —
+            // this guard is the other half of that fix, for panics the
+            // rewrite doesn't cover.
+            struct ResetIndexingOnDrop(Arc<AtomicBool>);
+            impl Drop for ResetIndexingOnDrop {
+                fn drop(&mut self) {
+                    self.0.store(false, Ordering::SeqCst);
+                }
+            }
+            let _reset_indexing = ResetIndexingOnDrop(indexing);
+
             // Lower this thread's scheduling priority first — the sweep
             // does real CPU work (in-process image decode for OCR, plus
             // any `tesseract`/`ffmpeg` subprocesses it spawns, which
@@ -275,7 +293,6 @@ impl ScreenshotsProvider {
             if trash_active {
                 trash_expired_entries(&entries, &storage_duration);
             }
-            indexing.store(false, Ordering::SeqCst);
         });
     }
 
