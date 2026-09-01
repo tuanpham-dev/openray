@@ -169,12 +169,13 @@ npx openray run <id>             # ids look like ext:<extension>:<command>, from
 npx openray run <id> --arg name=value   # for a command with arguments
 ```
 
-`run` only executes commands with no UI of their own — window presets,
-snippets, system commands, and other no-view extension actions. A command
-that opens a view (Store, Notes, most List/Grid/Form commands) errors
-instead of launching, since there's no palette on this end of a terminal
-for it to open into; launch those from the app. Both need OpenRay already
-running, same as `develop`.
+A command with no UI of its own (a window preset, a snippet, a system
+command) runs headlessly and `run` returns once it's done. A command that
+opens a view (Store, Notes, most List/Grid/Form commands) instead brings
+the app forward and opens it there, the same as a click or hotkey would —
+`run` returns as soon as that's requested, not once the view has actually
+rendered. Both `list` and `run` need OpenRay already running, same as
+`develop`.
 
 Write against `@raycast/api` (a dev dependency, for types only) or
 `@openray/api`; both are mapped onto OpenRay's own implementation at build

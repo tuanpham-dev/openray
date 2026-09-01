@@ -22,9 +22,10 @@ Options:
   --help               Show this message
 
 'develop', 'list', and 'run' talk to a running OpenRay; 'pack' and
-'publish' do not, so they work in CI. 'run' only runs commands with no UI
-of their own (window presets, snippets, system commands, and the like) —
-a command that opens a view errors instead of launching.
+'publish' do not, so they work in CI. 'run' runs a no-view command (window
+presets, snippets, system commands, ...) headlessly and returns; a command
+with a view (Store, Notes, most List/Grid/Form UIs) brings the app forward
+and opens it there instead, the same as a click or hotkey would.
 `
 
 function parseArgs(argv) {

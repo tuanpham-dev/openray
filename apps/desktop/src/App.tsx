@@ -231,6 +231,28 @@ function Palette() {
     }
   }, [launchItem])
 
+  // `openray run <id>` on a view-mode command: like the hotkey path above,
+  // the launch didn't originate from this window's own invoke call, so
+  // there's no resolved promise to react to — the backend shows the
+  // window (`run_headless`) and emits this instead, carrying exactly what
+  // `launchExtensionCommand` needs to do the same invoke+setView any other
+  // launch does.
+  useEffect(() => {
+    const unlisten = listen<{
+      extensionId: string
+      commandName: string
+      title: string
+      icon?: string | null
+      arguments?: Record<string, string>
+    }>('cli-run-extension-command', (event) => {
+      const { extensionId, commandName, title, icon, arguments: args } = event.payload
+      launchExtensionCommand(extensionId, commandName, title, icon, args)
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [launchExtensionCommand])
+
   // Tears down a mounted extension command's own timers/effects the moment
   // its view stops being current — every back/close path for an extension
   // view goes through a `setView` call that changes `view` away from this
