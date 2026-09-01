@@ -93,8 +93,12 @@ pub fn activate(id: &str) -> bool {
     let Some(window) = resolve_window(id) else { return false };
 
     let raised = window.perform_action("AXRaise");
+    // No options: macOS 14 dropped `ignoringOtherApps` as a distinct
+    // behavior (activation ignores the currently active app unconditionally
+    // now), so the flag that named it is deprecated and a no-op — omitting
+    // it keeps this call, not just this line, doing the same thing.
     let activated = NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
-        .map(|app| app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps))
+        .map(|app| app.activateWithOptions(NSApplicationActivationOptions::empty()))
         .unwrap_or(false);
 
     raised || activated

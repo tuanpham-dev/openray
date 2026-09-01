@@ -675,7 +675,7 @@ mod tests {
         let entries = vec![
             media_entry("/old-unpinned.png", now - 10 * 86_400, false),
             media_entry("/old-pinned.png", now - 10 * 86_400, true),
-            media_entry("/recent-unpinned.png", now - 1 * 86_400, false),
+            media_entry("/recent-unpinned.png", now - 86_400, false),
         ];
 
         let expired = paths_past_storage_duration(&entries, "7", now);

@@ -89,6 +89,12 @@ impl Default for HotkeyBindings {
 pub struct DesiredBinding {
     pub hotkey: String,
     pub action: HotkeyAction,
+    /// Read only by `sync_bindings`' Wayland branch (the XDG portal's
+    /// `GlobalShortcuts` API requires a human-readable label per shortcut);
+    /// built here regardless of platform since `build_desired_bindings` is
+    /// itself platform-independent. Genuinely unread on X11/macOS/Windows,
+    /// not actually dead.
+    #[allow(dead_code)]
     pub description: String,
 }
 
