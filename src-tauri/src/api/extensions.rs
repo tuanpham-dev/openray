@@ -202,6 +202,14 @@ pub async fn uninstall_extension(app: AppHandle, state: State<'_, AppState>, id:
     crate::application::menu_bar::remove(&app, &id);
     state.extensions.unregister(&id)?;
     state.command_settings.delete_for_extension(&id)?;
+    // Without this, a root-provider extension's dynamically-contributed
+    // rows (e.g. one per detected Chrome profile) outlived the uninstall
+    // that deleted its files — `openray list`/root search kept listing
+    // them, and running one failed with "extension not found" instead of
+    // just not showing up. The other three near-identical cleanup
+    // sequences (`develop.remove`, `remove_dev_extension`, and disabling
+    // an extension) already call this; this was the one missing it.
+    state.root_commands.clear_extension(&id);
     state.sync_hotkey_bindings(&app);
     Ok(())
 }
