@@ -111,6 +111,16 @@ pub const CLI_RUN_EXTENSION_COMMAND_EVENT: &str = "cli-run-extension-command";
 /// to keep in sync.
 pub async fn run_headless(app: &AppHandle, state: &AppState, id: &str, arguments: &std::collections::HashMap<String, String>) -> Result<(), String> {
     let command = state.registry.all_commands().into_iter().find(|command| command.id == id).ok_or_else(|| format!("no provider found for command '{id}'"))?;
+    // Root search and hotkey bindings (`api/search.rs`'s `disabled` set,
+    // `hotkey.rs`'s `build_desired_bindings`) both already refuse a
+    // disabled command by construction — it's simply never offered
+    // anywhere a user discovers what to run. The CLI is the one surface
+    // where a command is invoked by a typed/scripted id rather than
+    // picked from a list, so disabled has to be checked explicitly here
+    // to carry the same "won't run" guarantee.
+    if !state.command_settings.all().get(id).map(|entry| entry.enabled).unwrap_or(true) {
+        return Err(format!("'{id}' is disabled — enable it in Settings first"));
+    }
     let missing = missing_required_arguments(&command, arguments);
     if !missing.is_empty() {
         return Err(format!("missing required argument(s): {}", missing.join(", ")));
@@ -168,10 +178,15 @@ pub struct ListedCommand {
 pub fn listable_commands(state: &AppState) -> Vec<ListedCommand> {
     let extension_titles: std::collections::HashMap<String, String> =
         state.extensions.installed_commands().into_iter().map(|c| (c.extension_id, c.extension_title)).collect();
+    let command_settings = state.command_settings.all();
     state
         .registry
         .all_commands()
         .into_iter()
+        // Matches `api/search.rs`'s `disabled` filtering and
+        // `hotkey.rs`'s binding skip: a disabled command shouldn't show
+        // up in `openray list` any more than it shows up in root search.
+        .filter(|command| command_settings.get(&command.id).map(|entry| entry.enabled).unwrap_or(true))
         .map(|command| {
             let (mode, extension_title) = match parse_extension_command_id(&command.id) {
                 Some((extension_id, command_name)) => (resolve_mode(state, extension_id, command_name), extension_titles.get(extension_id).cloned()),
