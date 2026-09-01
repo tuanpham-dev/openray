@@ -1,10 +1,7 @@
-// Pure window-placement math — a line-for-line TypeScript port of
-// src-tauri/src/application/window_management/layout.rs. No platform I/O:
-// every preset's target rectangle, gap insetting, halves size-cycling,
-// cross-display remapping, and custom-command unit conversion lives here
-// so it's exercised by plain unit tests, matching the Rust module's own
-// rationale for keeping this pure. extensions/window-management is the
-// only caller.
+// Pure window-placement math. No platform I/O: every preset's target
+// rectangle, gap insetting, halves size-cycling, cross-display remapping,
+// and custom-command unit conversion lives here so it's exercised by
+// plain unit tests. extensions/window-management is the only caller.
 
 export interface Rect {
   x: number
@@ -158,7 +155,7 @@ function centeredFraction(workArea: Rect, fractionW: number, fractionH: number):
 function reasonableSize(workArea: Rect): Rect {
   const w = Math.min(workArea.w * 0.6, 1025)
   const h = Math.min(workArea.h * 0.6, 900)
-  return centeredFraction({ ...workArea, w, h }, 1, 1)
+  return { x: workArea.x + (workArea.w - w) / 2, y: workArea.y + (workArea.h - h) / 2, w, h }
 }
 
 function centerCurrent(current: Rect, workArea: Rect): Rect {
