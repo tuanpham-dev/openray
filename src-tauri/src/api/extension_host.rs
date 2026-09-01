@@ -66,23 +66,7 @@ pub async fn run_extension_command(
             }
         }
     }
-    let manifest_mode = state
-        .extensions
-        .installed_commands()
-        .into_iter()
-        .find(|c| c.extension_id == extension_id && c.name == command_name)
-        .map(|c| c.mode);
-    let mode = match manifest_mode {
-        Some(mode) => mode,
-        None => match state.root_commands.host_command_name_for(&extension_id, &command_name) {
-            Some(_) => {
-                let full_id = crate::application::extension_commands::extension_command_id(&extension_id, &command_name);
-                let opens_view = state.root_commands.flags_for(&full_id).map(|(_, opens_view)| opens_view).unwrap_or(false);
-                if opens_view { "view".to_string() } else { "no-view".to_string() }
-            }
-            None => "view".to_string(),
-        },
-    };
+    let mode = crate::application::extension_commands::resolve_mode(&state, &extension_id, &command_name);
     // A no-view extension command is the extension equivalent of an app or
     // system command: it acts on the previously focused application and has
     // no UI to replace the palette. Hide before launching so actions such as

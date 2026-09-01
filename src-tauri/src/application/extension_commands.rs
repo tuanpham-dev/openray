@@ -49,6 +49,113 @@ pub fn parse_extension_command_id(id: &str) -> Option<(&str, &str)> {
     id.strip_prefix("ext:")?.rsplit_once(':')
 }
 
+/// An extension command's manifest-declared mode (`"view"` / `"no-view"` /
+/// `"menu-bar"`), or the equivalent for a command that isn't a real
+/// manifest command at all — a root-provider-contributed row, whose own
+/// `opens_view` flag stands in for a mode it doesn't have.
+///
+/// Shared by `run_extension_command` (decides whether the palette needs
+/// hiding before launch) and the CLI control-socket runner (decides
+/// whether a command can run headlessly at all) so the two never drift
+/// into disagreeing about what a given id does.
+pub fn resolve_mode(state: &AppState, extension_id: &str, command_name: &str) -> String {
+    let manifest_mode = state
+        .extensions
+        .installed_commands()
+        .into_iter()
+        .find(|c| c.extension_id == extension_id && c.name == command_name)
+        .map(|c| c.mode);
+    match manifest_mode {
+        Some(mode) => mode,
+        None => match state.root_commands.host_command_name_for(extension_id, command_name) {
+            Some(_) => {
+                let full_id = extension_command_id(extension_id, command_name);
+                let opens_view = state.root_commands.flags_for(&full_id).map(|(_, opens_view)| opens_view).unwrap_or(false);
+                if opens_view { "view".to_string() } else { "no-view".to_string() }
+            }
+            None => "view".to_string(),
+        },
+    }
+}
+
+/// A command's `required` arguments the caller didn't supply — the gate a
+/// headless CLI run needs and the GUI doesn't, since the palette's
+/// argument bar physically cannot submit without filling them in first.
+fn missing_required_arguments(command: &Command, arguments: &std::collections::HashMap<String, String>) -> Vec<String> {
+    command.arguments.iter().filter(|argument| argument.required && !arguments.contains_key(&argument.name)).map(|argument| argument.name.clone()).collect()
+}
+
+/// Runs a command for the CLI's control-socket `command.run`: no window to
+/// show anything in, so unlike the palette's launch path this is a hard
+/// gate rather than a UI switch — a view/menu-bar id is rejected outright
+/// instead of mounting a command that would stream UI commits nobody is
+/// listening for.
+///
+/// `id` is the same opaque id `CommandRegistry` already keys on — a flat
+/// app/builtin id, or `ext:{extension_id}:{command_name}` — so this
+/// accepts exactly what `openray list` prints, no separate CLI id syntax
+/// to keep in sync.
+pub async fn run_headless(app: &AppHandle, state: &AppState, id: &str, arguments: &std::collections::HashMap<String, String>) -> Result<(), String> {
+    let command = state.registry.all_commands().into_iter().find(|command| command.id == id).ok_or_else(|| format!("no provider found for command '{id}'"))?;
+    let missing = missing_required_arguments(&command, arguments);
+    if !missing.is_empty() {
+        return Err(format!("missing required argument(s): {}", missing.join(", ")));
+    }
+
+    match parse_extension_command_id(id) {
+        Some((extension_id, command_name)) => {
+            let mode = resolve_mode(state, extension_id, command_name);
+            if mode != "no-view" {
+                return Err(format!("'{id}' opens a UI (\"{mode}\") — not supported from the CLI yet"));
+            }
+            crate::infrastructure::window::hide_palette(app).map_err(|e| e.to_string())?;
+            launch(app, extension_id, command_name, arguments).await?;
+        }
+        None => {
+            crate::infrastructure::window::hide_palette(app).map_err(|e| e.to_string())?;
+            if arguments.is_empty() {
+                state.registry.execute(id)?;
+            } else {
+                state.registry.execute_with_arguments(id, arguments)?;
+            }
+        }
+    }
+
+    state.usage.record_usage(id, crate::infrastructure::time::now_secs()).map_err(|e| e.to_string())
+}
+
+/// One entry in `openray list`'s output — everything the CLI needs to show
+/// a runnable id and, for extension commands, warn that it opens a UI
+/// `run_headless` will refuse.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedCommand {
+    pub id: String,
+    pub title: String,
+    pub extension_title: Option<String>,
+    /// `"action"` for an app/builtin command (always headlessly runnable);
+    /// otherwise the extension command's real mode from [`resolve_mode`].
+    pub mode: String,
+    pub arguments: Vec<crate::domain::command::CommandArgument>,
+}
+
+pub fn listable_commands(state: &AppState) -> Vec<ListedCommand> {
+    let extension_titles: std::collections::HashMap<String, String> =
+        state.extensions.installed_commands().into_iter().map(|c| (c.extension_id, c.extension_title)).collect();
+    state
+        .registry
+        .all_commands()
+        .into_iter()
+        .map(|command| {
+            let (mode, extension_title) = match parse_extension_command_id(&command.id) {
+                Some((extension_id, command_name)) => (resolve_mode(state, extension_id, command_name), extension_titles.get(extension_id).cloned()),
+                None => ("action".to_string(), None),
+            };
+            ListedCommand { id: command.id, title: command.title, extension_title, mode, arguments: command.arguments }
+        })
+        .collect()
+}
+
 /// Mounts and runs a command in the extension host.
 ///
 /// One launch path for every entry point — the palette opening a view

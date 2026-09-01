@@ -159,6 +159,23 @@ pipeline serves dev mode, installs, and packing, which is what keeps a dev
 build and a shipped build the same artifact. Unix only for now; the
 in-app picker works everywhere.
 
+### Running commands from a terminal
+
+The same socket lets you run a command without touching the palette:
+
+```sh
+npx openray list                 # id, extension, and mode for every command
+npx openray run <id>             # ids look like ext:<extension>:<command>, from the list above
+npx openray run <id> --arg name=value   # for a command with arguments
+```
+
+`run` only executes commands with no UI of their own — window presets,
+snippets, system commands, and other no-view extension actions. A command
+that opens a view (Store, Notes, most List/Grid/Form commands) errors
+instead of launching, since there's no palette on this end of a terminal
+for it to open into; launch those from the app. Both need OpenRay already
+running, same as `develop`.
+
 Write against `@raycast/api` (a dev dependency, for types only) or
 `@openray/api`; both are mapped onto OpenRay's own implementation at build
 time, and `@openray/extras` adds what Raycast has no equivalent for.

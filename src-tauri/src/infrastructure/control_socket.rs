@@ -297,6 +297,22 @@ pub fn spawn(app: &AppHandle) {
                 *attached.lock().unwrap() = None;
                 Ok(json!({ "removed": id }))
             }
+            "command.list" => {
+                let state = app.try_state::<AppState>().ok_or("app state not managed")?;
+                Ok(json!({ "commands": crate::application::extension_commands::listable_commands(&state) }))
+            }
+            // The CLI's `openray run <id>` — see `extension_commands::run_headless`'s
+            // doc comment for why a view/menu-bar id is rejected rather than
+            // opening the app: there's no window on this end of a socket
+            // connection for anything to render into.
+            "command.run" => {
+                let id = request.params.get("id").and_then(Value::as_str).ok_or("command.run needs an id")?;
+                let arguments: std::collections::HashMap<String, String> =
+                    request.params.get("arguments").map(|value| serde_json::from_value(value.clone()).unwrap_or_default()).unwrap_or_default();
+                let state = app.try_state::<AppState>().ok_or("app state not managed")?;
+                crate::application::extension_commands::run_headless(app, &state, id, &arguments).await?;
+                Ok(json!({ "id": id }))
+            }
             other => Err(format!("unknown method: {other}")),
         }
     }
