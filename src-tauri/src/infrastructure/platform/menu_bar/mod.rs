@@ -21,6 +21,11 @@ mod windows;
 pub enum RawMenuNode {
     Item { title: String, enabled: bool, shortcut: Option<String>, token: String },
     Submenu { title: String, enabled: bool, children: Vec<RawMenuNode> },
+    /// Constructed by `linux.rs`/`windows.rs`; `macos.rs`'s AX-based reader
+    /// doesn't currently distinguish a separator from an absent item, so
+    /// this platform's backend never builds one. Genuinely unused there,
+    /// not dead across the type as a whole.
+    #[allow(dead_code)]
     Separator,
 }
 

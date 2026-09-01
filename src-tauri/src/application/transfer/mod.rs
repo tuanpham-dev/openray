@@ -432,10 +432,6 @@ mod tests {
         conn.query_row("SELECT COUNT(*) FROM command_settings WHERE command_id = ?1", [command_id], |row| row.get(0)).unwrap()
     }
 
-    fn quicklink(conn: &Connection, key: &str, value: &str) {
-        conn.execute("INSERT INTO extension_storage (extension_id, key, value) VALUES ('quicklinks', ?1, ?2)", rusqlite::params![key, value]).unwrap();
-    }
-
     #[test]
     fn a_full_export_import_round_trip_moves_data_to_another_machine() {
         let source = migrated_conn();

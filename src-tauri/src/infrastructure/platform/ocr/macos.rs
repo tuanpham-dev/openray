@@ -35,20 +35,18 @@ pub fn engine_name() -> &'static str {
 
 pub fn extract_text(path: &Path) -> Option<String> {
     let path_str = path.to_str()?;
-    let url = unsafe { NSURL::fileURLWithPath(&NSString::from_str(path_str)) };
+    let url = NSURL::fileURLWithPath(&NSString::from_str(path_str));
 
-    let handler = unsafe {
-        VNImageRequestHandler::initWithURL_options(VNImageRequestHandler::alloc(), &url, &NSDictionary::new())
-    };
+    let handler = unsafe { VNImageRequestHandler::initWithURL_options(VNImageRequestHandler::alloc(), &url, &NSDictionary::new()) };
 
-    let request = unsafe { VNRecognizeTextRequest::new() };
-    unsafe { request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate) };
+    let request = VNRecognizeTextRequest::new();
+    request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
 
     let requests: Retained<NSArray<_>> =
         NSArray::from_retained_slice(&[Retained::into_super(Retained::into_super(request.clone()))]);
-    unsafe { handler.performRequests_error(&requests) }.ok()?;
+    handler.performRequests_error(&requests).ok()?;
 
-    let observations = unsafe { request.results() }?;
+    let observations = request.results()?;
 
     let mut lines = Vec::new();
     for observation in observations.iter() {

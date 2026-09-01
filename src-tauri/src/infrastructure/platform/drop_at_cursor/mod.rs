@@ -54,6 +54,7 @@ pub fn drop_file_at_cursor(_path: &Path) -> Result<(), String> {
 /// file's path — CRLF-terminated per the XDND/RFC 2483 convention (the
 /// clipboard's `text/uri-list` offer, by contrast, uses a bare `\n`;
 /// XDND targets specifically expect `\r\n`).
+#[cfg(target_os = "linux")]
 pub fn uri_list_payload(path: &Path) -> Vec<u8> {
     let mut payload = super::clipboard_multi::path_to_file_uri(path).into_bytes();
     payload.extend_from_slice(b"\r\n");
@@ -64,6 +65,7 @@ pub fn uri_list_payload(path: &Path) -> Vec<u8> {
 /// types]`. Only one type is ever offered, so the "more than 3 types,
 /// see XdndTypeList" flag (bit 0 of the version word) never needs to be
 /// set, and slots 3/4 stay zero.
+#[cfg(target_os = "linux")]
 pub fn enter_data(source: u32, version: u32, uri_list_atom: u32) -> [u32; 5] {
     [source, version << 24, uri_list_atom, 0, 0]
 }
@@ -73,17 +75,19 @@ pub fn enter_data(source: u32, version: u32, uri_list_atom: u32) -> [u32; 5] {
 /// `QueryPointer`'s reply reports them (`i16`, two's-complement into each
 /// 16-bit half) — relevant for multi-monitor setups with a monitor left
 /// of the origin.
+#[cfg(target_os = "linux")]
 pub fn position_data(source: u32, x: i16, y: i16, action_atom: u32) -> [u32; 5] {
     let packed = ((x as u16 as u32) << 16) | (y as u16 as u32);
     [source, 0, packed, 0, action_atom]
 }
 
 /// `XdndDrop` message data: `[source, reserved, timestamp, 0, 0]`.
+#[cfg(target_os = "linux")]
 pub fn drop_data(source: u32) -> [u32; 5] {
     [source, 0, 0, 0, 0]
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
     use std::path::PathBuf;
