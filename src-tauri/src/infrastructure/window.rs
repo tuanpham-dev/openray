@@ -359,13 +359,21 @@ pub fn open_settings_window(app: &AppHandle, target: SettingsTarget<'_>) -> taur
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(app, SETTINGS_WINDOW_LABEL, WebviewUrl::App(target.to_url().into()))
+    let window = WebviewWindowBuilder::new(app, SETTINGS_WINDOW_LABEL, WebviewUrl::App(target.to_url().into()))
         .title("OpenRay Settings")
         .inner_size(980.0, 620.0)
         .min_inner_size(800.0, 520.0)
         .resizable(true)
         .decorations(true)
         .build()?;
+    // The reuse branch above shows/focuses explicitly; a freshly built
+    // window needs the same — `build()` alone leaves it created but not
+    // raised, so the very first "Open Settings" call (the only time this
+    // branch runs) landed the window on screen with nothing pulling it to
+    // the front. Found live: the window existed at a valid on-screen
+    // position, just sitting behind whatever was already focused.
+    window.show()?;
+    window.set_focus()?;
 
     Ok(())
 }
