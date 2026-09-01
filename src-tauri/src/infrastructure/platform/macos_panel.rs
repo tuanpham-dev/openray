@@ -48,16 +48,20 @@ pub fn install(window: &WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
 
-/// AppKit/NSPanel calls are main-thread-only, and modern macOS hard-crashes
-/// (a trap, not a catchable panic) rather than merely warning when that's
-/// violated. Two callers reach `show`/`hide`/`is_visible` off the main
-/// thread: `hotkey.rs::dispatch` deliberately runs on a spawned thread (see
-/// its doc comment on the X11 deadlock that requires), and the
-/// single-instance relaunch callback (`lib.rs`) isn't marshalled at all.
-/// Neither was ever exercised on real macOS before — cross-compile checks
-/// can't catch a runtime threading violation — so route through the main
-/// thread here, once, rather than requiring every caller to remember to.
-fn on_main_thread<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> T {
+/// AppKit calls are main-thread-only, and modern macOS hard-crashes (a
+/// trap, not a catchable panic) rather than merely warning when that's
+/// violated — or, for a class not covered by that trap (`NSScreen`, see
+/// `window_manage/macos.rs`'s `work_area`/`displays`), just returns
+/// nothing, no crash to even notice by. Two callers reach `show`/`hide`/
+/// `is_visible` off the main thread: `hotkey.rs::dispatch` deliberately
+/// runs on a spawned thread (see its doc comment on the X11 deadlock that
+/// requires), and the single-instance relaunch callback (`lib.rs`) isn't
+/// marshalled at all. Neither was ever exercised on real macOS before —
+/// cross-compile checks can't catch a runtime threading violation — so
+/// route through the main thread here, once, rather than requiring every
+/// caller to remember to. `pub(crate)`: `window_manage/macos.rs` reuses
+/// this exact helper rather than a second copy of the same dispatch.
+pub(crate) fn on_main_thread<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> T {
     if objc2::MainThreadMarker::new().is_some() {
         return f();
     }

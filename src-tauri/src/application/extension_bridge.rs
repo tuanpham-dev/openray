@@ -119,8 +119,8 @@ pub async fn dispatch_request<R: Runtime>(app: AppHandle<R>, method: String, par
         "host.window.isAvailable" => window_is_available(),
         "host.window.getFocusedFrame" => window_get_focused_frame(),
         "host.window.setFrame" => window_set_frame(params),
-        "host.window.getWorkArea" => window_get_work_area(params),
-        "host.window.listDisplays" => window_list_displays(),
+        "host.window.getWorkArea" => window_get_work_area(&app, params),
+        "host.window.listDisplays" => window_list_displays(&app),
         "host.window.setFullscreen" => window_set_fullscreen(params),
         "host.window.getSettings" => window_get_settings(&app),
         "host.translate.getSettings" => translate_get_settings(&app),
@@ -510,15 +510,21 @@ fn window_set_frame(params: Option<Value>) -> Result<Value, Error> {
     Ok(json!(wm::set_frame(&id, rect)))
 }
 
-fn window_get_work_area(params: Option<Value>) -> Result<Value, Error> {
+fn window_get_work_area<R: Runtime>(app: &AppHandle<R>, params: Option<Value>) -> Result<Value, Error> {
     use crate::infrastructure::platform::window_manage as wm;
     let id = param_str(&params, "windowId")?;
-    Ok(wm::work_area(&id).map(rect_to_json).unwrap_or(Value::Null))
+    // Same downcast as the settings handlers: `window_manage`'s macOS
+    // backend is written against the concrete runtime (it needs a real
+    // `run_on_main_thread`), while a bridge handler is generic so its
+    // tests can use a mock.
+    let Some(app) = (app as &dyn std::any::Any).downcast_ref::<AppHandle>() else { return Ok(Value::Null) };
+    Ok(wm::work_area(app, &id).map(rect_to_json).unwrap_or(Value::Null))
 }
 
-fn window_list_displays() -> Result<Value, Error> {
+fn window_list_displays<R: Runtime>(app: &AppHandle<R>) -> Result<Value, Error> {
     use crate::infrastructure::platform::window_manage as wm;
-    Ok(json!(wm::displays().into_iter().map(rect_to_json).collect::<Vec<_>>()))
+    let Some(app) = (app as &dyn std::any::Any).downcast_ref::<AppHandle>() else { return Ok(json!([])) };
+    Ok(json!(wm::displays(app).into_iter().map(rect_to_json).collect::<Vec<_>>()))
 }
 
 fn window_set_fullscreen(params: Option<Value>) -> Result<Value, Error> {

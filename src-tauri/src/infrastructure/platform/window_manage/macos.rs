@@ -17,9 +17,11 @@
 
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSScreen, NSWorkspace};
+use tauri::AppHandle;
 
 use super::Rect;
 use crate::infrastructure::platform::macos_accessibility::{self, AXElement};
+use crate::infrastructure::platform::macos_panel;
 
 pub fn available() -> bool {
     macos_accessibility::is_trusted()
@@ -68,46 +70,58 @@ pub fn set_frame(id: &str, rect: Rect) -> bool {
     moved && resized
 }
 
-pub fn work_area(id: &str) -> Option<Rect> {
+/// `NSScreen` — unlike everything else in this file, which goes through
+/// `ApplicationServices`/AX C calls documented as callable from any thread
+/// (see `AXElement`'s doc comment) — is AppKit, and AppKit is main-thread
+/// -only. Found live: every call here returned `None` (`MainThreadMarker::
+/// new()` correctly refusing to hand out a marker, not a crash to notice
+/// by) because `host.window.getWorkArea`/`listDisplays` run on whatever
+/// tokio task is handling the extension bridge request, never the main
+/// thread — so every Window Management preset silently no-opped on
+/// `applyFrame`'s "Couldn't determine the screen area" branch before ever
+/// reaching `setFrame`. Same class of bug `macos_panel.rs`'s `on_main_thread`
+/// already exists to fix for NSPanel calls; reused here rather than a
+/// second copy of the same main-thread dispatch.
+pub fn work_area(app: &AppHandle, id: &str) -> Option<Rect> {
     let window = focused_window(id)?;
     let (x, y) = window.attribute_point("AXPosition")?;
     let (w, h) = window.attribute_size("AXSize")?;
     let center_x = x + w / 2.0;
     let center_y = y + h / 2.0;
 
-    // NSScreen is the one class in this file with no precedent elsewhere
-    // in the codebase (`window_list`/`menu_bar`'s macos.rs only ever touch
-    // NSWorkspace/NSRunningApplication). `objc2-app-kit` 0.3 requires a
-    // `MainThreadMarker` for `NSScreen::screens()`; degrade to "no result"
-    // rather than panic if this ever runs off the main thread.
-    let mtm = MainThreadMarker::new()?;
-    let screens = NSScreen::screens(mtm).to_vec();
-    let primary_height = screens.first()?.frame().size.height;
+    macos_panel::on_main_thread(app, move || {
+        let mtm = MainThreadMarker::new()?;
+        let screens = NSScreen::screens(mtm).to_vec();
+        let primary_height = screens.first()?.frame().size.height;
 
-    let target_screen = screens
-        .iter()
-        .find(|screen| {
-            let f = screen.frame();
-            let r = ns_rect_to_ax(f.origin.x, f.origin.y, f.size.width, f.size.height, primary_height);
-            center_x >= r.x && center_x < r.x + r.w && center_y >= r.y && center_y < r.y + r.h
-        })
-        .or_else(|| screens.first())?;
+        let target_screen = screens
+            .iter()
+            .find(|screen| {
+                let f = screen.frame();
+                let r = ns_rect_to_ax(f.origin.x, f.origin.y, f.size.width, f.size.height, primary_height);
+                center_x >= r.x && center_x < r.x + r.w && center_y >= r.y && center_y < r.y + r.h
+            })
+            .or_else(|| screens.first())?;
 
-    let vf = target_screen.visibleFrame();
-    Some(ns_rect_to_ax(vf.origin.x, vf.origin.y, vf.size.width, vf.size.height, primary_height))
+        let vf = target_screen.visibleFrame();
+        Some(ns_rect_to_ax(vf.origin.x, vf.origin.y, vf.size.width, vf.size.height, primary_height))
+    })
 }
 
-pub fn displays() -> Vec<Rect> {
-    let Some(mtm) = MainThreadMarker::new() else { return Vec::new() };
-    let screens = NSScreen::screens(mtm).to_vec();
-    let Some(primary_height) = screens.first().map(|s| s.frame().size.height) else { return Vec::new() };
-    screens
-        .iter()
-        .map(|screen| {
-            let f = screen.frame();
-            ns_rect_to_ax(f.origin.x, f.origin.y, f.size.width, f.size.height, primary_height)
-        })
-        .collect()
+/// See `work_area`'s doc comment — same main-thread requirement, same fix.
+pub fn displays(app: &AppHandle) -> Vec<Rect> {
+    macos_panel::on_main_thread(app, || {
+        let Some(mtm) = MainThreadMarker::new() else { return Vec::new() };
+        let screens = NSScreen::screens(mtm).to_vec();
+        let Some(primary_height) = screens.first().map(|s| s.frame().size.height) else { return Vec::new() };
+        screens
+            .iter()
+            .map(|screen| {
+                let f = screen.frame();
+                ns_rect_to_ax(f.origin.x, f.origin.y, f.size.width, f.size.height, primary_height)
+            })
+            .collect()
+    })
 }
 
 pub fn set_fullscreen(id: &str, fullscreen: bool) -> bool {
