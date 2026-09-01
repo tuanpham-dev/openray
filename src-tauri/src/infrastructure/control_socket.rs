@@ -301,10 +301,9 @@ pub fn spawn(app: &AppHandle) {
                 let state = app.try_state::<AppState>().ok_or("app state not managed")?;
                 Ok(json!({ "commands": crate::application::extension_commands::listable_commands(&state) }))
             }
-            // The CLI's `openray run <id>` — see `extension_commands::run_headless`'s
-            // doc comment for why a view/menu-bar id is rejected rather than
-            // opening the app: there's no window on this end of a socket
-            // connection for anything to render into.
+            // The CLI's `openray run <id>` — a no-view id runs headlessly;
+            // a view/menu-bar id opens the app instead, see
+            // `extension_commands::run_headless`'s doc comment.
             "command.run" => {
                 let id = request.params.get("id").and_then(Value::as_str).ok_or("command.run needs an id")?;
                 let arguments: std::collections::HashMap<String, String> =

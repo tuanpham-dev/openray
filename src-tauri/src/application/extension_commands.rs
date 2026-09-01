@@ -85,11 +85,25 @@ fn missing_required_arguments(command: &Command, arguments: &std::collections::H
     command.arguments.iter().filter(|argument| argument.required && !arguments.contains_key(&argument.name)).map(|argument| argument.name.clone()).collect()
 }
 
-/// Runs a command for the CLI's control-socket `command.run`: no window to
-/// show anything in, so unlike the palette's launch path this is a hard
-/// gate rather than a UI switch — a view/menu-bar id is rejected outright
-/// instead of mounting a command that would stream UI commits nobody is
-/// listening for.
+/// A CLI-triggered launch of a view/menu-bar command: the frontend has no
+/// invoke call to react to (unlike every click/hotkey launch, which calls
+/// `run_extension_command` itself and switches views on its own resolved
+/// value — see `App.tsx`'s `launchExtensionCommand`), so `run_headless`
+/// shows the palette and emits this instead, carrying exactly the
+/// arguments `launchExtensionCommand` needs. Mirrors the one other place
+/// that already couples "show the palette" with "launch a command neither
+/// of which the frontend initiated" — the global-hotkey path
+/// (`hotkey_dispatch.rs`'s `show_palette` + `hotkey-command` event).
+pub const CLI_RUN_EXTENSION_COMMAND_EVENT: &str = "cli-run-extension-command";
+
+/// Runs a command for the CLI's control-socket `command.run`. A no-view id
+/// runs headlessly and returns once dispatched, same as before. A view/
+/// menu-bar id can't run headlessly — there's nothing to render into — so
+/// this shows the palette and emits [`CLI_RUN_EXTENSION_COMMAND_EVENT`]
+/// for the frontend to actually launch (mirroring the hotkey path, not a
+/// second copy of the mount logic `launch` already owns): the *frontend's*
+/// own `run_extension_command` invoke ends up doing the actual mount, so
+/// this function does not call `launch` itself for that branch.
 ///
 /// `id` is the same opaque id `CommandRegistry` already keys on — a flat
 /// app/builtin id, or `ext:{extension_id}:{command_name}` — so this
@@ -105,11 +119,23 @@ pub async fn run_headless(app: &AppHandle, state: &AppState, id: &str, arguments
     match parse_extension_command_id(id) {
         Some((extension_id, command_name)) => {
             let mode = resolve_mode(state, extension_id, command_name);
-            if mode != "no-view" {
-                return Err(format!("'{id}' opens a UI (\"{mode}\") — not supported from the CLI yet"));
+            if mode == "no-view" {
+                crate::infrastructure::window::hide_palette(app).map_err(|e| e.to_string())?;
+                launch(app, extension_id, command_name, arguments).await?;
+            } else {
+                crate::infrastructure::window::show_palette(app).map_err(|e| e.to_string())?;
+                app.emit(
+                    CLI_RUN_EXTENSION_COMMAND_EVENT,
+                    json!({
+                        "extensionId": extension_id,
+                        "commandName": command_name,
+                        "title": command.title,
+                        "icon": command.icon,
+                        "arguments": arguments,
+                    }),
+                )
+                .map_err(|e| e.to_string())?;
             }
-            crate::infrastructure::window::hide_palette(app).map_err(|e| e.to_string())?;
-            launch(app, extension_id, command_name, arguments).await?;
         }
         None => {
             crate::infrastructure::window::hide_palette(app).map_err(|e| e.to_string())?;
@@ -125,8 +151,8 @@ pub async fn run_headless(app: &AppHandle, state: &AppState, id: &str, arguments
 }
 
 /// One entry in `openray list`'s output — everything the CLI needs to show
-/// a runnable id and, for extension commands, warn that it opens a UI
-/// `run_headless` will refuse.
+/// an id and, for extension commands, note whether running it stays
+/// headless or brings the app forward to show its view.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListedCommand {
