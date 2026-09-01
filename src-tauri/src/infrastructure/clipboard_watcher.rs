@@ -83,6 +83,14 @@ impl ClipboardWatcher {
                     continue;
                 }
 
+                // Checked once per poll, not per-branch: a third-party app
+                // (a password manager, most commonly) marking its own copy
+                // this way is unrelated to which flavor (text/image) that
+                // copy happens to carry — see `clipboard_sensitivity`'s
+                // doc comment for why this exists alongside `suppressed`
+                // rather than instead of it.
+                let sensitive = crate::infrastructure::platform::clipboard_sensitivity::is_marked_sensitive();
+
                 // Text first: it's the cheap read, and an image copied from
                 // a browser often carries a text/URL flavour too, which is
                 // the more useful thing to keep.
@@ -94,7 +102,7 @@ impl ClipboardWatcher {
                             // A concealed copy is still on the clipboard —
                             // it just must not be written to history.
                             let concealed = watcher_suppressed.lock().unwrap().remove(&hash);
-                            if !concealed {
+                            if !concealed && !sensitive {
                                 let limits = ClipboardLimits::from_settings(&settings);
                                 record_copied_text(&conn, &text, hash, images_dir.as_deref(), limits);
                             }
@@ -117,6 +125,10 @@ impl ClipboardWatcher {
                     continue;
                 }
                 last_hash = Some(hash);
+
+                if sensitive {
+                    continue;
+                }
 
                 match write_png(dir, hash, &image) {
                     Ok(path) => {

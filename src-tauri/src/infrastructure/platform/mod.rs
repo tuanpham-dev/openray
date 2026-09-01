@@ -15,6 +15,7 @@ pub mod windows_focus;
 
 pub mod background_priority;
 pub mod clipboard_multi;
+pub mod clipboard_sensitivity;
 pub mod drop_at_cursor;
 pub mod menu_bar;
 pub mod ocr;
