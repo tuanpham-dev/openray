@@ -101,6 +101,10 @@ tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.
 objc2-app-kit = { version = "0.3", features = ["NSScreen", "NSPasteboard", "NSPasteboardItem"] }
 objc2-core-foundation = { version = "0.3", features = ["CFString", "CFDictionary", "CFNumber"] }
 objc2 = "0.6"
+# `infrastructure::paste`'s main-thread dispatch — already a transitive
+# dependency via the objc2-* crates above, promoted to direct since
+# paste.rs calls it explicitly rather than through another crate's API.
+dispatch2 = "0.3"
 # NSData: Screenshots' "Auto" paste format (`clipboard_multi/macos.rs`)
 # writes raw PNG bytes to the pasteboard as an `NSData`.
 objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSDictionary", "NSData"] }
