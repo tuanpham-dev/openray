@@ -1,4 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { binaryExists } from './path'
 
 // Fire-and-forget: several of these end the session (log out, shut down),
@@ -75,7 +77,7 @@ async function volumeSet(percent: number): Promise<void> {
   throw new Error('not supported on this desktop')
 }
 
-async function toggleAppearance(): Promise<void> {
+async function toggleAppearanceLinux(): Promise<void> {
   // GNOME only: reads the current `color-scheme` and flips it. Other
   // desktops have no equivalent freedesktop-standard toggle, and the
   // command is already hidden there via the `gsettings` PATH probe.
@@ -86,7 +88,91 @@ async function toggleAppearance(): Promise<void> {
   await spawnDetached('gsettings', ['set', 'org.gnome.desktop.interface', 'color-scheme', next])
 }
 
-export async function runAction(id: string): Promise<void> {
+async function osascript(script: string): Promise<void> {
+  await spawnDetached('osascript', ['-e', script])
+}
+
+/** Runs `osascript` and returns its stdout, rather than fire-and-forget —
+ *  needed for the volume/appearance toggles below, which have to read
+ *  the current state before deciding what to flip it to. */
+function osascriptSync(script: string): string {
+  const result = spawnSync('osascript', ['-e', script])
+  if (result.error || result.status !== 0) {
+    throw new Error(result.stderr?.toString().trim() || 'osascript failed')
+  }
+  return result.stdout.toString().trim()
+}
+
+/** `System Events`'s top-level `sleep`/`restart`/`shut down`/`log out`
+ *  verbs run immediately, the same way `systemctl poweroff`/`reboot` do
+ *  on Linux — no "are you sure?" dialog, unlike clicking the matching
+ *  Apple-menu item. That's intentional here: this command already went
+ *  through OpenRay's own confirm-before-running step (`CONFIRM_IDS`), a
+ *  second native confirmation would be redundant. */
+async function macosPowerVerb(verb: 'sleep' | 'restart' | 'shut down' | 'log out'): Promise<void> {
+  await osascript(`tell application "System Events" to ${verb}`)
+}
+
+/** No Accessibility permission needed — same lock the login window's own
+ *  Lock Screen menu item uses, invoked directly rather than through UI
+ *  scripting. `CGSession` is a real, long-standing Apple binary (part of
+ *  the login window's own "Menu Extras" bundle, not a private API this
+ *  extension is reaching into) — this is the standard non-GUI way to
+ *  trigger a lock from a script. */
+async function macosLockScreen(): Promise<void> {
+  await spawnDetached('/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession', ['-suspend'])
+}
+
+async function macosToggleMute(): Promise<void> {
+  const muted = osascriptSync('output muted of (get volume settings)')
+  await osascript(`set volume output muted ${muted === 'true' ? 'false' : 'true'}`)
+}
+
+async function macosVolumeStep(up: boolean): Promise<void> {
+  const current = Number(osascriptSync('output volume of (get volume settings)'))
+  const next = Math.max(0, Math.min(100, current + (up ? 5 : -5)))
+  await osascript(`set volume output volume ${next}`)
+}
+
+async function macosVolumeSet(percent: number): Promise<void> {
+  await osascript(`set volume output volume ${percent}`)
+}
+
+/** Respects the user's own "Warn before emptying the Trash" Finder
+ *  preference — if they've turned that on, Finder shows its own
+ *  confirmation dialog here, same as using the Finder menu item
+ *  directly. Not a bug: OpenRay's own `CONFIRM_IDS` step already ran
+ *  before this action was reached, and silently bypassing a user's
+ *  explicit Finder setting on top of that would be the wrong call. */
+async function macosEmptyTrash(): Promise<void> {
+  await osascript('tell application "Finder" to empty trash')
+}
+
+/** GNOME's toggle above has a real freedesktop setting to read back;
+ *  macOS's AppleScript equivalent is a plain boolean already, so this is
+ *  simpler — no read-then-decide needed, `not dark mode` is a single
+ *  expression. */
+async function macosToggleAppearance(): Promise<void> {
+  await osascript('tell application "System Events" to tell appearance preferences to set dark mode to not dark mode')
+}
+
+/** No system-wide "whatever's currently playing" concept on macOS without
+ *  a compiled helper against the private MediaRemote framework — this
+ *  targets Spotify (if it's actually running; `tell application` would
+ *  otherwise launch it just to receive a play/pause it wasn't part of)
+ *  and falls back to Music.app otherwise, which ships on every Mac and
+ *  is `tell`-able even while closed (AppleScript launches it). Mirrors
+ *  `playerctl`'s own scope on Linux — it only reaches players speaking
+ *  MPRIS, not literally anything producing sound either. */
+function macosMediaTarget(): 'Spotify' | 'Music' {
+  return spawnSync('pgrep', ['-x', 'Spotify']).status === 0 ? 'Spotify' : 'Music'
+}
+
+async function macosMediaCommand(verb: 'playpause' | 'next track' | 'previous track'): Promise<void> {
+  await osascript(`tell application "${macosMediaTarget()}" to ${verb}`)
+}
+
+async function runActionLinux(id: string): Promise<void> {
   switch (id) {
     case 'lock-screen':
       return lockScreen()
@@ -133,8 +219,62 @@ export async function runAction(id: string): Promise<void> {
     case 'toggle-bluetooth':
       return spawnDetached('rfkill', ['toggle', 'bluetooth'])
     case 'toggle-appearance':
-      return toggleAppearance()
+      return toggleAppearanceLinux()
     default:
       throw new Error(`unknown system command '${id}'`)
   }
+}
+
+async function runActionMacos(id: string): Promise<void> {
+  switch (id) {
+    case 'lock-screen':
+      return macosLockScreen()
+    case 'sleep':
+      return macosPowerVerb('sleep')
+    case 'restart':
+      return macosPowerVerb('restart')
+    case 'shut-down':
+      return macosPowerVerb('shut down')
+    case 'log-out':
+      return macosPowerVerb('log out')
+    case 'sleep-displays':
+      return spawnDetached('pmset', ['displaysleepnow'])
+    case 'screen-saver':
+      return spawnDetached('open', ['-a', 'ScreenSaverEngine'])
+    case 'play-pause':
+      return macosMediaCommand('playpause')
+    case 'next-track':
+      return macosMediaCommand('next track')
+    case 'previous-track':
+      return macosMediaCommand('previous track')
+    case 'toggle-mute':
+      return macosToggleMute()
+    case 'volume-up':
+      return macosVolumeStep(true)
+    case 'volume-down':
+      return macosVolumeStep(false)
+    case 'volume-0':
+      return macosVolumeSet(0)
+    case 'volume-25':
+      return macosVolumeSet(25)
+    case 'volume-50':
+      return macosVolumeSet(50)
+    case 'volume-75':
+      return macosVolumeSet(75)
+    case 'volume-100':
+      return macosVolumeSet(100)
+    case 'open-trash':
+      return spawnDetached('open', [join(homedir(), '.Trash')])
+    case 'empty-trash':
+      return macosEmptyTrash()
+    case 'toggle-appearance':
+      return macosToggleAppearance()
+    default:
+      throw new Error(`unknown system command '${id}'`)
+  }
+}
+
+export async function runAction(id: string): Promise<void> {
+  if (process.platform === 'darwin') return runActionMacos(id)
+  return runActionLinux(id)
 }

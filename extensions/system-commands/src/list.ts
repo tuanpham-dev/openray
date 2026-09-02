@@ -3,17 +3,21 @@ import { runAction } from './actions'
 import { binaryExists } from './path'
 import { CONFIRM_IDS, TABLE, type SystemCommandMeta } from './table'
 
-// This extension's actions (`actions.ts`) shell out to Linux-only tools
-// (wpctl/pactl/systemctl/...) with no macOS/Windows equivalent — see
-// table.ts's header comment. `linuxRequires` alone doesn't catch that: a
-// row declaring no required binaries (e.g. every volume-* row) fell
-// through as "available" on macOS/Windows too, then failed silently the
-// moment its action ran (caught by `execute()` below, reported only as a
-// toast a headless caller never sees). Gating the whole table on the
-// platform, not just each row's binaries, keeps a non-Linux desktop from
-// ever being offered a command that cannot work at all.
+// This extension's Linux actions (`actions.ts`) shell out to Linux-only
+// tools (wpctl/pactl/systemctl/...) with no direct macOS equivalent —
+// `linuxRequires` alone doesn't catch that on macOS: a row declaring no
+// required *Linux* binaries (e.g. every volume-* row) would otherwise
+// fall through as "available" there too, then fail silently the moment
+// its action ran (caught by `execute()` below, reported only as a toast
+// a headless caller never sees). macOS gets its own real actions
+// (`table.ts`'s `macosSupported`) instead of reusing the Linux ones —
+// still no `linuxRequires`-style PATH probing needed there, since
+// `osascript`/`pmset`/`open` ship on every real Mac. Windows has neither
+// side implemented, so it stays gated out entirely.
 function isAvailable(entry: SystemCommandMeta): boolean {
-  return process.platform === 'linux' && entry.linuxRequires.every(binaryExists)
+  if (process.platform === 'linux') return entry.linuxRequires.every(binaryExists)
+  if (process.platform === 'darwin') return entry.macosSupported !== false
+  return false
 }
 
 export default async function listRootCommands() {
