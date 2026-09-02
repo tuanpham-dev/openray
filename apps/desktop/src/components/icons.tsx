@@ -57,6 +57,16 @@ export function TransferIcon(props: IconProps) {
   )
 }
 
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </Svg>
+  )
+}
+
 export function AdvancedIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -132,6 +142,15 @@ export function WindowSizeIcon({ scale, ...props }: IconProps & { scale: 'small'
     <Svg {...props}>
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <rect {...inner} rx="1" fill="currentColor" stroke="none" />
+    </Svg>
+  )
+}
+
+export function PencilIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
     </Svg>
   )
 }
@@ -221,6 +240,15 @@ export function AlertIcon(props: IconProps) {
       <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
       <line x1="12" y1="9" x2="12" y2="13" />
       <line x1="12" y1="17" x2="12.01" y2="17" />
+    </Svg>
+  )
+}
+
+export function EyeIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+      <circle cx="12" cy="12" r="3" />
     </Svg>
   )
 }

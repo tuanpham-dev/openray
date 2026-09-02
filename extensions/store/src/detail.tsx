@@ -106,7 +106,7 @@ export function StoreDetail({
             <Action title="Reinstall" icon={Icon.Download} onAction={onInstall} />
           )}
           {installed && installed.source !== 'builtin' && (
-            <Action title="Uninstall" style="destructive" onAction={onUninstall} />
+            <Action title="Uninstall" icon={Icon.Trash} style="destructive" onAction={onUninstall} />
           )}
         </ActionPanel>
       }

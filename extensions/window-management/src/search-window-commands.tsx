@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, confirmAlert, List, showHUD } from '@raycast/api'
+import { Action, ActionPanel, confirmAlert, Icon, List, showHUD } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { deleteWindowCommand, listWindowCommands, type WindowCommand } from './storage'
 import { execute } from './provider'
@@ -41,7 +41,7 @@ export default function SearchWindowCommands() {
         description="Create a window command to get started."
         actions={
           <ActionPanel>
-            <Action.Push title="Create Window Command" target={<WindowCommandForm onSaved={refresh} />} />
+            <Action.Push title="Create Window Command" icon={Icon.Plus} target={<WindowCommandForm onSaved={refresh} />} />
           </ActionPanel>
         }
       />
@@ -53,10 +53,10 @@ export default function SearchWindowCommands() {
           subtitle={subtitle(command)}
           actions={
             <ActionPanel>
-              <Action title="Run" onAction={() => void execute(command.id)} />
-              <Action.Push title="Edit" target={<WindowCommandForm command={command} onSaved={refresh} />} />
-              <Action.Push title="Create Window Command" target={<WindowCommandForm onSaved={refresh} />} />
-              <Action title="Delete" style="destructive" onAction={() => void remove(command)} />
+              <Action title="Run" icon={Icon.ArrowRight} onAction={() => void execute(command.id)} />
+              <Action.Push title="Edit" icon={Icon.Pencil} target={<WindowCommandForm command={command} onSaved={refresh} />} />
+              <Action.Push title="Create Window Command" icon={Icon.Plus} target={<WindowCommandForm onSaved={refresh} />} />
+              <Action title="Delete" icon={Icon.Trash} style="destructive" onAction={() => void remove(command)} />
             </ActionPanel>
           }
         />

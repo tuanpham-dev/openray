@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, List, confirmAlert, showHUD } from '@raycast/api'
+import { Action, ActionPanel, Icon, List, confirmAlert, showHUD } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { LANGUAGES } from '@openray/translate-core'
 import { deleteTranslateCommand, listTranslateCommands, type TranslateCommand } from './storage'
@@ -41,7 +41,7 @@ export default function SearchTranslateCommands() {
         description="Create a fixed-language-pair command to get started."
         actions={
           <ActionPanel>
-            <Action.Push title="Create Translate Command" target={<TranslateCommandForm onSaved={refresh} />} />
+            <Action.Push title="Create Translate Command" icon={Icon.Plus} target={<TranslateCommandForm onSaved={refresh} />} />
           </ActionPanel>
         }
       />
@@ -53,10 +53,10 @@ export default function SearchTranslateCommands() {
           subtitle={`${languageName(command.sourceLang)} → ${languageName(command.targetLang)}`}
           actions={
             <ActionPanel>
-              <Action.Push title="Run Command" target={<TranslateBody presetId={command.id} />} />
-              <Action.Push title="Edit" target={<TranslateCommandForm command={command} onSaved={refresh} />} />
-              <Action.Push title="Create Translate Command" target={<TranslateCommandForm onSaved={refresh} />} />
-              <Action title="Delete" style="destructive" onAction={() => void remove(command)} />
+              <Action.Push title="Run Command" icon={Icon.ArrowRight} target={<TranslateBody presetId={command.id} />} />
+              <Action.Push title="Edit" icon={Icon.Pencil} target={<TranslateCommandForm command={command} onSaved={refresh} />} />
+              <Action.Push title="Create Translate Command" icon={Icon.Plus} target={<TranslateCommandForm onSaved={refresh} />} />
+              <Action title="Delete" icon={Icon.Trash} style="destructive" onAction={() => void remove(command)} />
             </ActionPanel>
           }
         />

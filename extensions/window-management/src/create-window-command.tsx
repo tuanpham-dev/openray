@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Action, ActionPanel, Form, popToRoot, showHUD, showToast, Toast, useNavigation } from '@raycast/api'
+import { Action, ActionPanel, Form, Icon, popToRoot, showHUD, showToast, Toast, useNavigation } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { createWindowCommand, updateWindowCommand, type CustomUnit, type WindowCommand } from './storage'
 
@@ -73,7 +73,7 @@ export function WindowCommandForm({ command, onSaved }: WindowCommandFormProps) 
       actions={
         <ActionPanel>
           <Action.SubmitForm title={command ? 'Save Window Command' : 'Create Window Command'} onSubmit={submit} />
-          {onSaved && <Action title="Cancel" onAction={() => pop()} />}
+          {onSaved && <Action title="Cancel" icon={Icon.XMarkCircle} onAction={() => pop()} />}
         </ActionPanel>
       }
     >

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, List } from '@raycast/api'
+import { Action, ActionPanel, Icon, List } from '@raycast/api'
 import { canListWindows, closeWindow, focusWindow, listWindows, type WindowInfo } from '@openray/extras'
 
 export default function SwitchWindows() {
@@ -43,8 +43,14 @@ export default function SwitchWindows() {
           subtitle={window.appName}
           actions={
             <ActionPanel>
-              <Action title="Switch to Window" onAction={() => void switchTo(window)} />
-              <Action title="Close Window" style="destructive" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void close(window)} />
+              <Action title="Switch to Window" icon="window-move" onAction={() => void switchTo(window)} />
+              <Action
+                title="Close Window"
+                icon={Icon.XMarkCircle}
+                style="destructive"
+                shortcut={{ modifiers: ['cmd'], key: 'backspace' }}
+                onAction={() => void close(window)}
+              />
             </ActionPanel>
           }
         />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { List, ActionPanel, Action, Detail, useNavigation, showToast, Toast } from '@raycast/api'
+import { List, ActionPanel, Action, Detail, Icon, useNavigation, showToast, Toast } from '@raycast/api'
 import * as storage from './storage'
 import type { ChatRecord, MessageRecord } from './storage'
 import * as engine from './engine'
@@ -177,17 +177,19 @@ function ChatWindowView({ quick }: ChatWindowViewProps) {
       }
       actions={
         <ActionPanel>
-          <Action title="Send" shortcut={{ modifiers: [], key: 'return' }} onAction={() => void send()} />
-          {!quick && <Action title="New Chat" shortcut={{ modifiers: ['cmd'], key: 'n' }} onAction={() => void newChat()} />}
-          <Action title="Regenerate" shortcut={{ modifiers: ['cmd'], key: 'r' }} onAction={() => void regenerate()} />
+          <Action title="Send" icon={Icon.ArrowRight} shortcut={{ modifiers: [], key: 'return' }} onAction={() => void send()} />
+          {!quick && <Action title="New Chat" icon={Icon.Plus} shortcut={{ modifiers: ['cmd'], key: 'n' }} onAction={() => void newChat()} />}
+          <Action title="Regenerate" icon="refresh" shortcut={{ modifiers: ['cmd'], key: 'r' }} onAction={() => void regenerate()} />
           <Action
             title="Show Memory"
+            icon={Icon.Eye}
             onAction={() =>
               void storage.getMemory().then((memory) => push(<Detail markdown={memory || 'No memory yet.'} navigationTitle="Memory" />))
             }
           />
           <Action
             title="Clear Memory"
+            icon={Icon.Trash}
             onAction={() =>
               void storage.clearMemory().then(() => showToast({ style: Toast.Style.Success, title: 'Memory cleared' }))
             }
@@ -202,7 +204,7 @@ function ChatWindowView({ quick }: ChatWindowViewProps) {
           icon="send"
           actions={
             <ActionPanel>
-              <Action title="Send" onAction={() => void send()} />
+              <Action title="Send" icon={Icon.ArrowRight} onAction={() => void send()} />
             </ActionPanel>
           }
         />
@@ -214,7 +216,11 @@ function ChatWindowView({ quick }: ChatWindowViewProps) {
           subtitle={preview(streamingText) || 'Thinking…'}
           actions={
             <ActionPanel>
-              <Action title="View Full" onAction={() => push(<Detail markdown={streamingText || 'Thinking…'} navigationTitle="Assistant" />)} />
+              <Action
+                title="View Full"
+                icon={Icon.Eye}
+                onAction={() => push(<Detail markdown={streamingText || 'Thinking…'} navigationTitle="Assistant" />)}
+              />
             </ActionPanel>
           }
         />
@@ -228,17 +234,25 @@ function ChatWindowView({ quick }: ChatWindowViewProps) {
           subtitle={preview(message.content)}
           actions={
             <ActionPanel>
-              <Action title="View Full" onAction={() => push(<Detail markdown={message.content} navigationTitle={message.role === 'user' ? 'You' : 'Assistant'} />)} />
+              <Action
+                title="View Full"
+                icon={Icon.Eye}
+                onAction={() => push(<Detail markdown={message.content} navigationTitle={message.role === 'user' ? 'You' : 'Assistant'} />)}
+              />
               <Action.CopyToClipboard title="Copy" content={message.content} />
-              {index === 0 && message.role === 'assistant' && <Action title="Regenerate" shortcut={{ modifiers: ['cmd'], key: 'r' }} onAction={() => void regenerate()} />}
+              {index === 0 && message.role === 'assistant' && (
+                <Action title="Regenerate" icon="refresh" shortcut={{ modifiers: ['cmd'], key: 'r' }} onAction={() => void regenerate()} />
+              )}
               <Action
                 title="Show Memory"
+                icon={Icon.Eye}
                 onAction={() =>
                   void storage.getMemory().then((memory) => push(<Detail markdown={memory || 'No memory yet.'} navigationTitle="Memory" />))
                 }
               />
               <Action
                 title="Clear Memory"
+                icon={Icon.Trash}
                 onAction={() =>
                   void storage.clearMemory().then(() => showToast({ style: Toast.Style.Success, title: 'Memory cleared' }))
                 }

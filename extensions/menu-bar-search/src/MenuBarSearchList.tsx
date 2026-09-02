@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Action, ActionPanel, List } from '@raycast/api'
+import { Action, ActionPanel, Icon, List } from '@raycast/api'
 import { activateMenuBarItem, listMenuBarItems, type MenuBarItem } from '@openray/extras'
 
 function matchesQuery(item: MenuBarItem, needle: string): boolean {
@@ -48,7 +48,7 @@ export function MenuBarSearchList() {
           actions={
             item.enabled ? (
               <ActionPanel>
-                <Action title="Activate" onAction={() => void activateMenuBarItem(item.token)} />
+                <Action title="Activate" icon={Icon.ArrowRight} onAction={() => void activateMenuBarItem(item.token)} />
               </ActionPanel>
             ) : undefined
           }

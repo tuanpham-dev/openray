@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Action, ActionPanel, Form, popToRoot, showHUD, showToast, Toast, useNavigation } from '@raycast/api'
+import { Action, ActionPanel, Form, Icon, popToRoot, showHUD, showToast, Toast, useNavigation } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { createQuicklink, updateQuicklink, type Quicklink } from './storage'
 
@@ -51,7 +51,7 @@ export function QuicklinkForm({ quicklink, onSaved }: QuicklinkFormProps) {
       actions={
         <ActionPanel>
           <Action.SubmitForm title={quicklink ? 'Save Quicklink' : 'Create Quicklink'} onSubmit={submit} />
-          {onSaved && <Action title="Cancel" onAction={() => pop()} />}
+          {onSaved && <Action title="Cancel" icon={Icon.XMarkCircle} onAction={() => pop()} />}
         </ActionPanel>
       }
     >

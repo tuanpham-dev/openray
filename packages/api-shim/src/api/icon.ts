@@ -39,6 +39,8 @@ export const Icon = {
   ArrowLeft: 'arrow-left',
   Eye: 'eye',
   EyeSlash: 'eye-slash',
+  ExternalLink: 'external-link',
+  Pin: 'pin',
   // Referenced by `wikipedia`; a missing member is not inert — the action
   // ends up with `icon={undefined}` and silently renders no icon at all.
   Window: 'window',

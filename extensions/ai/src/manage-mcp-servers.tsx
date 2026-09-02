@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { List, Form, ActionPanel, Action, useNavigation, showToast, Toast, open } from '@raycast/api'
+import { List, Form, ActionPanel, Action, Icon, useNavigation, showToast, Toast, open } from '@raycast/api'
 import * as storage from './storage'
 import type { McpServerRecord } from './storage'
 import * as oauth from './mcp/oauth'
@@ -94,12 +94,30 @@ export default function ManageMcpServersCommand() {
           accessories={[{ text: server.enabled ? 'Enabled' : 'Disabled' }, server.alwaysAllow ? { tag: 'Always Allow' } : {}]}
           actions={
             <ActionPanel>
-              <Action title={server.enabled ? 'Disable' : 'Enable'} onAction={() => void storage.setMcpServerEnabled(server.id, !server.enabled).then(refresh)} />
-              <Action title={server.alwaysAllow ? 'Revoke Always Allow' : 'Always Allow Tool Calls'} onAction={() => void storage.setMcpServerAlwaysAllow(server.id, !server.alwaysAllow).then(refresh)} />
-              {server.oauthType && <Action title="Sign in via OAuth" onAction={() => void startOAuth(server)} />}
-              {server.oauthType && <Action title="Sign Out" onAction={() => void storage.deleteMcpOAuthTokens(server.id).then(refresh)} />}
-              <Action title="Delete" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void storage.deleteMcpServer(server.id).then(refresh)} />
-              <Action title="Add Server" shortcut={{ modifiers: ['cmd'], key: 'n' }} onAction={() => push(<McpServerForm onSaved={refresh} />)} />
+              <Action
+                title={server.enabled ? 'Disable' : 'Enable'}
+                icon={server.enabled ? Icon.XMarkCircle : Icon.CheckCircle}
+                onAction={() => void storage.setMcpServerEnabled(server.id, !server.enabled).then(refresh)}
+              />
+              <Action
+                title={server.alwaysAllow ? 'Revoke Always Allow' : 'Always Allow Tool Calls'}
+                icon={Icon.CheckCircle}
+                onAction={() => void storage.setMcpServerAlwaysAllow(server.id, !server.alwaysAllow).then(refresh)}
+              />
+              {server.oauthType && <Action title="Sign in via OAuth" icon={Icon.ArrowRight} onAction={() => void startOAuth(server)} />}
+              {server.oauthType && <Action title="Sign Out" icon="log-out" onAction={() => void storage.deleteMcpOAuthTokens(server.id).then(refresh)} />}
+              <Action
+                title="Delete"
+                icon={Icon.Trash}
+                shortcut={{ modifiers: ['cmd'], key: 'backspace' }}
+                onAction={() => void storage.deleteMcpServer(server.id).then(refresh)}
+              />
+              <Action
+                title="Add Server"
+                icon={Icon.Plus}
+                shortcut={{ modifiers: ['cmd'], key: 'n' }}
+                onAction={() => push(<McpServerForm onSaved={refresh} />)}
+              />
             </ActionPanel>
           }
         />
@@ -110,7 +128,7 @@ export default function ManageMcpServersCommand() {
           description="Add one to give AI Chat tool-calling access."
           actions={
             <ActionPanel>
-              <Action title="Add Server" onAction={() => push(<McpServerForm onSaved={refresh} />)} />
+              <Action title="Add Server" icon={Icon.Plus} onAction={() => push(<McpServerForm onSaved={refresh} />)} />
             </ActionPanel>
           }
         />

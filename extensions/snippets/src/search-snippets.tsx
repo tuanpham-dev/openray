@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, Clipboard, confirmAlert, List, showHUD, showToast, Toast } from '@raycast/api'
+import { Action, ActionPanel, Clipboard, confirmAlert, Icon, List, showHUD, showToast, Toast } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { deleteSnippet, listSnippets, type Snippet } from './storage'
 import { resolveBody, takesArgument } from './resolve'
@@ -53,7 +53,7 @@ export default function SearchSnippets() {
         description="Create a snippet to get started."
         actions={
           <ActionPanel>
-            <Action.Push title="Create Snippet" target={<SnippetForm onSaved={refresh} />} />
+            <Action.Push title="Create Snippet" icon={Icon.Plus} target={<SnippetForm onSaved={refresh} />} />
           </ActionPanel>
         }
       />
@@ -67,11 +67,11 @@ export default function SearchSnippets() {
           accessories={snippet.keyword ? [{ tag: snippet.keyword }] : []}
           actions={
             <ActionPanel>
-              <Action title="Paste" onAction={() => void pasteSnippet(snippet)} />
-              <Action title="Copy to Clipboard" onAction={() => void copySnippet(snippet)} />
-              <Action.Push title="Edit" target={<SnippetForm snippet={snippet} onSaved={refresh} />} />
-              <Action.Push title="Create Snippet" target={<SnippetForm onSaved={refresh} />} />
-              <Action title="Delete" style="destructive" onAction={() => void remove(snippet)} />
+              <Action title="Paste" icon={Icon.Clipboard} onAction={() => void pasteSnippet(snippet)} />
+              <Action title="Copy to Clipboard" icon="copy" onAction={() => void copySnippet(snippet)} />
+              <Action.Push title="Edit" icon={Icon.Pencil} target={<SnippetForm snippet={snippet} onSaved={refresh} />} />
+              <Action.Push title="Create Snippet" icon={Icon.Plus} target={<SnippetForm onSaved={refresh} />} />
+              <Action title="Delete" icon={Icon.Trash} style="destructive" onAction={() => void remove(snippet)} />
             </ActionPanel>
           }
         />

@@ -25,7 +25,7 @@ export default function SearchNotesCommand() {
           subtitle={note.pinnedAt ? 'Pinned' : undefined}
           actions={
             <ActionPanel>
-              <Action title="Open Note" onAction={() => void openOrFocusNote(note.id)} />
+              <Action title="Open Note" icon="note" onAction={() => void openOrFocusNote(note.id)} />
             </ActionPanel>
           }
         />

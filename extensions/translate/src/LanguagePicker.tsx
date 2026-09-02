@@ -1,4 +1,4 @@
-import { Action, ActionPanel, List, useNavigation } from '@raycast/api'
+import { Action, ActionPanel, Icon, List, useNavigation } from '@raycast/api'
 import { LANGUAGES } from '@openray/translate-core'
 
 interface LanguagePickerProps {
@@ -30,6 +30,7 @@ export function LanguagePicker({ includeAuto, onSelect }: LanguagePickerProps) {
             <ActionPanel>
               <Action
                 title="Select"
+                icon={Icon.CheckCircle}
                 onAction={() => {
                   onSelect(lang.code)
                   pop()

@@ -8,10 +8,16 @@ import {
   CameraIcon,
   CheckCircleIcon,
   ClipboardIcon,
+  CloseIcon,
   CodeIcon,
   CopyIcon,
+  CrosshairIcon,
+  DownloadIcon,
   ExternalLinkIcon,
+  EyeIcon,
   EyeOffIcon,
+  PencilIcon,
+  PinIcon,
   PlusIcon,
   DisplayNextIcon,
   DisplayPreviousIcon,
@@ -38,6 +44,7 @@ import {
   SkipForwardIcon,
   SmileyIcon,
   SparklesIcon,
+  SwapIcon,
   SystemThemeIcon,
   TextIcon,
   TranslateIcon,
@@ -160,8 +167,15 @@ export const SYSTEM_ICON_NAMES: Record<string, ComponentType<IconProps>> = {
   'check-circle': CheckCircleIcon,
   copy: CopyIcon,
   'external-link': ExternalLinkIcon,
+  eye: EyeIcon,
   'eye-slash': EyeOffIcon,
   plus: PlusIcon,
+  pencil: PencilIcon,
+  download: DownloadIcon,
+  pin: PinIcon,
+  swap: SwapIcon,
+  crosshair: CrosshairIcon,
+  close: CloseIcon,
 }
 
 /**
@@ -187,6 +201,7 @@ export const RAYCAST_ICON_ALIASES: Record<string, string> = {
   'question-mark': 'alert',
   upload: 'send',
   globe: 'link',
+  'xmark-circle': 'close',
   // A window with its right pane picked out is the nearest thing this set
   // has to Raycast's sidebar glyph.
   'app-window-sidebar-right': 'window-right-half',
