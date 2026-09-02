@@ -113,17 +113,18 @@ function osascriptSync(script: string): string {
  *  `log out` is the odd one out — found live: unlike the other three,
  *  the plain `log out` verb *does* show the native "are you sure you
  *  want to log out now?" countdown dialog and waits on it, exactly the
- *  double-confirmation this function exists to avoid. The fix is the
- *  well-documented raw-Apple-Event form instead of the plain verb —
- *  sending `aevtrlgo` (Log out's actual event code) directly, rather
- *  than through the higher-level `log out` command that adds the
- *  confirmation on top. */
+ *  double-confirmation this function exists to avoid. See `macosLogOut`
+ *  below for the fix. */
 async function macosPowerVerb(verb: 'sleep' | 'restart' | 'shut down'): Promise<void> {
   await osascript(`tell application "System Events" to ${verb}`)
 }
 
+/** Must target `loginwindow`, not `System Events` — found live: sending
+ *  this same event to `System Events` fails outright
+ *  (`errAEEventNotHandled`, -1708). Only `loginwindow`, the process that
+ *  actually owns login/logout, understands `aevtrlgo` directly. */
 async function macosLogOut(): Promise<void> {
-  await osascript('tell application "System Events" to «event aevtrlgo»')
+  await osascript('tell application "loginwindow" to «event aevtrlgo»')
 }
 
 /** No Accessibility permission needed — same lock the login window's own
