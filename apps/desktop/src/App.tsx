@@ -260,13 +260,27 @@ function Palette() {
   // this cleanup fires on. Without this, a no-view-bound `runCommand` call
   // was the only thing that ever tore a command down (T9); with concurrent
   // mounts there's no guarantee a next launch ever comes.
+  //
+  // Keyed on the command identity, not `view` itself: `launchExtensionCommand`
+  // builds a fresh `view` object on every launch, including a *relaunch* of
+  // the same command (e.g. a second `openray run` on an already-open view).
+  // Keying on `view`'s object identity re-ran this cleanup on every such
+  // relaunch — and since the host's own `runCommand` already unmounts and
+  // remounts synchronously for a repeat launch (`runner.ts`'s "re-launching
+  // X: unmounting its previous instance first"), this cleanup's *own*
+  // `unmountExtensionCommand` call then raced the fresh mount and, arriving
+  // after it, tore down the instance that had just been launched. Found
+  // live: relaunching an already-open view via `openray run` left the
+  // palette stuck on "Loading…" forever, its first commit never arriving
+  // because the reconciler tree was destroyed before it could send one.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (view.type !== 'extension') return
     const { extensionId, commandName } = view
     return () => {
       void unmountExtensionCommand(extensionId, commandName)
     }
-  }, [view])
+  }, [view.type === 'extension' ? `${view.extensionId}:${view.commandName}` : null])
 
   // Hot reload: a dev-mode rebuild of the extension whose command is on
   // screen re-launches that command in place. Nothing about the *view*
