@@ -103,14 +103,27 @@ function osascriptSync(script: string): string {
   return result.stdout.toString().trim()
 }
 
-/** `System Events`'s top-level `sleep`/`restart`/`shut down`/`log out`
- *  verbs run immediately, the same way `systemctl poweroff`/`reboot` do
- *  on Linux — no "are you sure?" dialog, unlike clicking the matching
- *  Apple-menu item. That's intentional here: this command already went
- *  through OpenRay's own confirm-before-running step (`CONFIRM_IDS`), a
- *  second native confirmation would be redundant. */
-async function macosPowerVerb(verb: 'sleep' | 'restart' | 'shut down' | 'log out'): Promise<void> {
+/** `System Events`'s top-level `sleep`/`restart`/`shut down` verbs run
+ *  immediately, the same way `systemctl poweroff`/`reboot` do on Linux —
+ *  no "are you sure?" dialog, unlike clicking the matching Apple-menu
+ *  item. That's intentional here: this command already went through
+ *  OpenRay's own confirm-before-running step (`CONFIRM_IDS`), a second
+ *  native confirmation would be redundant.
+ *
+ *  `log out` is the odd one out — found live: unlike the other three,
+ *  the plain `log out` verb *does* show the native "are you sure you
+ *  want to log out now?" countdown dialog and waits on it, exactly the
+ *  double-confirmation this function exists to avoid. The fix is the
+ *  well-documented raw-Apple-Event form instead of the plain verb —
+ *  sending `aevtrlgo` (Log out's actual event code) directly, rather
+ *  than through the higher-level `log out` command that adds the
+ *  confirmation on top. */
+async function macosPowerVerb(verb: 'sleep' | 'restart' | 'shut down'): Promise<void> {
   await osascript(`tell application "System Events" to ${verb}`)
+}
+
+async function macosLogOut(): Promise<void> {
+  await osascript('tell application "System Events" to «event aevtrlgo»')
 }
 
 /** No Accessibility permission needed — same lock the login window's own
@@ -236,7 +249,7 @@ async function runActionMacos(id: string): Promise<void> {
     case 'shut-down':
       return macosPowerVerb('shut down')
     case 'log-out':
-      return macosPowerVerb('log out')
+      return macosLogOut()
     case 'sleep-displays':
       return spawnDetached('pmset', ['displaysleepnow'])
     case 'screen-saver':
