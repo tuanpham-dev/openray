@@ -43,9 +43,30 @@ function openInEditor(path: string): boolean {
     (bin): bin is string => Boolean(bin) && isAvailable(bin),
   )
   const editor = candidates[0]
-  if (!editor) return false
-  spawn(editor, [path], { detached: true, stdio: 'ignore' }).unref()
-  return true
+  if (editor) {
+    spawn(editor, [path], { detached: true, stdio: 'ignore' }).unref()
+    return true
+  }
+
+  // The `which` candidates above only catch an editor whose CLI shim is
+  // on PATH — VS Code, Cursor, Zed, and Sublime Text all ship that as an
+  // opt-in "install shell command" step most users never run, so a
+  // completely normal install (dragged straight into /Applications)
+  // was invisible here even with the editor sitting right there. Same
+  // problem `file-search`'s `openInTerminal` already hit and fixed for
+  // Terminal/iTerm: check real `.app` bundles and launch via `open -a`
+  // instead of guessing at PATH.
+  if (process.platform === 'darwin') {
+    const app = ['Visual Studio Code', 'Cursor', 'Zed', 'Sublime Text', 'TextMate', 'BBEdit'].find((name) =>
+      existsSync(`/Applications/${name}.app`),
+    )
+    if (app) {
+      spawn('open', ['-a', app, path], { detached: true, stdio: 'ignore' }).unref()
+      return true
+    }
+  }
+
+  return false
 }
 
 function expandHome(path: string): string {
