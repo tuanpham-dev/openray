@@ -7,6 +7,8 @@ mod macos;
 #[cfg(target_os = "macos")]
 pub mod macos_accessibility;
 #[cfg(target_os = "macos")]
+pub mod macos_display_watch;
+#[cfg(target_os = "macos")]
 pub mod macos_panel;
 #[cfg(target_os = "windows")]
 mod windows;

@@ -410,6 +410,20 @@ fn spawn_background_workers(app: &tauri::AppHandle) {
   // reproducing native `application::calculator::currency`'s
   // once-at-startup fetch/cache contract with no dedicated call site.
   spawn_root_provider_startup(app);
+
+  // Repeats that same startup push whenever macOS reports a display was
+  // connected/disconnected/reconfigured — otherwise a root-provider
+  // listing that depends on `listDisplays()` (Window Management's
+  // `next-display`/`previous-display`) stays wrong until something
+  // unrelated happens to trigger a refresh. See
+  // `macos_display_watch`'s doc comment for how this was found.
+  #[cfg(target_os = "macos")]
+  {
+    let app = app.clone();
+    crate::infrastructure::platform::macos_display_watch::watch(move || {
+      spawn_root_provider_startup(&app);
+    });
+  }
 }
 
 /// T14: requests every installed `root-provider` command's listing once,
