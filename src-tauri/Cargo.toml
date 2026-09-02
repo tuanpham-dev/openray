@@ -98,16 +98,27 @@ tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.
 # NSRunningApplication for Navigation).
 # NSPasteboard/NSPasteboardItem: Screenshots' "Auto" paste format
 # (`clipboard_multi/macos.rs`) — multi-representation clipboard write.
-objc2-app-kit = { version = "0.3", features = ["NSScreen", "NSPasteboard", "NSPasteboardItem"] }
+# NSApplication: `macos_display_watch`'s
+# NSApplicationDidChangeScreenParametersNotification constant.
+objc2-app-kit = { version = "0.3", features = ["NSScreen", "NSPasteboard", "NSPasteboardItem", "NSApplication"] }
 objc2-core-foundation = { version = "0.3", features = ["CFString", "CFDictionary", "CFNumber"] }
 objc2 = "0.6"
 # `infrastructure::paste`'s main-thread dispatch — already a transitive
 # dependency via the objc2-* crates above, promoted to direct since
 # paste.rs calls it explicitly rather than through another crate's API.
 dispatch2 = "0.3"
+# `macos_display_watch`'s NSNotificationCenter observer block — already a
+# transitive dependency via the objc2-* crates above (their block-taking
+# APIs are gated behind it), promoted to direct since that module builds
+# an `RcBlock` explicitly rather than through another crate's API.
+block2 = "0.6"
 # NSData: Screenshots' "Auto" paste format (`clipboard_multi/macos.rs`)
 # writes raw PNG bytes to the pasteboard as an `NSData`.
-objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSDictionary", "NSData"] }
+# NSOperation: unused directly (`macos_display_watch` always passes `None`
+# for the callback queue) but required for
+# `addObserverForName:object:queue:usingBlock:`'s signature to resolve at
+# all — the parameter type is `Option<&NSOperationQueue>`.
+objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSArray", "NSDictionary", "NSData", "NSOperation", "block2"] }
 # Screenshots' OCR backend (`platform/ocr/macos.rs`) went native (a
 # compiled Vision shim, vision_ocr.m, called via a C ABI — see build.rs)
 # after the objc2-vision-based version was found hanging indefinitely on
