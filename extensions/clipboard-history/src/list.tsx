@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Action, ActionPanel, List, confirmAlert, open, showHUD } from '@raycast/api'
+import { Action, ActionPanel, Icon, List, confirmAlert, open, showHUD } from '@raycast/api'
 import {
   type ClipboardHistoryEntry,
   clearClipboardHistory,
@@ -268,10 +268,17 @@ export default function ClipboardHistoryCommand() {
                 <Action.CopyToClipboard title="Copy as RGB" content={toRgbString(color)} />
               </>
             )}
-            <Action title="Delete" style="destructive" shortcut={{ modifiers: ['cmd'], key: 'backspace' }} onAction={() => void remove(entry)} />
+            <Action
+              title="Delete"
+              icon={Icon.Trash}
+              style="destructive"
+              shortcut={{ modifiers: ['cmd'], key: 'backspace' }}
+              onAction={() => void remove(entry)}
+            />
             <ActionPanel.Section>
               <Action
                 title="Clear All"
+                icon={Icon.Trash}
                 style="destructive"
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'backspace' }}
                 onAction={() => void clearAll()}

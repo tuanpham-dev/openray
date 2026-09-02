@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, List } from '@raycast/api'
+import { Action, ActionPanel, Icon, List } from '@raycast/api'
 import { LANGUAGES, translate, type Translation } from '@openray/translate-core'
 import { getTranslateSettings, setTranslateTargetLanguage } from '@openray/extras'
 import { getTranslateCommand, listHistory, recordHistory, type HistoryEntry } from './storage'
@@ -131,8 +131,8 @@ export function TranslateBody({ presetId }: TranslateBodyProps) {
 
   const languagePickerActions = (
     <>
-      <Action.Push title="Change Source Language" target={<LanguagePicker includeAuto onSelect={setSourceLang} />} />
-      <Action.Push title="Change Target Language" target={<LanguagePicker onSelect={setTargetLang} />} />
+      <Action.Push title="Change Source Language" icon="translate" target={<LanguagePicker includeAuto onSelect={setSourceLang} />} />
+      <Action.Push title="Change Target Language" icon="translate" target={<LanguagePicker onSelect={setTargetLang} />} />
     </>
   )
 
@@ -168,7 +168,7 @@ export function TranslateBody({ presetId }: TranslateBodyProps) {
                     </>
                   )}
                   <Action.CopyToClipboard title="Copy Source Text" content={searchText} />
-                  <Action title="Swap Languages" onAction={swap} />
+                  <Action title="Swap Languages" icon="swap" onAction={swap} />
                 </>
               )}
               {languagePickerActions}

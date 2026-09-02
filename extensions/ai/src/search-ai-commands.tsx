@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { List, ActionPanel, Action, Form, Detail, useNavigation, Clipboard } from '@raycast/api'
+import { List, ActionPanel, Action, Form, Detail, Icon, useNavigation, Clipboard } from '@raycast/api'
 import { argumentSpecs } from '@openray/placeholders'
 import * as storage from './storage'
 import type { CommandRecord } from './storage'
@@ -154,10 +154,11 @@ export default function SearchAiCommandsCommand() {
           subtitle={command.builtin ? 'Built-in' : 'AI Command'}
           actions={
             <ActionPanel>
-              <Action title="Run" onAction={() => runAiCommand(command, push)} />
+              <Action title="Run" icon={Icon.ArrowRight} onAction={() => runAiCommand(command, push)} />
               {!command.builtin && (
                 <Action
                   title="Delete"
+                  icon={Icon.Trash}
                   shortcut={{ modifiers: ['cmd'], key: 'backspace' }}
                   onAction={() => void storage.deleteCommand(command.id).then(() => storage.listCommands()).then(setCommands)}
                 />

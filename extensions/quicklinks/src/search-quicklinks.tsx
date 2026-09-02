@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, confirmAlert, List, open, showHUD, showToast, Toast } from '@raycast/api'
+import { Action, ActionPanel, confirmAlert, Icon, List, open, showHUD, showToast, Toast } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { deleteQuicklink, listQuicklinks, type Quicklink } from './storage'
 import { resolveUrl, takesArgument } from './resolve'
@@ -47,7 +47,7 @@ export default function SearchQuicklinks() {
         description="Create a quicklink to get started."
         actions={
           <ActionPanel>
-            <Action.Push title="Create Quicklink" target={<QuicklinkForm onSaved={refresh} />} />
+            <Action.Push title="Create Quicklink" icon={Icon.Plus} target={<QuicklinkForm onSaved={refresh} />} />
           </ActionPanel>
         }
       />
@@ -59,11 +59,11 @@ export default function SearchQuicklinks() {
           subtitle={quicklink.urlTemplate}
           actions={
             <ActionPanel>
-              <Action title="Open" onAction={() => void runQuicklink(quicklink)} />
+              <Action title="Open" icon={Icon.ExternalLink} onAction={() => void runQuicklink(quicklink)} />
               <Action.CopyToClipboard title="Copy Link" content={quicklink.urlTemplate} />
-              <Action.Push title="Edit" target={<QuicklinkForm quicklink={quicklink} onSaved={refresh} />} />
-              <Action.Push title="Create Quicklink" target={<QuicklinkForm onSaved={refresh} />} />
-              <Action title="Delete" style="destructive" onAction={() => void remove(quicklink)} />
+              <Action.Push title="Edit" icon={Icon.Pencil} target={<QuicklinkForm quicklink={quicklink} onSaved={refresh} />} />
+              <Action.Push title="Create Quicklink" icon={Icon.Plus} target={<QuicklinkForm onSaved={refresh} />} />
+              <Action title="Delete" icon={Icon.Trash} style="destructive" onAction={() => void remove(quicklink)} />
             </ActionPanel>
           }
         />

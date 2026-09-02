@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { existsSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { dirname } from 'node:path'
-import { Action, ActionPanel, Clipboard, List, open, showInFinder, showToast, Toast } from '@raycast/api'
+import { Action, ActionPanel, Clipboard, Icon, List, open, showInFinder, showToast, Toast } from '@raycast/api'
 import { queryFileSearch, type FileSearchEntry } from '@openray/extras'
 
 const SEARCH_DEBOUNCE_MS = 120
@@ -74,11 +74,12 @@ export function FileSearchList() {
           subtitle={entry.path}
           actions={
             <ActionPanel>
-              <Action title="Open" onAction={() => void open(entry.path)} />
-              <Action title="Reveal in Files" onAction={() => void showInFinder(entry.path)} />
-              <Action title="Copy Path" onAction={() => void Clipboard.copy(entry.path)} />
+              <Action title="Open" icon={Icon.ExternalLink} onAction={() => void open(entry.path)} />
+              <Action title="Reveal in Files" icon={Icon.Folder} onAction={() => void showInFinder(entry.path)} />
+              <Action title="Copy Path" icon={Icon.Clipboard} onAction={() => void Clipboard.copy(entry.path)} />
               <Action
                 title="Open in Terminal"
+                icon={Icon.Terminal}
                 onAction={() =>
                   void openInTerminal(entry.path).then((found) => {
                     if (!found) void showToast({ style: Toast.Style.Failure, title: 'Open in Terminal', message: 'No terminal emulator found' })

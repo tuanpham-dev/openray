@@ -226,13 +226,13 @@ export default function Command() {
           <StoreDetail row={row} busy={busy === row.entry.name} onInstall={() => void install(row)} onUninstall={() => void remove(row)} />
         }
       />
-      {row.updatable && <Action title={`Update to ${row.entry.version}`} onAction={() => void install(row)} />}
-      {!row.installed && <Action title="Install" onAction={() => void install(row)} />}
-      {row.installed && !row.updatable && <Action title="Reinstall" onAction={() => void install(row)} />}
+      {row.updatable && <Action title={`Update to ${row.entry.version}`} icon={Icon.Download} onAction={() => void install(row)} />}
+      {!row.installed && <Action title="Install" icon={Icon.Download} onAction={() => void install(row)} />}
+      {row.installed && !row.updatable && <Action title="Reinstall" icon={Icon.Download} onAction={() => void install(row)} />}
       {row.installed && row.installed.source !== 'builtin' && (
-        <Action title="Uninstall" style="destructive" onAction={() => void remove(row)} />
+        <Action title="Uninstall" icon={Icon.Trash} style="destructive" onAction={() => void remove(row)} />
       )}
-      <Action title="Refresh Catalogs" onAction={() => void load()} />
+      <Action title="Refresh Catalogs" icon="refresh" onAction={() => void load()} />
     </ActionPanel>
   )
 

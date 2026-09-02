@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { List, ActionPanel, Action, useNavigation } from '@raycast/api'
+import { List, ActionPanel, Action, Icon, useNavigation } from '@raycast/api'
 import { MarkdownEditor, openExtensionWindow, getNotesSettings } from '@openray/extras'
 import type { Note } from '@openray/notes-core'
 import { listNotes, getNote, updateNoteContent, createNote, setNotePinned, deleteNote, duplicateNote, touchNoteOpened } from './storage'
@@ -126,6 +126,7 @@ function BrowseList({ onSelect }: { onSelect: (id: string) => void }) {
             <ActionPanel>
               <Action
                 title="Open Note"
+                icon="note"
                 onAction={() => {
                   pop()
                   onSelect(note.id)
@@ -174,20 +175,29 @@ function NotesWindowView() {
         <ActionPanel>
           <Action
             title="Create Note"
+            icon={Icon.Plus}
             shortcut={{ modifiers: ['cmd'], key: 'n' }}
             onAction={() => void createNote('').then((created) => openNoteById(created.id))}
           />
-          <Action title="Browse Notes" shortcut={{ modifiers: ['cmd'], key: 'p' }} onAction={() => push(<BrowseList onSelect={openNoteById} />)} />
+          <Action
+            title="Browse Notes"
+            icon={Icon.MagnifyingGlass}
+            shortcut={{ modifiers: ['cmd'], key: 'p' }}
+            onAction={() => push(<BrowseList onSelect={openNoteById} />)}
+          />
           <Action
             title={note.pinnedAt ? 'Unpin Note' : 'Pin Note'}
+            icon={Icon.Pin}
             onAction={() => void setNotePinned(note.id, !note.pinnedAt).then(() => setCurrentNoteId(note.id))}
           />
           <Action
             title="Duplicate Note"
+            icon="copy"
             onAction={() => void duplicateNote(note.id).then((created) => created && openNoteById(created.id))}
           />
           <Action
             title="Delete Note"
+            icon={Icon.Trash}
             onAction={() =>
               void deleteNote(note.id).then(async () => {
                 const remaining = await listNotes()

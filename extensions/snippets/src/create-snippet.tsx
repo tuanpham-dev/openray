@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Action, ActionPanel, Form, popToRoot, showHUD, showToast, Toast, useNavigation } from '@raycast/api'
+import { Action, ActionPanel, Form, Icon, popToRoot, showHUD, showToast, Toast, useNavigation } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { createSnippet, updateSnippet, type Snippet } from './storage'
 
@@ -53,7 +53,7 @@ export function SnippetForm({ snippet, onSaved }: SnippetFormProps) {
       actions={
         <ActionPanel>
           <Action.SubmitForm title={snippet ? 'Save Snippet' : 'Create Snippet'} onSubmit={submit} />
-          {onSaved && <Action title="Cancel" onAction={() => pop()} />}
+          {onSaved && <Action title="Cancel" icon={Icon.XMarkCircle} onAction={() => pop()} />}
         </ActionPanel>
       }
     >

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { List, Form, ActionPanel, Action, useNavigation, showToast, Toast } from '@raycast/api'
+import { List, Form, ActionPanel, Action, Icon, useNavigation, showToast, Toast } from '@raycast/api'
 import * as storage from './storage'
 import type { ProviderKeyRecord } from './storage'
 
@@ -61,8 +61,12 @@ export default function ManageProvidersCommand() {
             subtitle={saved ? 'Configured' : 'Not configured'}
             actions={
               <ActionPanel>
-                <Action title="Set Key" onAction={() => push(<ProviderKeyForm providerId={provider.id} label={provider.label} needsKey={provider.needsKey} onSaved={refresh} />)} />
-                {saved && <Action title="Remove Key" onAction={() => void storage.deleteProviderKey(provider.id).then(refresh)} />}
+                <Action
+                  title="Set Key"
+                  icon={Icon.Plus}
+                  onAction={() => push(<ProviderKeyForm providerId={provider.id} label={provider.label} needsKey={provider.needsKey} onSaved={refresh} />)}
+                />
+                {saved && <Action title="Remove Key" icon={Icon.Trash} onAction={() => void storage.deleteProviderKey(provider.id).then(refresh)} />}
               </ActionPanel>
             }
           />

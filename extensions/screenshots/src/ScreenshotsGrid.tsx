@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Action, ActionPanel, Grid } from '@raycast/api'
+import { Action, ActionPanel, Grid, Icon } from '@raycast/api'
 import {
   copyScreenshotWithFormat,
   dropScreenshot,
@@ -147,21 +147,23 @@ export function ScreenshotsGrid() {
             title={entry.name}
             actions={
               <ActionPanel>
-                <Action title="Paste" onAction={() => void pasteScreenshotWithFormat(entry.path, format)} />
-                <Action title={`Copy as ${FORMAT_LABELS[format]}`} onAction={() => void copyScreenshotWithFormat(entry.path, format)} />
+                <Action title="Paste" icon={Icon.Clipboard} onAction={() => void pasteScreenshotWithFormat(entry.path, format)} />
+                <Action title={`Copy as ${FORMAT_LABELS[format]}`} icon="copy" onAction={() => void copyScreenshotWithFormat(entry.path, format)} />
                 {availableFormats(entry.kind)
                   .filter((alt) => alt !== format)
                   .map((alt) => (
                     <Action
                       key={`copy-as-${alt}`}
                       title={`Copy as ${FORMAT_LABELS[alt]}`}
+                      icon="copy"
                       onAction={() => void copyScreenshotWithFormat(entry.path, alt)}
                     />
                   ))}
-                {dropSupported && <Action title="Drop at Cursor" onAction={() => void dropScreenshot(entry.path)} />}
-                <Action title="Open" onAction={() => void openScreenshot(entry.path)} />
+                {dropSupported && <Action title="Drop at Cursor" icon="crosshair" onAction={() => void dropScreenshot(entry.path)} />}
+                <Action title="Open" icon={Icon.ExternalLink} onAction={() => void openScreenshot(entry.path)} />
                 <Action
                   title={entry.pinned ? 'Unpin' : 'Pin'}
+                  icon={Icon.Pin}
                   onAction={() => togglePinned(entry.path, !entry.pinned)}
                 />
               </ActionPanel>
