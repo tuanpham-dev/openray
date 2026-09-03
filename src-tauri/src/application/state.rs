@@ -32,6 +32,11 @@ pub struct AppState {
     pub usage: UsageRepository,
     pub clipboard: Arc<ClipboardHistoryProvider>,
     pub clipboard_watcher: ClipboardWatcher,
+    /// Snippet auto-expansion's keystroke listener + insertion service. Owns
+    /// its own listener thread (started lazily on first enable, then paused via
+    /// an atomic), the same start-once/pause-not-stop shape as
+    /// `clipboard_watcher`. See `application::auto_expand`.
+    pub auto_expander: crate::application::auto_expand::AutoExpander,
     /// Also separately managed as `Arc<SettingsStore>` (see `lib.rs`) so
     /// `infrastructure/window.rs` can read it without reaching into
     /// `AppState` — an infrastructure module importing an application-layer

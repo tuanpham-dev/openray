@@ -27,13 +27,13 @@ export default function SearchSnippets() {
       await showToast({ style: Toast.Style.Failure, title: 'This snippet needs an argument', message: 'Launch it from the main search instead.' })
       return
     }
-    const expanded = await resolveBody(snippet.body, '')
-    await Clipboard.paste(expanded)
+    const { text } = await resolveBody(snippet.body, '')
+    await Clipboard.paste(text)
   }
 
   const copySnippet = async (snippet: Snippet) => {
-    const expanded = await resolveBody(snippet.body, '')
-    await Clipboard.copy(expanded)
+    const { text } = await resolveBody(snippet.body, '')
+    await Clipboard.copy(text)
     await showHUD('Copied to Clipboard')
   }
 

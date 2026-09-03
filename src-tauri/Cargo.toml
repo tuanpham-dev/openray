@@ -16,9 +16,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
-
-# Compiles the native macOS Vision OCR shim (vision_ocr.m); macOS-only.
-[target.'cfg(target_os = "macos")'.build-dependencies]
+# Compiles the native macOS Vision OCR shim (vision_ocr.m) when the *target*
+# is macOS (see build.rs). Declared for every host — not just a macOS host —
+# because build.rs now decides via `CARGO_CFG_TARGET_OS` at runtime, so its
+# `cc::Build` reference must compile on any host (e.g. cross-compiling to
+# Windows/Linux from a Mac, or the Linux CI host building build.rs at all).
 cc = "1"
 
 [features]
@@ -143,7 +145,11 @@ lnk = "0.6.4"
 # `OcrEngine`/`BitmapDecoder` make block waiting for a completion callback
 # that an implicitly-STA thread (Rust's default) never pumps, hanging
 # forever; a sibling project hit and documented this exact deadlock.
-windows = { version = "0.62.2", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Com"] }
+# Win32_UI_Input_KeyboardAndMouse: snippet auto-expansion's native keystroke
+# listener (`application::auto_expand` via `platform::windows_keytap`) — the
+# `WH_KEYBOARD_LL` low-level keyboard hook plus `ToUnicodeEx`/`GetKeyboardState`
+# character decoding. Replaces the `rdev` crate on Windows.
+windows = { version = "0.62.2", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Com"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13.13", features = ["global_shortcuts"] }
@@ -157,7 +163,10 @@ glib = "0.18"
 # Restoring input focus when the palette hides; X11 doesn't do it for us.
 # randr: per-monitor work-area resolution for Window Management's
 # Next/Previous Display and multi-monitor gap math.
-x11rb = { version = "0.13.2", features = ["randr"] }
+# `record`: snippet auto-expansion's native keystroke listener
+# (`application::auto_expand` via `platform::linux_keytap`) taps global key
+# presses through the XRecord extension, replacing the `rdev` crate on Linux.
+x11rb = { version = "0.13.2", features = ["randr", "record"] }
 # Navigation: reads/activates app menu bars over D-Bus (Qt/KDE dbusmenu,
 # GTK org.gtk.Menus, AppMenu.Registrar). Blocking API only — verified via
 # a throwaway spike that it coexists with the app's own tokio runtime

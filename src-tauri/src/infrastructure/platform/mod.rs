@@ -2,10 +2,16 @@
 pub(crate) mod linux;
 #[cfg(target_os = "linux")]
 pub mod linux_focus;
+#[cfg(target_os = "linux")]
+pub mod linux_keytap;
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
 pub mod macos_accessibility;
+#[cfg(target_os = "macos")]
+pub mod macos_input_monitoring;
+#[cfg(target_os = "macos")]
+pub mod macos_keytap;
 #[cfg(target_os = "macos")]
 pub mod macos_display_watch;
 #[cfg(target_os = "macos")]
@@ -14,6 +20,8 @@ pub mod macos_panel;
 mod windows;
 #[cfg(target_os = "windows")]
 pub mod windows_focus;
+#[cfg(target_os = "windows")]
+pub mod windows_keytap;
 
 pub mod background_priority;
 pub mod clipboard_multi;

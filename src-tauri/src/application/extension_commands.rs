@@ -384,6 +384,53 @@ pub async fn launch_root_provider_listing<R: Runtime>(app: &AppHandle<R>, extens
     Ok(state.extension_host.notify("extension.runRootProviderList", Some(params)).await?)
 }
 
+/// Resolves one snippet to its final text + caret offset, without pasting —
+/// the request half of snippet auto-expansion. Mirrors
+/// `launch_root_command`'s param-building (so the snippet's `resolve` export
+/// runs with the same command context, clipboard, and selection access its
+/// `execute` export gets), but uses `call_checked` to await the returned
+/// `{ text, cursorOffset }` value instead of firing and forgetting.
+///
+/// `snippet_id` is the row's own id (the `extension_storage` key), the same
+/// value `execute` receives. The host command is the snippets extension's
+/// root-provider command (`list`), resolved from the loaded root rows.
+pub async fn resolve_snippet<R: Runtime>(app: &AppHandle<R>, snippet_id: &str) -> Result<serde_json::Value, Error> {
+    let state = app.try_state::<AppState>().ok_or_else(|| Error::msg("app state not managed"))?;
+
+    let extension_id = "snippets";
+    let host_command_name = state
+        .root_commands
+        .host_command_name(extension_id)
+        .ok_or_else(|| Error::msg("snippets root-provider is not loaded yet"))?;
+
+    let entry = state
+        .extensions
+        .list()
+        .into_iter()
+        .find(|e| e.id == extension_id)
+        .ok_or_else(|| Error::msg("extension 'snippets' not found"))?;
+    let path = entry.path.ok_or_else(|| Error::msg("extension 'snippets' has no install path"))?;
+    let command_path = format!("{path}/.openray/build/{host_command_name}.js");
+
+    let preferences = state
+        .extensions
+        .resolve_preferences(extension_id, &host_command_name)
+        .map_err(|missing| Error::msg(format!("missing_required_preferences:{}", missing.join(","))))?;
+
+    let (environment, platform) = environment_and_platform_json(&state, &path);
+    let params = json!({
+        "extensionId": extension_id,
+        "commandName": host_command_name,
+        "commandPath": command_path,
+        "preferences": preferences,
+        "rowId": snippet_id,
+        "environment": environment,
+        "platform": platform,
+    });
+
+    Ok(state.extension_host.call_checked("extension.resolveSnippet", Some(params)).await?)
+}
+
 /// Builds the RPC params both Import/Export hooks share: which extension,
 /// which bundle, and the same context every other launch variant passes.
 ///

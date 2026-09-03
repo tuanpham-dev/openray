@@ -308,6 +308,25 @@ export function pseudoUuid(): string {
   return randomUUID()
 }
 
+/** The `{cursor}` caret marker, left verbatim by `expand` (it evaluates to
+ *  `undefined`, so it survives into the expanded string). */
+const CURSOR_MARKER = '{cursor}'
+
+/** Splits an already-expanded string into its final text (every `{cursor}`
+ *  marker removed) and the caret offset. The offset is the first marker's
+ *  position measured in Unicode code points — not UTF-16 code units — so it
+ *  matches a per-code-point caret walk on the consumer side (the Rust
+ *  auto-expansion service sends that many Left presses). When there is no
+ *  marker the offset is the text length, i.e. the caret stays at the end. */
+export function splitCursor(expanded: string): { text: string; cursorOffset: number } {
+  const markerIndex = expanded.indexOf(CURSOR_MARKER)
+  const text = expanded.split(CURSOR_MARKER).join('')
+  // The first marker has no earlier markers before it, so `expanded` up to
+  // it is already final text; its code-point length is the offset.
+  const cursorOffset = markerIndex === -1 ? [...text].length : [...expanded.slice(0, markerIndex)].length
+  return { text, cursorOffset }
+}
+
 const DATE_TOKENS: [string, (d: Date, locale: string | undefined) => string][] = [
   ['yyyy', (d) => String(d.getFullYear()).padStart(4, '0')],
   ['yy', (d) => String(d.getFullYear() % 100).padStart(2, '0')],

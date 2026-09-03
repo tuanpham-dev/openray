@@ -79,6 +79,14 @@ export interface Settings {
    *  it to the OS trash (never permanently deleted). `"unlimited"`
    *  (default) or a day-count string. Pinned screenshots are exempt. */
   screenshotStorageDuration: 'unlimited' | '1' | '7' | '30' | '90' | '180' | '365'
+  /** Whether snippet auto-expansion runs — typing a snippet's keyword in
+   *  any app replaces it in place with the expanded body. Off by default;
+   *  needs OS input permissions and is unavailable on Wayland. */
+  snippetAutoExpand: boolean
+  /** How a keyword triggers an auto-expansion — `"instant"` (expand once
+   *  the keyword is fully typed) or `"delimiter"` (expand once the keyword
+   *  is followed by a space, tab, or enter, which is consumed). */
+  snippetAutoExpandMode: 'instant' | 'delimiter'
 }
 
 export function getSettings(): Promise<Settings> {

@@ -8,6 +8,7 @@ import { NotesPrefs } from './NotesPane'
 import { AiPrefs } from './AiPane'
 import { ClipboardPrefs } from './ClipboardPane'
 import { FileSearchPrefs } from './FileSearchPane'
+import { SnippetsPrefs } from './SnippetsPrefs'
 
 interface BuiltinPrefsProps {
   settings: Settings
@@ -57,4 +58,5 @@ export const BUILTIN_PREFS: Record<string, ComponentType<BuiltinPrefsProps>> = {
   'script-commands': ScriptCommandsPrefs,
   'clipboard-history': ClipboardPrefs,
   'file-search': FileSearchPrefs,
+  snippets: SnippetsPrefs,
 }

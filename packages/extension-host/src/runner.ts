@@ -230,10 +230,10 @@ function buildCommandContext(params: {
 /** Fresh `require`, discarding any cached module — every launch variant
  * needs this so a long-lived sidecar process never lets one run's
  * top-level module state (or a crash mid-evaluation) leak into the next. */
-function requireFreshCommandModule(commandPath: string): { default?: unknown; execute?: unknown; view?: unknown; onQuery?: unknown; exportData?: unknown; exportVersion?: unknown; importData?: unknown } {
+function requireFreshCommandModule(commandPath: string): { default?: unknown; execute?: unknown; resolve?: unknown; view?: unknown; onQuery?: unknown; exportData?: unknown; exportVersion?: unknown; importData?: unknown } {
   const resolved = requireCommand.resolve(commandPath)
   delete requireCommand.cache[resolved]
-  return requireCommand(commandPath) as { default?: unknown; execute?: unknown; view?: unknown; onQuery?: unknown; exportData?: unknown; exportVersion?: unknown; importData?: unknown }
+  return requireCommand(commandPath) as { default?: unknown; execute?: unknown; resolve?: unknown; view?: unknown; onQuery?: unknown; exportData?: unknown; exportVersion?: unknown; importData?: unknown }
 }
 
 /**
@@ -472,6 +472,27 @@ async function runRootCommand(params: RunRootCommandParams): Promise<void> {
 }
 
 /**
+ * Resolves a snippet to final text + caret offset without pasting — the
+ * read half of a root-provider row's `execute`, called by the native
+ * auto-expansion service (`application::auto_expand`) via
+ * `extension.resolveSnippet`. Runs with the command context set so the
+ * snippet's `resolve` export can read its own `LocalStorage`, clipboard,
+ * and selection the same way `execute` does. Returns `{ text, cursorOffset }`.
+ */
+async function resolveSnippet(params: RunRootCommandParams): Promise<JsonValue> {
+  setCommandContext(buildCommandContext(params))
+  setCacheRootDirectory(params.environment.supportPath)
+
+  const resolve = requireFreshCommandModule(params.commandPath).resolve
+  if (typeof resolve !== 'function') {
+    throw new Error(`${params.commandPath} has no named "resolve" export (required for snippet auto-expansion)`)
+  }
+
+  const resolved = await (resolve as (id: string, argument?: string) => Promise<unknown>)(params.rowId, params.argument)
+  return (resolved ?? null) as JsonValue
+}
+
+/**
  * T20: mounts a root-provider row's `view` export — the counterpart to
  * `runCommand` for a contributed row, needed because a plain
  * `mode: "root-provider"` command's `execute` export (what
@@ -683,6 +704,10 @@ export function registerRunnerMethods(dispatcher: RpcDispatcher): void {
   dispatcher.register('extension.runRootCommand', async (params) => {
     await runRootCommand(asRecord(params) as unknown as RunRootCommandParams)
     return null
+  })
+
+  dispatcher.register('extension.resolveSnippet', async (params) => {
+    return await resolveSnippet(asRecord(params) as unknown as RunRootCommandParams)
   })
 
   dispatcher.register('extension.runRootCommandView', (params) => {

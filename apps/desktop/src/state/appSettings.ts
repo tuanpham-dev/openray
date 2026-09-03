@@ -47,6 +47,8 @@ const DEFAULTS: Settings = {
   clipboardRetentionDays: 'never',
   fileSearchScopes: [],
   screenshotStorageDuration: 'unlimited',
+  snippetAutoExpand: false,
+  snippetAutoExpandMode: 'instant',
 }
 
 class AppSettingsStore {

@@ -161,6 +161,20 @@ pub struct Settings {
     /// `clamp_screenshot_storage_duration`.
     #[serde(default = "default_screenshot_storage_duration")]
     pub screenshot_storage_duration: String,
+    /// Whether snippet auto-expansion runs — typing a snippet's keyword in
+    /// any app replaces it in place with the expanded body. Off by default
+    /// since it needs OS input permissions (macOS Input Monitoring +
+    /// Accessibility) and is unavailable on Wayland. Toggled from the
+    /// Snippets settings pane; drives the native `AutoExpander` service.
+    #[serde(default)]
+    pub snippet_auto_expand: bool,
+    /// How a keyword triggers an auto-expansion — `"instant"` (expand the
+    /// moment the keyword is fully typed) or `"delimiter"` (expand only
+    /// once the keyword is followed by a space, tab, or enter, which is
+    /// consumed). Clamped to one of those two by
+    /// `clamp_snippet_auto_expand_mode`.
+    #[serde(default = "default_snippet_auto_expand_mode")]
+    pub snippet_auto_expand_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -291,6 +305,10 @@ fn default_screenshot_storage_duration() -> String {
     "unlimited".into()
 }
 
+fn default_snippet_auto_expand_mode() -> String {
+    "instant".into()
+}
+
 const RETENTION_DAY_TIERS: &[&str] = &["1", "7", "30", "90", "180", "365"];
 
 /// Keeps a hand-edited config or bad IPC payload from setting an
@@ -395,6 +413,15 @@ pub fn clamp_clipboard_retention_days(days: String) -> String {
 /// Keeps a hand-edited config or bad IPC payload from setting an
 /// unrecognized storage-duration tier — falls back to `"unlimited"`, the
 /// default.
+/// Keeps a hand-edited config or bad IPC payload from setting an
+/// unrecognized trigger mode — falls back to `"instant"`, the default.
+pub fn clamp_snippet_auto_expand_mode(mode: String) -> String {
+    match mode.as_str() {
+        "instant" | "delimiter" => mode,
+        _ => default_snippet_auto_expand_mode(),
+    }
+}
+
 pub fn clamp_screenshot_storage_duration(duration: String) -> String {
     if duration == "unlimited" || RETENTION_DAY_TIERS.contains(&duration.as_str()) {
         duration
@@ -453,6 +480,8 @@ impl Default for Settings {
             clipboard_retention_days: default_clipboard_retention_days(),
             file_search_scopes: Vec::new(),
             screenshot_storage_duration: default_screenshot_storage_duration(),
+            snippet_auto_expand: false,
+            snippet_auto_expand_mode: default_snippet_auto_expand_mode(),
         }
     }
 }
@@ -482,6 +511,7 @@ fn clamp_settings(settings: &mut Settings) {
     settings.clipboard_max_image_mb = clamp_clipboard_max_image_mb(settings.clipboard_max_image_mb);
     settings.clipboard_retention_days = clamp_clipboard_retention_days(settings.clipboard_retention_days.clone());
     settings.screenshot_storage_duration = clamp_screenshot_storage_duration(settings.screenshot_storage_duration.clone());
+    settings.snippet_auto_expand_mode = clamp_snippet_auto_expand_mode(settings.snippet_auto_expand_mode.clone());
 }
 
 /// Reads `settings.json` at `path`, tolerating both a missing file (fresh
@@ -637,6 +667,17 @@ mod tests {
         assert_eq!(settings.clipboard_retention_days, default_clipboard_retention_days());
         assert!(settings.file_search_scopes.is_empty());
         assert_eq!(settings.screenshot_storage_duration, default_screenshot_storage_duration());
+        assert!(!settings.snippet_auto_expand);
+        assert_eq!(settings.snippet_auto_expand_mode, default_snippet_auto_expand_mode());
+    }
+
+    #[test]
+    fn clamp_snippet_auto_expand_mode_accepts_known_values_and_falls_back_to_instant() {
+        for valid in ["instant", "delimiter"] {
+            assert_eq!(clamp_snippet_auto_expand_mode(valid.into()), valid);
+        }
+        assert_eq!(clamp_snippet_auto_expand_mode("bogus".into()), "instant");
+        assert_eq!(clamp_snippet_auto_expand_mode(String::new()), "instant");
     }
 
     #[test]

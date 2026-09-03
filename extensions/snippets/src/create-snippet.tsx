@@ -61,7 +61,8 @@ export function SnippetForm({ snippet, onSaved }: SnippetFormProps) {
       <Form.TextField
         id="keyword"
         title="Keyword"
-        placeholder="Optional — types alongside the name in search"
+        placeholder="Optional — searchable, and the auto-expand trigger"
+        info="Searchable alongside the name. When snippet auto-expansion is enabled in Settings, typing this keyword in any app replaces it with the expanded text — use a distinctive keyword like ;sig."
         defaultValue={snippet?.keyword}
         onChange={setKeyword}
       />
