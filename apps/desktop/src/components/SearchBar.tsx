@@ -22,10 +22,14 @@ interface SearchBarProps {
 
 export function SearchBar({ value, onChange, placeholder, onBack, trailing, loading, arguments: argumentFields }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const resolvedPlaceholder = placeholder ?? 'Search for apps and commands…'
   // With argument fields present the query shrinks to its own text so the
   // fields sit right beside it — Raycast puts them a single gap apart, not
-  // at opposite ends of the bar.
-  const [measureRef, queryWidth] = useAutoWidth<HTMLInputElement>(value, { min: 24, max: 420, placeholder: '' })
+  // at opposite ends of the bar. An *empty* query is measured against its
+  // placeholder rather than collapsing to `min`, which used to leave the
+  // fields sitting on top of it — "Search…" clipped to "Se" — before a
+  // single character had been typed.
+  const [measureRef, queryWidth] = useAutoWidth<HTMLInputElement>(value, { min: 24, max: 420, placeholder: resolvedPlaceholder })
   // Latest props for listeners that subscribe once.
   const latest = useRef({ value, onChange })
   latest.current = { value, onChange }
@@ -127,7 +131,7 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, load
           suppressHoverSelection()
           onChange(event.target.value)
         }}
-        placeholder={placeholder ?? 'Search for apps and commands…'}
+        placeholder={resolvedPlaceholder}
         style={argumentFields ? { flex: '0 0 auto', width: queryWidth } : undefined}
         autoFocus
         spellCheck={false}
