@@ -74,7 +74,6 @@ const K_CG_EVENT_TAP_DISABLED_BY_USER_INPUT: u32 = 0xFFFF_FFFF;
 const K_CG_KEYBOARD_EVENT_KEYCODE: u32 = 9;
 // CGEventFlags masks.
 const K_CG_EVENT_FLAG_MASK_CONTROL: u64 = 0x0004_0000;
-const K_CG_EVENT_FLAG_MASK_ALTERNATE: u64 = 0x0008_0000;
 const K_CG_EVENT_FLAG_MASK_COMMAND: u64 = 0x0010_0000;
 
 /// One decoded key-down, handed to the auto-expander's matcher.
@@ -83,9 +82,11 @@ pub struct MacKeyEvent {
     pub keycode: u16,
     /// The first character the key produced under the current layout, if any.
     pub text: Option<char>,
+    /// Cmd and Ctrl only: the matcher treats those as chords, while Option
+    /// is a typing modifier on macOS layouts and is already reflected in
+    /// `text` (see `classify_macos`).
     pub command: bool,
     pub control: bool,
-    pub alternate: bool,
 }
 
 type Handler = Box<dyn Fn(MacKeyEvent) + Send + Sync>;
@@ -122,7 +123,6 @@ extern "C" fn tap_callback(_proxy: CGEventTapProxy, etype: u32, event: CGEventRe
                 text,
                 command: flags & K_CG_EVENT_FLAG_MASK_COMMAND != 0,
                 control: flags & K_CG_EVENT_FLAG_MASK_CONTROL != 0,
-                alternate: flags & K_CG_EVENT_FLAG_MASK_ALTERNATE != 0,
             });
         }
     }
