@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, confirmAlert, Icon, List, open, showHUD, showToast, Toast } from '@raycast/api'
+import { Action, ActionPanel, confirmAlert, Icon, List, open, showHUD } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { deleteQuicklink, listQuicklinks, type Quicklink } from './storage'
-import { resolveUrl, takesArgument } from './resolve'
+import { argumentField, resolveUrl } from './resolve'
 import { QuicklinkForm } from './create-quicklink'
 
 export default function SearchQuicklinks() {
@@ -19,15 +19,8 @@ export default function SearchQuicklinks() {
     void refresh()
   }, [])
 
-  const runQuicklink = async (quicklink: Quicklink) => {
-    if (takesArgument(quicklink.urlTemplate)) {
-      // Argument-taking quicklinks are launched through root search's own
-      // argument-bar flow, not from inside this management list — nudge
-      // instead of silently opening with an empty value.
-      await showToast({ style: Toast.Style.Failure, title: 'This quicklink needs an argument', message: 'Launch it from the main search instead.' })
-      return
-    }
-    const url = await resolveUrl(quicklink.urlTemplate, '')
+  const runQuicklink = async (quicklink: Quicklink, values: Record<string, string>) => {
+    const url = await resolveUrl(quicklink.urlTemplate, values.argument ?? '')
     await open(url)
   }
 
@@ -59,7 +52,17 @@ export default function SearchQuicklinks() {
           subtitle={quicklink.urlTemplate}
           actions={
             <ActionPanel>
-              <Action title="Open" icon={Icon.ExternalLink} onAction={() => void runQuicklink(quicklink)} />
+              {/* A quicklink holding `{query}`/`{argument}` collects it in
+                  this list's own search bar, exactly as root search does.
+                  It used to refuse outright and point at root search
+                  instead, which left the link visibly listed but
+                  unrunnable from the one place you go to find it. */}
+              <Action
+                title="Open"
+                icon={Icon.ExternalLink}
+                arguments={argumentField(quicklink.urlTemplate)}
+                onAction={(values) => void runQuicklink(quicklink, values)}
+              />
               <Action.CopyToClipboard title="Copy Link" content={quicklink.urlTemplate} />
               <Action.Push title="Edit" icon={Icon.Pencil} target={<QuicklinkForm quicklink={quicklink} onSaved={refresh} />} />
               <Action.Push title="Create Quicklink" icon={Icon.Plus} target={<QuicklinkForm onSaved={refresh} />} />
@@ -71,3 +74,4 @@ export default function SearchQuicklinks() {
     </List>
   )
 }
+

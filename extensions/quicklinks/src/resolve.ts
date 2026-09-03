@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { Clipboard, getSelectedText } from '@raycast/api'
-import { argumentSpecs, expand, type Context } from '@openray/placeholders'
+import { argumentSpecs, expand, type ArgumentSpec, type Context } from '@openray/placeholders'
 
 /** Raycast's spelling is `{argument}` (with optional attributes, handled
  *  by the placeholder parser); `{query}` is what this app shipped with
@@ -9,6 +9,17 @@ const LEGACY_QUERY_PLACEHOLDER = '{query}'
 
 export function takesArgument(urlTemplate: string): boolean {
   return urlTemplate.includes(LEGACY_QUERY_PLACEHOLDER) || argumentSpecs(urlTemplate).length > 0
+}
+
+/** The inline field the palette collects before opening this quicklink, or
+ *  `undefined` when the template has nothing to substitute. Named after the
+ *  template's own `{argument name="…"}` where it says one; only a single
+ *  value is carried end to end, so there is only ever one field (see
+ *  `ExtensionArgument`'s note in the host protocol). */
+export function argumentField(urlTemplate: string): { name: string; placeholder: string }[] | undefined {
+  if (!takesArgument(urlTemplate)) return undefined
+  const spec: ArgumentSpec | undefined = argumentSpecs(urlTemplate)[0]
+  return [{ name: 'argument', placeholder: spec?.name ?? 'Query' }]
 }
 
 /** Makes a user-entered link openable. `open()` needs a scheme; a bare
