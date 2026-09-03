@@ -1,5 +1,6 @@
 import type { UiNode } from '@openray/protocol'
 import type { PaletteAction } from '../state/actions'
+import type { CommandArgument } from '../components/types'
 import { invokeExtensionCallback } from '../ipc/extensionHost'
 import { resolveVisual } from './resolveVisual'
 
@@ -110,6 +111,30 @@ export function findActionsSlot(node: UiNode | undefined, nodes: Record<string, 
  * reused as-is rather than forked, per the plan's shared-component-library
  * constraint.
  */
+/** An `Action`'s declared inline arguments, normalised to the shape
+ *  `ArgumentFields` already renders for a command's own arguments — so an
+ *  extension's action gets the identical search-bar treatment rather than a
+ *  second, parallel prompt. Anything malformed is dropped rather than
+ *  rendered as a nameless field. */
+function argumentsFrom(prop: unknown): CommandArgument[] | undefined {
+  if (!Array.isArray(prop)) return undefined
+  const declared = prop.flatMap((entry): CommandArgument[] => {
+    if (!entry || typeof entry !== 'object') return []
+    const { name, type, placeholder, required } = entry as Record<string, unknown>
+    if (typeof name !== 'string' || name === '') return []
+    return [
+      {
+        name,
+        type: type === 'password' ? 'password' : 'text',
+        placeholder: typeof placeholder === 'string' ? placeholder : null,
+        // An action that asks for a value normally cannot run without one.
+        required: required !== false,
+      },
+    ]
+  })
+  return declared.length > 0 ? declared : undefined
+}
+
 export function actionsFromSlot(slot: UiNode | undefined, nodes: Record<string, UiNode>): PaletteAction[] {
   if (!slot) return []
   const actions: PaletteAction[] = []
@@ -119,6 +144,7 @@ export function actionsFromSlot(slot: UiNode | undefined, nodes: Record<string, 
     if (!node) return
     if (node.type === 'Action') {
       const callbackId = callbackIdFrom(node.props.onAction)
+      const declared = argumentsFrom(node.props.arguments)
       actions.push({
         id: node.id,
         title: typeof node.props.title === 'string' ? node.props.title : 'Action',
@@ -128,7 +154,12 @@ export function actionsFromSlot(slot: UiNode | undefined, nodes: Record<string, 
         // those icons silently.
         icon: resolveVisual(node.props.icon).source || undefined,
         shortcut: shortcutLabel(node.props.shortcut),
-        onAction: () => (callbackId ? invokeExtensionCallback(callbackId) : Promise.resolve()),
+        arguments: declared,
+        // The collected values are only passed on when the action asked for
+        // them, so an action taking none keeps being called with no
+        // arguments at all.
+        onAction: (values) =>
+          callbackId ? invokeExtensionCallback(callbackId, declared ? [values ?? {}] : []) : Promise.resolve(),
       })
       return
     }

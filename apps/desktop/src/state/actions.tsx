@@ -2,14 +2,18 @@ import type { ReactNode } from 'react'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { CopyIcon, ExternalLinkIcon, EyeOffIcon } from '../components/icons'
 import { hidePalette } from '../ipc/window'
-import type { PaletteItem } from '../components/types'
+import type { CommandArgument, PaletteItem } from '../components/types'
 
 export interface PaletteAction {
   id: string
   title: string
   icon?: ReactNode
   shortcut?: string
-  onAction: () => void | Promise<void>
+  /** Fields collected inline in the search bar before this action runs, in
+   *  the same bar root search collects a command's arguments in. Present
+   *  only for an extension action that declared them. */
+  arguments?: CommandArgument[]
+  onAction: (values?: Record<string, string>) => void | Promise<void>
 }
 
 function genericActions(item: PaletteItem, activate: (item: PaletteItem) => void): PaletteAction[] {

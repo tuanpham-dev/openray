@@ -6,6 +6,16 @@ export function takesArgument(body: string): boolean {
   return argumentSpecs(body).length > 0
 }
 
+/** The inline field the palette collects before inserting this snippet, or
+ *  `undefined` when the body has nothing to substitute. Named after the
+ *  body's own `{argument name="…"}` where it says one; only a single value
+ *  is carried end to end, so there is only ever one field. */
+export function argumentField(body: string): { name: string; placeholder: string }[] | undefined {
+  const spec = argumentSpecs(body)[0]
+  if (!spec) return undefined
+  return [{ name: 'argument', placeholder: spec.name ?? 'Value' }]
+}
+
 /** A resolved snippet ready to insert.
  *  - `text` — the fully-expanded body with every `{cursor}` marker removed.
  *  - `cursorOffset` — where the caret should land, as a count of Unicode

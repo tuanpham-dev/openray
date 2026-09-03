@@ -116,3 +116,49 @@ describe('actionsFromSlot', () => {
     expect(findActionsSlot(form, nodes)?.id).toBe('slot')
   })
 })
+
+/**
+ * An action can ask the palette to collect a value before it runs, which is
+ * what makes an argument-taking quicklink or snippet runnable from the list
+ * it is listed in rather than only from root search.
+ */
+describe('actionsFromSlot argument fields', () => {
+  function panelWith(props: Record<string, unknown>): { slot: UiNode; nodes: Record<string, UiNode> } {
+    const nodes: Record<string, UiNode> = {
+      action: { id: 'action', type: 'Action', props: { title: 'Open', ...props }, children: [] },
+      panel: { id: 'panel', type: 'ActionPanel', props: {}, children: ['action'] },
+    }
+    const slot: UiNode = { id: 'slot', type: '__actions', props: {}, children: ['panel'] }
+    nodes.slot = slot
+    return { slot, nodes }
+  }
+
+  it('leaves an action that declares nothing without fields', () => {
+    const { slot, nodes } = panelWith({})
+    expect(actionsFromSlot(slot, nodes)[0]?.arguments).toBeUndefined()
+  })
+
+  it('normalises a declared argument into the shape the search bar renders', () => {
+    const { slot, nodes } = panelWith({ arguments: [{ name: 'argument', placeholder: 'Query' }] })
+    expect(actionsFromSlot(slot, nodes)[0]?.arguments).toEqual([
+      { name: 'argument', type: 'text', placeholder: 'Query', required: true },
+    ])
+  })
+
+  it('treats an argument as required unless it says otherwise', () => {
+    const { slot, nodes } = panelWith({ arguments: [{ name: 'a' }, { name: 'b', required: false }] })
+    expect(actionsFromSlot(slot, nodes)[0]?.arguments?.map((argument) => argument.required)).toEqual([true, false])
+  })
+
+  it('drops entries with no usable name rather than rendering a nameless field', () => {
+    const { slot, nodes } = panelWith({ arguments: [{ name: '' }, 'nonsense', { name: 'ok' }] })
+    expect(actionsFromSlot(slot, nodes)[0]?.arguments).toEqual([
+      { name: 'ok', type: 'text', placeholder: null, required: true },
+    ])
+  })
+
+  it('ignores an arguments prop that is not a list', () => {
+    const { slot, nodes } = panelWith({ arguments: { name: 'argument' } })
+    expect(actionsFromSlot(slot, nodes)[0]?.arguments).toBeUndefined()
+  })
+})

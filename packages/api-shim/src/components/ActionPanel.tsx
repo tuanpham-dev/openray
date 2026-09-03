@@ -6,11 +6,27 @@ import { open as openTarget, showHUD, showInFinder } from '../api/system'
 import { Icon } from '../api/icon'
 import { withFallbacks } from './namespace-fallback'
 
+/** A value the palette collects before running an action, in the list's own
+ *  search bar — the same inline fields root search puts a command's
+ *  arguments in, rather than a pushed prompt. `required` defaults to true:
+ *  an action that asks for a value normally can't run without one. */
+export interface ActionArgument {
+  name: string
+  type?: 'text' | 'password'
+  placeholder?: string
+  required?: boolean
+}
+
 export interface ActionProps {
   title: string
   icon?: string
   shortcut?: { modifiers: string[]; key: string }
-  onAction?: () => void
+  /** Collected inline before `onAction`, which receives the values keyed
+   *  by name. A list row whose action needs a value — a quicklink with
+   *  `{argument}`, a snippet with a placeholder — is then runnable from the
+   *  list it is listed in, instead of only from root search. */
+  arguments?: ActionArgument[]
+  onAction?: (values: Record<string, string>) => void
   style?: 'regular' | 'destructive'
 }
 

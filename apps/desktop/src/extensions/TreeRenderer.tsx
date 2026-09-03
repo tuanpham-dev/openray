@@ -19,6 +19,7 @@ import { useExtensionRootNode, useExtensionTree } from './registry'
 import { looksLikeIconName, lookupSystemIcon } from '../components/systemIconNames'
 import { useVirtualizedGrid } from './useVirtualizedGrid'
 import { actionsFromSlot, findActionsSlot, matchesShortcut, parseShortcut } from './actions'
+import { ArgumentFields, type ArgumentFieldsHandle } from '../components/ArgumentFields'
 import { fuzzyScore } from './fuzzyMatch'
 import { invokeExtensionCallback } from '../ipc/extensionHost'
 import { openUrl } from '../ipc/window'
@@ -467,6 +468,71 @@ function ListDropdownAccessory({
   )
 }
 
+/**
+ * The inline argument fields for the selected row's primary action.
+ *
+ * Root search puts a command's own arguments right in its search bar and
+ * runs on a single ↵. An extension's list or grid gets the identical
+ * treatment for an action that declares `arguments`, so a row that needs a
+ * value — a quicklink holding `{argument}`, a snippet with a placeholder —
+ * is runnable from the view that lists it, rather than only from root
+ * search after being told to go there.
+ */
+function useActionArguments(actions: PaletteAction[]): {
+  /** Rendered into the search bar; absent when nothing asks for a value. */
+  argumentFields: ReactNode
+  /** Runs an action with whatever its fields hold. */
+  runAction: (action: PaletteAction) => void
+  /** `actions`, with the ⌘K panel's copies routed through `runAction`. */
+  panelActions: PaletteAction[]
+} {
+  const [values, setValues] = useState<Record<string, string>>({})
+  const fieldsRef = useRef<ArgumentFieldsHandle>(null)
+  const declared = actions[0]?.arguments
+
+  // Moving to a row that asks for different fields clears what the last one
+  // collected; staying on fields of the same shape keeps them.
+  const shape = (declared ?? []).map((argument) => argument.name).join('\u0000')
+  useEffect(() => {
+    setValues({})
+  }, [shape])
+
+  const runAction = useCallback(
+    (action: PaletteAction) => {
+      // A *required* field left empty isn't an error to report — root
+      // search simply doesn't run yet — so the caret goes there instead.
+      const fields = action.arguments ?? []
+      const missing = fields.findIndex((argument) => argument.required && !(values[argument.name] ?? '').trim())
+      if (missing >= 0) {
+        fieldsRef.current?.focus(missing)
+        return
+      }
+      void action.onAction(values)
+    },
+    [values],
+  )
+
+  const panelActions = useMemo(
+    () => actions.map((action) => (action.arguments ? { ...action, onAction: () => runAction(action) } : action)),
+    [actions, runAction],
+  )
+
+  const primary = actions[0]
+  const argumentFields =
+    declared && primary ? (
+      <ArgumentFields
+        ref={fieldsRef}
+        args={declared}
+        values={values}
+        onChange={(name, value) => setValues((current) => ({ ...current, [name]: value }))}
+        onSubmit={() => runAction(primary)}
+        onExit={() => document.querySelector<HTMLInputElement>('.openray-search-input')?.focus()}
+      />
+    ) : undefined
+
+  return { argumentFields, runAction, panelActions }
+}
+
 function ExtensionList({
   node,
   nodes,
@@ -504,13 +570,18 @@ function ExtensionList({
     return () => clearTimeout(timer)
   }, [searchCallback, searchText])
 
+  // Held in a ref, not read directly: `useActionArguments` needs the
+  // selected row's actions, which need the selected index, which needs this
+  // callback — so the runner only exists further down.
+  const runActionRef = useRef<(action: PaletteAction) => void>(() => {})
+
   const onActivate = useCallback(
     (index: number, secondary?: boolean) => {
       const entry = filtered[index]
       if (!entry) return
       const entryActions = actionsFromSlot(findActionsSlot(entry.item, nodes), nodes)
       const action: PaletteAction | undefined = secondary ? entryActions[1] : entryActions[0]
-      void action?.onAction()
+      if (action) runActionRef.current(action)
     },
     [filtered, nodes],
   )
@@ -544,10 +615,16 @@ function ExtensionList({
     return actionsFromSlot(selected && findActionsSlot(selected.item, nodes), nodes)
   }, [filtered, selectedIndex, nodes, emptyView])
 
+  const { argumentFields, runAction, panelActions } = useActionArguments(actions)
+  runActionRef.current = runAction
+
   // `List.Item.detail` (T28: first consumer, clipboard-history's preview
   // pane) switches the whole list into a two-column layout — matching
   // Raycast, where using `detail` on any item applies list-wide, not
   // per-item — showing the *selected* item's own detail on the right.
+  // The selected row's primary action decides whether the search bar grows
+  // argument fields, and moving to a row that wants different ones clears
+  // what the last row collected.
   const hasDetail = useMemo(() => filtered.some(({ item }) => findChildByType(item, nodes, 'Detail')), [filtered, nodes])
   const selectedDetail = useMemo(() => {
     const selected = filtered[selectedIndex]
@@ -597,6 +674,7 @@ function ExtensionList({
         placeholder="Search…"
         onBack={onBack}
         loading={propBoolean(node, 'isLoading')}
+        arguments={argumentFields}
         trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} onValueChange={setAccessoryValue} onOpenChange={setDropdownOpen} />}
       />
       {hasDetail ? (
@@ -607,7 +685,7 @@ function ExtensionList({
       ) : (
         rows
       )}
-      {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
+      {actionPanelOpen && <ActionPanel actions={panelActions} onClose={() => setActionPanelOpen(false)} />}
       <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} extensionId={extensionId} />
     </div>
   )
@@ -748,13 +826,18 @@ function ExtensionGrid({
     if (selectedIndex >= filtered.length) setSelectedIndex(Math.max(0, filtered.length - 1))
   }, [filtered.length, selectedIndex])
 
+  // Held in a ref, not read directly: `useActionArguments` needs the
+  // selected row's actions, which need the selected index, which needs this
+  // callback — so the runner only exists further down.
+  const runActionRef = useRef<(action: PaletteAction) => void>(() => {})
+
   const onActivate = useCallback(
     (index: number, secondary?: boolean) => {
       const entry = filtered[index]
       if (!entry) return
       const entryActions = actionsFromSlot(findActionsSlot(entry.item, nodes), nodes)
       const action: PaletteAction | undefined = secondary ? entryActions[1] : entryActions[0]
-      void action?.onAction()
+      if (action) runActionRef.current(action)
     },
     [filtered, nodes],
   )
@@ -780,6 +863,9 @@ function ExtensionGrid({
     const selected = filtered[selectedIndex]
     return actionsFromSlot(selected && findActionsSlot(selected.item, nodes), nodes)
   }, [filtered, selectedIndex, nodes, emptyView])
+
+  const { argumentFields, runAction, panelActions } = useActionArguments(actions)
+  runActionRef.current = runAction
 
   // 2D navigation: ←/→ step one cell, ↑/↓ step a whole row (`columns`),
   // clamped rather than wrapped so the last partial row is reachable.
@@ -882,6 +968,7 @@ function ExtensionGrid({
         placeholder={propString(node, 'searchBarPlaceholder') ?? 'Search…'}
         onBack={onBack}
         loading={propBoolean(node, 'isLoading')}
+        arguments={argumentFields}
         trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} onValueChange={setAccessoryValue} onOpenChange={setDropdownOpen} />}
       />
       <div
@@ -893,7 +980,7 @@ function ExtensionGrid({
         {filtered.length === 0 && (emptyView ? <EmptyViewContent node={emptyView} /> : <div className="openray-empty-view">No results</div>)}
         {cells}
       </div>
-      {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
+      {actionPanelOpen && <ActionPanel actions={panelActions} onClose={() => setActionPanelOpen(false)} />}
       <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} extensionId={extensionId} />
     </div>
   )

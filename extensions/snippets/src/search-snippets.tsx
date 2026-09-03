@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Action, ActionPanel, Clipboard, confirmAlert, Icon, List, showHUD, showToast, Toast } from '@raycast/api'
+import { Action, ActionPanel, Clipboard, confirmAlert, Icon, List, showHUD } from '@raycast/api'
 import { refreshRootCommands } from '@openray/extras'
 import { deleteSnippet, listSnippets, type Snippet } from './storage'
-import { resolveBody, takesArgument } from './resolve'
+import { argumentField, resolveBody } from './resolve'
 import { SnippetForm } from './create-snippet'
 
 export default function SearchSnippets() {
@@ -19,20 +19,13 @@ export default function SearchSnippets() {
     void refresh()
   }, [])
 
-  const pasteSnippet = async (snippet: Snippet) => {
-    if (takesArgument(snippet.body)) {
-      // Argument-taking snippets are launched through root search's own
-      // argument-bar flow, not from inside this management list — nudge
-      // instead of silently pasting an empty value.
-      await showToast({ style: Toast.Style.Failure, title: 'This snippet needs an argument', message: 'Launch it from the main search instead.' })
-      return
-    }
-    const { text } = await resolveBody(snippet.body, '')
+  const pasteSnippet = async (snippet: Snippet, values: Record<string, string>) => {
+    const { text } = await resolveBody(snippet.body, values.argument ?? '')
     await Clipboard.paste(text)
   }
 
-  const copySnippet = async (snippet: Snippet) => {
-    const { text } = await resolveBody(snippet.body, '')
+  const copySnippet = async (snippet: Snippet, values: Record<string, string>) => {
+    const { text } = await resolveBody(snippet.body, values.argument ?? '')
     await Clipboard.copy(text)
     await showHUD('Copied to Clipboard')
   }
@@ -67,8 +60,23 @@ export default function SearchSnippets() {
           accessories={snippet.keyword ? [{ tag: snippet.keyword }] : []}
           actions={
             <ActionPanel>
-              <Action title="Paste" icon={Icon.Clipboard} onAction={() => void pasteSnippet(snippet)} />
-              <Action title="Copy to Clipboard" icon="copy" onAction={() => void copySnippet(snippet)} />
+              {/* A snippet with a placeholder collects it in this list's
+                  own search bar, exactly as root search does. It used to
+                  refuse outright and point at root search instead, which
+                  left the snippet visibly listed but unusable from the one
+                  place you go to find it. */}
+              <Action
+                title="Paste"
+                icon={Icon.Clipboard}
+                arguments={argumentField(snippet.body)}
+                onAction={(values) => void pasteSnippet(snippet, values)}
+              />
+              <Action
+                title="Copy to Clipboard"
+                icon="copy"
+                arguments={argumentField(snippet.body)}
+                onAction={(values) => void copySnippet(snippet, values)}
+              />
               <Action.Push title="Edit" icon={Icon.Pencil} target={<SnippetForm snippet={snippet} onSaved={refresh} />} />
               <Action.Push title="Create Snippet" icon={Icon.Plus} target={<SnippetForm onSaved={refresh} />} />
               <Action title="Delete" icon={Icon.Trash} style="destructive" onAction={() => void remove(snippet)} />
