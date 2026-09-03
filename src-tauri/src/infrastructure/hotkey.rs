@@ -238,16 +238,16 @@ pub fn sync_bindings(app: &AppHandle, palette_hotkey: &str, command_settings: &H
     if is_wayland() {
         let shortcuts = desired
             .iter()
-            .filter_map(|binding| {
+            .map(|binding| {
                 let id = match &binding.action {
                     HotkeyAction::TogglePalette => "toggle-palette".to_string(),
                     HotkeyAction::RunCommand(command_id) => format!("cmd:{command_id}"),
                 };
-                Some(crate::infrastructure::wayland_hotkey::PortalShortcut {
+                crate::infrastructure::wayland_hotkey::PortalShortcut {
                     id,
                     trigger: hotkey_to_xdg_trigger(&binding.hotkey),
                     description: binding.description.clone(),
-                })
+                }
             })
             .collect();
         crate::infrastructure::wayland_hotkey::spawn_registration_multi(app.clone(), shortcuts);
