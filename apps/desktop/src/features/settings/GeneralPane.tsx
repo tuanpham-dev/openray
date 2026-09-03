@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { listen } from '@tauri-apps/api/event'
 import { HotkeyRecorder } from './HotkeyRecorder'
 import { Toggle } from './Toggle'
 import { SegmentedControl } from './SegmentedControl'
 import { ChevronDownIcon, MoonIcon, SunIcon, SystemThemeIcon, WindowSizeIcon } from '../../components/icons'
 import { updateSettings, updateHotkey, type Settings, type WindowSize } from '../../ipc/settings'
 import type { ThemePreference } from '../../theme/ThemeProvider'
+import { useAppEvent } from '../../ipc/events'
 
 const THEME_OPTIONS = [
   { value: 'light' as const, label: 'Light', icon: <SunIcon /> },
@@ -38,12 +38,7 @@ interface GeneralPaneProps {
 export function GeneralPane({ settings, onChange }: GeneralPaneProps) {
   const [hotkeyUnavailable, setHotkeyUnavailable] = useState(false)
 
-  useEffect(() => {
-    const unlisten = listen('hotkey-unavailable', () => setHotkeyUnavailable(true))
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [])
+  useAppEvent('hotkey-unavailable', () => setHotkeyUnavailable(true))
 
   useEffect(() => {
     setHotkeyUnavailable(false)

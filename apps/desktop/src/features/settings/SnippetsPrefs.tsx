@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { useState } from 'react'
 import { Toggle } from './Toggle'
 import { SegmentedControl } from './SegmentedControl'
 import { SparklesIcon, TextIcon } from '../../components/icons'
 import { updateSettings, type Settings } from '../../ipc/settings'
+import { useAppEvent } from '../../ipc/events'
 
 interface BuiltinPrefsProps {
   settings: Settings
@@ -23,14 +23,9 @@ const MODE_OPTIONS: { value: Settings['snippetAutoExpandMode']; label: string; i
 export function SnippetsPrefs({ settings, onChange }: BuiltinPrefsProps) {
   const [unavailableReason, setUnavailableReason] = useState<string | null>(null)
 
-  useEffect(() => {
-    const unlisten = listen<string>('snippet-auto-expand-unavailable', (event) => {
-      setUnavailableReason(event.payload || 'unknown')
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [])
+  useAppEvent<string>('snippet-auto-expand-unavailable', (reason) => {
+    setUnavailableReason(reason || 'unknown')
+  })
 
   const save = (patch: Partial<Settings>) => {
     const next = { ...settings, ...patch }

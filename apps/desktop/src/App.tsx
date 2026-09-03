@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArgumentFields, type ArgumentFieldsHandle } from './components/ArgumentFields'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
-import { listen } from '@tauri-apps/api/event'
 import { hidePalette } from './ipc/window'
 import { search, runCommand, runCommandWithArguments, type InlineRow } from './ipc/search'
 import { openSettings } from './ipc/settings'
@@ -31,6 +30,7 @@ import { useAppSettings } from './state/appSettings'
 import './theme/tokens.css'
 import './components/palette.css'
 import './App.css'
+import { useAppEvent } from './ipc/events'
 
 const SEARCH_DEBOUNCE_MS = 80
 
@@ -114,14 +114,7 @@ function Palette() {
   // Staleness is already resolved backend-side (a stale in-flight query's
   // reply is dropped before this event is ever emitted), so every event
   // that does arrive here is safe to apply as-is.
-  useEffect(() => {
-    const unlisten = listen<{ rows: InlineRow[] }>('inline-rows', (event) => {
-      setInlineRows(event.payload.rows)
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [])
+  useAppEvent<{ rows: InlineRow[] }>('inline-rows', ({ rows }) => setInlineRows(rows))
 
   /**
    * Launches an extension command by its parsed id, optionally with the
@@ -222,14 +215,7 @@ function Palette() {
     void runCommand(item.id)
   }, [])
 
-  useEffect(() => {
-    const unlisten = listen<PaletteItem>('hotkey-command', (event) => {
-      launchItem(event.payload)
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [launchItem])
+  useAppEvent<PaletteItem>('hotkey-command', launchItem)
 
   // `openray run <id>` on a view-mode command: like the hotkey path above,
   // the launch didn't originate from this window's own invoke call, so
@@ -237,21 +223,15 @@ function Palette() {
   // window (`run_headless`) and emits this instead, carrying exactly what
   // `launchExtensionCommand` needs to do the same invoke+setView any other
   // launch does.
-  useEffect(() => {
-    const unlisten = listen<{
-      extensionId: string
-      commandName: string
-      title: string
-      icon?: string | null
-      arguments?: Record<string, string>
-    }>('cli-run-extension-command', (event) => {
-      const { extensionId, commandName, title, icon, arguments: args } = event.payload
-      launchExtensionCommand(extensionId, commandName, title, icon, args)
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [launchExtensionCommand])
+  useAppEvent<{
+    extensionId: string
+    commandName: string
+    title: string
+    icon?: string | null
+    arguments?: Record<string, string>
+  }>('cli-run-extension-command', ({ extensionId, commandName, title, icon, arguments: args }) => {
+    launchExtensionCommand(extensionId, commandName, title, icon, args)
+  })
 
   // Tears down a mounted extension command's own timers/effects the moment
   // its view stops being current — every back/close path for an extension
@@ -292,40 +272,29 @@ function Palette() {
   //
   // A failed build re-launches nothing (there's no new bundle to run) and
   // surfaces as a toast instead, leaving the last working version mounted.
-  useEffect(() => {
-    const unlisten = listen<DevBuildEvent>('extension-dev-build', (event) => {
-      const build = event.payload
-      if (build.errors.length > 0) {
-        setToast({
-          id: `dev-build-${build.extensionId}`,
-          style: 'FAILURE',
-          title: `${build.extensionId} failed to build`,
-          message: build.errors[0],
-        })
-        return
-      }
-      const current = viewRef.current
-      if (current.type !== 'extension' || current.extensionId !== build.extensionId) return
-      extensionTreeStore.reset()
-      void runExtensionCommand(current.extensionId, current.commandName, current.args, current.positionalArgument)
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
+  useAppEvent<DevBuildEvent>('extension-dev-build', (build) => {
+    if (build.errors.length > 0) {
+      setToast({
+        id: `dev-build-${build.extensionId}`,
+        style: 'FAILURE',
+        title: `${build.extensionId} failed to build`,
+        message: build.errors[0],
+      })
+      return
     }
-  }, [])
+    const current = viewRef.current
+    if (current.type !== 'extension' || current.extensionId !== build.extensionId) return
+    extensionTreeStore.reset()
+    void runExtensionCommand(current.extensionId, current.commandName, current.args, current.positionalArgument)
+  })
 
   // popToRoot()/closeMainWindow() from an extension: back to the root
   // search view, optionally clearing the query (Raycast's default for
   // popToRoot).
-  useEffect(() => {
-    const unlisten = listen<{ clearSearchBar?: boolean }>('extension-pop-to-root', (event) => {
-      setView({ type: 'search' })
-      if (event.payload.clearSearchBar) setQuery('')
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [])
+  useAppEvent<{ clearSearchBar?: boolean }>('extension-pop-to-root', ({ clearSearchBar }) => {
+    setView({ type: 'search' })
+    if (clearSearchBar) setQuery('')
+  })
 
   // Raycast-style "Pop to Root Search": how long after the palette is
   // hidden its query/view/selection reset back to root search on next
@@ -333,42 +302,37 @@ function Palette() {
   // (and reset, mirroring the extension-pop-to-root handler above) happens
   // on the following `palette-shown`, since "never"/"immediately" are
   // meaningless without knowing whether the palette is being reopened now.
-  useEffect(() => {
-    const unlistenHidden = listen('palette-hidden', () => {
-      hiddenAtRef.current = Date.now()
-    })
-    const unlistenShown = listen('palette-shown', () => {
-      // The NSPanel/native window becoming key (macos_panel::show's
-      // show_and_make_key) doesn't put DOM focus on any particular
-      // element inside the webview — without this, the search input only
-      // has focus if it happened to already have it (e.g. survived from
-      // before the palette was hidden), so a keystroke right after
-      // reopening can silently go nowhere.
-      document.querySelector<HTMLInputElement>('.openray-search-input')?.focus()
+  useAppEvent('palette-hidden', () => {
+    hiddenAtRef.current = Date.now()
+  })
 
-      const hiddenAt = hiddenAtRef.current
-      hiddenAtRef.current = null
-      if (popToRootDelay === 'never' || hiddenAt === null) return
-      const elapsedMs = Date.now() - hiddenAt
-      const dueMs = popToRootDelay === 'immediately' ? 0 : Number(popToRootDelay) * 1000
-      if (elapsedMs >= dueMs) {
-        setView({ type: 'search' })
-        setQuery('')
-        setArgumentValues({})
-        // Popping to root rewinds the list's own scroll too. The webview
-        // survives a hide, so a palette left scrolled mid-list comes back
-        // scrolled there — with the "Suggestions" heading above the first
-        // row out of view — whenever the reset doesn't happen to move the
-        // selection (it was already on the first row).
-        const list = document.querySelector<HTMLElement>('.openray-result-list')
-        if (list) list.scrollTop = 0
-      }
-    })
-    return () => {
-      void unlistenHidden.then((fn) => fn())
-      void unlistenShown.then((fn) => fn())
+  useAppEvent('palette-shown', () => {
+    // The NSPanel/native window becoming key (macos_panel::show's
+    // show_and_make_key) doesn't put DOM focus on any particular
+    // element inside the webview — without this, the search input only
+    // has focus if it happened to already have it (e.g. survived from
+    // before the palette was hidden), so a keystroke right after
+    // reopening can silently go nowhere.
+    document.querySelector<HTMLInputElement>('.openray-search-input')?.focus()
+
+    const hiddenAt = hiddenAtRef.current
+    hiddenAtRef.current = null
+    if (popToRootDelay === 'never' || hiddenAt === null) return
+    const elapsedMs = Date.now() - hiddenAt
+    const dueMs = popToRootDelay === 'immediately' ? 0 : Number(popToRootDelay) * 1000
+    if (elapsedMs >= dueMs) {
+      setView({ type: 'search' })
+      setQuery('')
+      setArgumentValues({})
+      // Popping to root rewinds the list's own scroll too. The webview
+      // survives a hide, so a palette left scrolled mid-list comes back
+      // scrolled there — with the "Suggestions" heading above the first
+      // row out of view — whenever the reset doesn't happen to move the
+      // selection (it was already on the first row).
+      const list = document.querySelector<HTMLElement>('.openray-result-list')
+      if (list) list.scrollTop = 0
     }
-  }, [popToRootDelay])
+  })
 
   const onActivate = useCallback(
     (index: number, secondary?: boolean, shift?: boolean) => {
