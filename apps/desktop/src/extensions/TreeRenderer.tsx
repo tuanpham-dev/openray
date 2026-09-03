@@ -473,12 +473,14 @@ function ExtensionList({
   onBack,
   title,
   icon,
+  extensionId,
 }: {
   node: UiNode
   nodes: Record<string, UiNode>
   onBack?: () => void
   title?: string
   icon?: string | null
+  extensionId?: string
 }) {
   const [searchText, setSearchText] = useControlledSearchText(node)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
@@ -594,7 +596,6 @@ function ExtensionList({
         onChange={setSearchText}
         placeholder="Search…"
         onBack={onBack}
-        title={propString(node, 'navigationTitle')}
         loading={propBoolean(node, 'isLoading')}
         trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} onValueChange={setAccessoryValue} onOpenChange={setDropdownOpen} />}
       />
@@ -607,7 +608,7 @@ function ExtensionList({
         rows
       )}
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} />
+      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} extensionId={extensionId} />
     </div>
   )
 }
@@ -686,12 +687,14 @@ function ExtensionGrid({
   onBack,
   title,
   icon,
+  extensionId,
 }: {
   node: UiNode
   nodes: Record<string, UiNode>
   onBack?: () => void
   title?: string
   icon?: string | null
+  extensionId?: string
 }) {
   const [searchText, setSearchText] = useControlledSearchText(node)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
@@ -878,7 +881,6 @@ function ExtensionGrid({
         onChange={setSearchText}
         placeholder={propString(node, 'searchBarPlaceholder') ?? 'Search…'}
         onBack={onBack}
-        title={propString(node, 'navigationTitle')}
         loading={propBoolean(node, 'isLoading')}
         trailing={dropdownAccessory && <ListDropdownAccessory node={dropdownAccessory} nodes={nodes} onValueChange={setAccessoryValue} onOpenChange={setDropdownOpen} />}
       />
@@ -892,7 +894,7 @@ function ExtensionGrid({
         {cells}
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} />
+      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} extensionId={extensionId} />
     </div>
   )
 }
@@ -1049,11 +1051,13 @@ function ExtensionDetail({
   title,
   icon,
   onBack,
+  extensionId,
 }: {
   node: UiNode
   nodes: Record<string, UiNode>
   title?: string
   icon?: string | null
+  extensionId?: string
   /** Present when this view was pushed onto a navigation stack — a Detail
    *  reached via `Action.Push` needs the same way back a Form does. */
   onBack?: () => void
@@ -1076,17 +1080,14 @@ function ExtensionDetail({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [actions])
 
-  const navigationTitle = propString(node, 'navigationTitle')
-
   return (
     <div className="palette">
       {/* Same top bar a Form gets, and for the same reason: a Detail has no
-          search field, but a pushed one still needs the way back and its own
-          name. */}
+          search field, but a pushed one still needs the way back. The view's
+          name is read off the footer, not repeated up here. */}
       {onBack && (
         <div className="openray-form-header">
           <BackButton onClick={onBack} />
-          <span className="openray-form-header-title">{navigationTitle ?? title}</span>
           {propBoolean(node, 'isLoading') && <span className="openray-toast-spinner" aria-label="Loading" />}
         </div>
       )}
@@ -1099,7 +1100,7 @@ function ExtensionDetail({
         <DetailBody node={node} nodes={nodes} />
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} />
+      <Footer primaryActionLabel={actions[0]?.title} context={title} contextIcon={icon} extensionId={extensionId} />
     </div>
   )
 }
@@ -1176,12 +1177,14 @@ function ExtensionForm({
   onBack,
   title,
   icon,
+  extensionId,
 }: {
   node: UiNode
   nodes: Record<string, UiNode>
   onBack?: () => void
   title?: string
   icon?: string | null
+  extensionId?: string
 }) {
   const [values, setValues] = useState<Record<string, string | boolean>>({})
   const actionsSlot = findActionsSlot(node, nodes)
@@ -1305,11 +1308,10 @@ function ExtensionForm({
   return (
     <div className="palette">
       {/* A form has no search field, but it does have the same top bar a
-          List/Grid sub-view gets: the way back, and the view's own name.
-          Raycast draws its forms this way too. */}
+          List/Grid sub-view gets: the way back. The view's name is read off
+          the footer, not repeated up here. */}
       <div className="openray-form-header">
         {onBack && <BackButton onClick={onBack} />}
-        <span className="openray-form-header-title">{propString(node, 'navigationTitle') ?? title}</span>
         {propBoolean(node, 'isLoading') && <span className="openray-toast-spinner" aria-label="Loading" />}
       </div>
       <div className="openray-form-scroll">
@@ -1327,7 +1329,7 @@ function ExtensionForm({
         </div>
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
-      <Footer primaryActionLabel={actions[0]?.title ?? 'Submit'} primaryActionNeedsCmd context={title} contextIcon={icon} />
+      <Footer primaryActionLabel={actions[0]?.title ?? 'Submit'} primaryActionNeedsCmd context={title} contextIcon={icon} extensionId={extensionId} />
     </div>
   )
 }
@@ -1591,10 +1593,12 @@ export function ExtensionView({
   onBack,
   title,
   icon,
+  extensionId,
 }: {
   onBack?: () => void
   title?: string
   icon?: string | null
+  extensionId?: string
 } = {}) {
   const root = useExtensionRootNode()
   const { nodes } = useExtensionTree()
@@ -1622,13 +1626,13 @@ export function ExtensionView({
   // in-place updates still correctly preserve state as before.
   switch (root.type) {
     case 'List':
-      return <ExtensionList key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
+      return <ExtensionList key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} extensionId={extensionId} />
     case 'Grid':
-      return <ExtensionGrid key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
+      return <ExtensionGrid key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} extensionId={extensionId} />
     case 'Detail':
-      return <ExtensionDetail key={root.id} node={root} nodes={nodes} title={title} icon={icon} onBack={onBack} />
+      return <ExtensionDetail key={root.id} node={root} nodes={nodes} title={title} icon={icon} onBack={onBack} extensionId={extensionId} />
     case 'Form':
-      return <ExtensionForm key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} />
+      return <ExtensionForm key={root.id} node={root} nodes={nodes} onBack={onBack} title={title} icon={icon} extensionId={extensionId} />
     case 'MarkdownEditor':
       return <ExtensionMarkdownEditor key={root.id} node={root} nodes={nodes} />
     default:

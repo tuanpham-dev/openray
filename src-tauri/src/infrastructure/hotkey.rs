@@ -115,6 +115,11 @@ pub fn build_desired_bindings(
     }];
 
     for command in commands {
+        // Never bound, whatever an older store still holds for it — see
+        // `api::settings::set_command_hotkey`.
+        if command.id == crate::application::settings_provider::OPEN_SETTINGS_COMMAND_ID {
+            continue;
+        }
         let Some(entry) = command_settings.get(&command.id) else { continue };
         if !entry.enabled {
             continue;
@@ -406,6 +411,17 @@ mod bindings_tests {
         let desired = build_desired_bindings("Alt+Space", &settings, &[command("firefox.desktop")]);
         assert_eq!(desired.len(), 2);
         assert_eq!(desired[1].action, HotkeyAction::RunCommand("firefox.desktop".into()));
+    }
+
+    #[test]
+    fn never_binds_the_settings_command() {
+        // Whatever an older store still holds for it — Settings no longer
+        // lists it and `set_command_hotkey` refuses one.
+        let id = crate::application::settings_provider::OPEN_SETTINGS_COMMAND_ID;
+        let mut settings = HashMap::new();
+        settings.insert(id.to_string(), CommandSettingsEntry { alias: None, hotkey: Some("Ctrl+Alt+Comma".into()), enabled: true });
+        let desired = build_desired_bindings("Alt+Space", &settings, &[command(id)]);
+        assert_eq!(desired.len(), 1);
     }
 
     #[test]

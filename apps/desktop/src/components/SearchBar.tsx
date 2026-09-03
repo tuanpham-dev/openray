@@ -16,14 +16,11 @@ interface SearchBarProps {
   /** A selected command's argument fields, rendered inline after the query
    *  the way Raycast does — see `ArgumentFields`. */
   arguments?: ReactNode
-  /** A sub-view's `navigationTitle` (List/Grid), shown as a label ahead of
-   *  the search field, after the back button. */
-  title?: string
   /** Shows a small spinner at the trailing edge (List/Grid `isLoading`). */
   loading?: boolean
 }
 
-export function SearchBar({ value, onChange, placeholder, onBack, trailing, title, loading, arguments: argumentFields }: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder, onBack, trailing, loading, arguments: argumentFields }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   // With argument fields present the query shrinks to its own text so the
   // fields sit right beside it — Raycast puts them a single gap apart, not
@@ -115,7 +112,6 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, titl
           <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       )}
-      {title && <span className="openray-search-title">{title}</span>}
       <input
         ref={(element) => {
           inputRef.current = element

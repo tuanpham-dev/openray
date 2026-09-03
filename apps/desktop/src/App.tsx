@@ -579,6 +579,7 @@ function Palette() {
           onBack={() => leaveExtensionView(view.extensionId, view.commandName)}
           title={view.title}
           icon={view.icon}
+          extensionId={view.extensionId}
         />
         {overlays}
       </>

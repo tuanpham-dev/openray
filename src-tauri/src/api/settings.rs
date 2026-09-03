@@ -4,6 +4,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::application::command_settings::CommandSettingsEntry;
+use crate::application::settings_provider::OPEN_SETTINGS_COMMAND_ID;
 use crate::application::state::AppState;
 use crate::domain::command::Command;
 use crate::infrastructure::settings::Settings;
@@ -145,6 +146,13 @@ pub fn open_settings(app: AppHandle) -> Result<(), String> {
     window::open_settings_window(&app, window::SettingsTarget::General).map_err(|e| e.to_string())
 }
 
+/// Opens Settings on one extension's own page — the palette footer's menu
+/// while an extension command is running.
+#[tauri::command]
+pub fn open_extension_settings(app: AppHandle, extension_id: String) -> Result<(), String> {
+    window::open_settings_window(&app, window::SettingsTarget::Extension(&extension_id)).map_err(|e| e.to_string())
+}
+
 /// Every command in the registry (apps, builtins, quicklinks, snippets,
 /// extension commands) — the settings window's source list for grouping
 /// into its Applications / per-extension / Built-ins table.
@@ -161,6 +169,13 @@ pub fn list_command_settings(state: State<AppState>) -> HashMap<String, CommandS
 #[tauri::command]
 pub fn set_command_hotkey(app: AppHandle, state: State<AppState>, command_id: String, hotkey: Option<String>) -> Result<(), String> {
     if let Some(ref value) = hotkey {
+        // "OpenRay Settings" takes no hotkey: the palette binds ⌘, for it
+        // already, so a global binding on top only ate a shortcut. Settings
+        // no longer lists it at all (General's Commands table is gone);
+        // this keeps an older or hand-edited store honest too.
+        if !value.is_empty() && command_id == OPEN_SETTINGS_COMMAND_ID {
+            return Err("OpenRay Settings can't have a hotkey".to_string());
+        }
         if !value.is_empty() {
             let palette_hotkey = state.settings.get().hotkey;
             let conflict = find_hotkey_conflict(

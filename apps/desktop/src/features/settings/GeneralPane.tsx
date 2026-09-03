@@ -3,11 +3,9 @@ import { listen } from '@tauri-apps/api/event'
 import { HotkeyRecorder } from './HotkeyRecorder'
 import { Toggle } from './Toggle'
 import { SegmentedControl } from './SegmentedControl'
-import { CommandList } from './CommandList'
 import { ChevronDownIcon, MoonIcon, SunIcon, SystemThemeIcon, WindowSizeIcon } from '../../components/icons'
 import { updateSettings, updateHotkey, type Settings, type WindowSize } from '../../ipc/settings'
 import type { ThemePreference } from '../../theme/ThemeProvider'
-import type { CommandSettingsEntry, SettingsCommand } from '../../ipc/commandSettings'
 
 const THEME_OPTIONS = [
   { value: 'light' as const, label: 'Light', icon: <SunIcon /> },
@@ -35,14 +33,9 @@ const SHOW_ON_SCREEN_OPTIONS: { value: Settings['showOnScreen']; label: string }
 interface GeneralPaneProps {
   settings: Settings
   onChange: (settings: Settings) => void
-  builtinCommands: SettingsCommand[]
-  commandSettings: Record<string, CommandSettingsEntry>
-  onAlias: (commandId: string, alias: string | null) => Promise<void>
-  onHotkey: (commandId: string, hotkey: string | null) => Promise<void>
-  onEnabled: (commandId: string, enabled: boolean) => void
 }
 
-export function GeneralPane({ settings, onChange, builtinCommands, commandSettings, onAlias, onHotkey, onEnabled }: GeneralPaneProps) {
+export function GeneralPane({ settings, onChange }: GeneralPaneProps) {
   const [hotkeyUnavailable, setHotkeyUnavailable] = useState(false)
 
   useEffect(() => {
@@ -211,18 +204,6 @@ export function GeneralPane({ settings, onChange, builtinCommands, commandSettin
           <span className="openray-settings-control-hint">Alt+J/K move through lists; Alt+H/L move across grids</span>
         </span>
       </div>
-
-      <section className="openray-extension-view-section openray-extension-view-section--divided">
-        <h3>Commands</h3>
-        <CommandList
-          commands={builtinCommands}
-          commandSettings={commandSettings}
-          onAlias={onAlias}
-          onHotkey={onHotkey}
-          onEnabled={onEnabled}
-          emptyText="No built-in commands."
-        />
-      </section>
 
       <div className="openray-settings-bottom-spacer" />
     </div>

@@ -105,6 +105,12 @@ export function openSettings(): Promise<void> {
   return invoke('open_settings')
 }
 
+/** Opens Settings on one extension's own page — what the footer menu of a
+ *  running extension command offers. */
+export function openExtensionSettings(extensionId: string): Promise<void> {
+  return invoke('open_extension_settings', { extensionId })
+}
+
 /** The OS-resolved scheme ("light" or "dark"), for settings.theme === 'system'. */
 export function getSystemTheme(): Promise<'light' | 'dark'> {
   return invoke('get_system_theme')
