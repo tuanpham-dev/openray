@@ -221,8 +221,12 @@
    leaves the wrapper — and the rest of the layout — exactly as it was.
    
    The offset is the metadata column plus the gap, so the strip ends where
-   the page padding does. */
-.openray-detail-page .openray-detail-markdown > p:first-child {
+   the page padding does.
+   
+   Gated on the paragraph actually holding an image: an extension with no
+   screenshots opens on ordinary prose instead, and treating that as a strip
+   bled it under the metadata column and forbade it from wrapping. */
+.openray-detail-page .openray-detail-markdown > p:first-child:has(img) {
   margin-right: -328px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -230,7 +234,7 @@
   padding-bottom: 8px;
 }
 
-.openray-detail-page .openray-detail-markdown > p:first-child img {
+.openray-detail-page .openray-detail-markdown > p:first-child:has(img) img {
   max-height: 150px;
   width: auto;
   display: inline-block;
@@ -238,11 +242,18 @@
   margin-right: 8px;
 }
 
-/* Pushed below the strip so the bleed has somewhere to go. 150px of image
-   plus its scrollbar padding and the paragraph's own margin — a constant,
-   because the image height is capped at a constant. */
 .openray-detail-page .openray-detail-info {
   grid-column: 2;
+}
+
+/* Pushed below the strip so the bleed has somewhere to go. 150px of image
+   plus its scrollbar padding and the paragraph's own margin — a constant,
+   because the image height is capped at a constant.
+   
+   Only when there is a strip to clear. Unconditionally, it stranded the
+   Information panel a third of the way down an otherwise empty page for
+   every extension that ships no screenshots. */
+.openray-detail-page .openray-detail-markdown:has(> p:first-child img) ~ .openray-detail-info {
   margin-top: 182px;
 }
 
