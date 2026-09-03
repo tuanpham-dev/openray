@@ -211,6 +211,9 @@ fn setup_window_chrome(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
         // reliable path instead of trusting the payload.
         WindowEvent::ThemeChanged(_) => {
           let _ = app_handle.emit("system-theme-changed", window::system_theme(&app_handle));
+          // The tray glyph was picked to read against the panel, which has
+          // just been repainted along with everything else.
+          infrastructure::tray::apply_system_theme(&app_handle);
         }
         _ => {}
       }
