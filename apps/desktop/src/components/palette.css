@@ -44,17 +44,6 @@
   color: var(--openray-text-primary);
 }
 
-/* An extension List/Grid's navigationTitle, ahead of the search field. */
-.openray-search-title {
-  flex-shrink: 0;
-  font-size: calc(15px * var(--openray-font-scale, 1));
-  font-weight: 500;
-  color: var(--openray-text-secondary);
-  padding-right: 4px;
-  border-right: 1px solid var(--openray-border);
-  margin-right: 2px;
-}
-
 .openray-search-input::placeholder {
   color: var(--openray-text-tertiary);
 }
@@ -972,12 +961,6 @@ button.openray-tag:hover {
   border-bottom: 1px solid var(--openray-border);
 }
 
-.openray-form-header-title {
-  font-size: calc(15px * var(--openray-font-scale, 1));
-  font-weight: 500;
-  color: var(--openray-text-primary);
-}
-
 .openray-form-scroll {
   flex: 1;
   min-height: 0;
@@ -1433,13 +1416,50 @@ button.openray-tag:hover {
   flex-shrink: 0;
 }
 
+/* The brand label is a button — it opens the footer menu (see `FooterMenu`
+   in Footer.tsx) — drawn chrome-less so it still reads as a label. */
 .openray-footer-brand {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin: 0 -6px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
   font-size: calc(12.5px * var(--openray-font-scale, 1));
   font-weight: 600;
   color: var(--openray-text-primary);
+  cursor: default;
+}
+
+.openray-footer-brand:hover,
+.openray-footer-brand--open {
+  background: var(--openray-hover-bg, var(--openray-selected-bg));
+}
+
+.openray-footer-menu-root {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Same popover as the ⌘K actions panel, anchored to the footer's left
+   edge instead of its right. */
+.openray-footer-menu {
+  position: absolute;
+  bottom: 48px;
+  left: 8px;
+  width: max-content;
+  min-width: 220px;
+  max-width: 380px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--openray-bg-solid);
+  border: 1px solid var(--openray-border);
+  box-shadow: var(--openray-shadow);
+  z-index: 10;
 }
 
 .openray-footer-brand-mark {
@@ -1504,14 +1524,46 @@ button.openray-tag:hover {
   width: max-content;
   min-width: 260px;
   max-width: 380px;
-  max-height: 280px;
-  overflow-y: auto;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
   padding: 6px;
   border-radius: 10px;
   background: var(--openray-bg-solid);
   border: 1px solid var(--openray-border);
   box-shadow: var(--openray-shadow);
   z-index: 10;
+}
+
+/* The rows scroll on their own so the search field below stays pinned. */
+.openray-action-panel-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.openray-action-panel-empty {
+  padding: 10px 8px;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-tertiary);
+}
+
+.openray-action-panel-search {
+  flex-shrink: 0;
+  margin: 6px -6px -6px;
+  padding: 9px 14px;
+  border: none;
+  border-top: 1px solid var(--openray-border);
+  border-radius: 0 0 10px 10px;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: calc(13px * var(--openray-font-scale, 1));
+  color: var(--openray-text-primary);
+}
+
+.openray-action-panel-search::placeholder {
+  color: var(--openray-text-tertiary);
 }
 
 .openray-action-panel-header {

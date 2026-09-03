@@ -180,15 +180,7 @@ export function SettingsWindow() {
           {!settings ? (
             <div className="openray-empty-view">Loading…</div>
           ) : selection.kind === 'general' ? (
-            <GeneralPane
-              settings={settings}
-              onChange={setSettings}
-              builtinCommands={commands.filter((c) => c.kind === 'builtin')}
-              commandSettings={commandSettings}
-              onAlias={updateAlias}
-              onHotkey={updateHotkey}
-              onEnabled={updateEnabled}
-            />
+            <GeneralPane settings={settings} onChange={setSettings} />
           ) : selection.kind === 'transfer' ? (
             <ImportExportPane />
           ) : selection.kind === 'advanced' ? (

@@ -78,6 +78,7 @@ pub fn run() {
       api::settings::update_settings,
       api::settings::update_hotkey,
       api::settings::open_settings,
+      api::settings::open_extension_settings,
       api::settings::list_settings_commands,
       api::settings::list_command_settings,
       api::settings::set_command_hotkey,
