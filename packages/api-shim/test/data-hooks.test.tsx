@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetNodeIdsForTests, mount } from '../src/reconciler'
 import { setCacheRootDirectory } from '../src/api/cache'
 import { useCachedPromise, useFetch } from '../src/utils-hooks'
+import { flush } from './flush'
 
 /**
  * `useFetch` and `useCachedPromise` are what most real Raycast extensions
@@ -36,9 +37,6 @@ async function serve(handler: (url: string) => { status?: number; body: string; 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, hits: () => hits }
 }
-
-/** react-reconciler commits through the scheduler; nothing is synchronous. */
-const flush = () => new Promise((resolve) => setImmediate(resolve))
 
 /**
  * Mounts a hook and returns a getter for its latest returned value.

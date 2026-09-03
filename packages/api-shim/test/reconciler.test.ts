@@ -3,20 +3,11 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import type { UiTreeCommit } from '@openray/protocol'
 import { _resetNodeIdsForTests, invokeCallback, mount } from '../src/reconciler'
 import { getCommandContext, setCommandContext } from '../src/api/command-context'
+import { flush } from './flush'
 
 function collect(): { commits: UiTreeCommit[]; onCommit: (c: UiTreeCommit) => void } {
   const commits: UiTreeCommit[] = []
   return { commits, onCommit: (c) => commits.push(c) }
-}
-
-/**
- * react-reconciler schedules commits through the `scheduler` package even
- * in legacy-root mode — nothing here is synchronous. One macrotask tick is
- * enough for it to drain in Node; the real sidecar just lets Node's event
- * loop do this naturally.
- */
-function flush(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve))
 }
 
 beforeEach(() => {
