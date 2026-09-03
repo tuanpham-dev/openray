@@ -458,8 +458,13 @@ fn classify_macos(ev: &crate::infrastructure::platform::macos_keytap::MacKeyEven
         RETURN | KP_ENTER | TAB | SPACE => Some(Key::Delimiter),
         ESCAPE | LEFT | RIGHT | DOWN | UP | HOME | END | PAGE_UP | PAGE_DOWN | FWD_DELETE => Some(Key::Reset),
         _ => {
-            // Cmd/Ctrl chord is a shortcut, not typing. Option (alternate) can
-            // be part of typing a character on some layouts, so it's allowed.
+            // Cmd/Ctrl chord is a shortcut, not typing. Option is deliberately
+            // not in that list, and unlike Alt on X11/Windows it isn't a leak:
+            // macOS layouts define Option as a typing modifier (Option+S is ß,
+            // Option+G is ©), and `CGEventKeyboardGetUnicodeString` hands back
+            // whatever the focused field received — so the buffer tracks the
+            // field rather than drifting from it. Option with a navigation key
+            // is classified by keycode above.
             if ev.command || ev.control {
                 return Some(Key::Reset);
             }
@@ -524,8 +529,21 @@ fn classify_windows(ev: &crate::infrastructure::platform::windows_keytap::WinKey
             Some(Key::Reset)
         }
         _ => {
-            if ev.control {
-                return Some(Key::Reset); // Ctrl chord (Alt-Gr can type, so allow Alt)
+            // A modifier chord is a shortcut, not typing, and must not feed
+            // the buffer: Alt+S opens a menu and types nothing into the
+            // focused field, yet `ToUnicodeEx` still decodes it to 's', which
+            // would seed the buffer and let the next two keys complete
+            // someone's `sig`.
+            //
+            // The exception is AltGr, which Windows reports as Ctrl+Alt and
+            // which really does type — on a layout that defines one it
+            // produces a character, so that character is taken. A plain
+            // Ctrl+Alt shortcut falls out of the same test: `ToUnicodeEx`
+            // gives it the control-character translation, which the decoder
+            // has already filtered away to `None`.
+            let alt_gr_typed = ev.control && ev.alt && ev.text.is_some();
+            if (ev.control || ev.alt) && !alt_gr_typed {
+                return Some(Key::Reset); // Ctrl/Alt chord
             }
             ev.text.map(Key::Char)
         }
@@ -589,8 +607,15 @@ fn classify_linux(ev: &crate::infrastructure::platform::linux_keytap::LinuxKeyEv
             Some(Key::Reset)
         }
         _ => {
-            if ev.control {
-                return Some(Key::Reset); // Ctrl chord
+            // A modifier chord is a shortcut, not typing, and must not feed
+            // the buffer. Alt counts as much as Ctrl: Alt+S opens a menu and
+            // types nothing, but its keysym still decodes to 's', which would
+            // seed the buffer and let the next two keys complete someone's
+            // `sig`. AltGr is Mod5, not Mod1, and `dispatch_key` reads only
+            // the unshifted/shifted keysyms anyway, so composed characters
+            // never reach here as an Alt chord.
+            if ev.control || ev.alt {
+                return Some(Key::Reset); // Ctrl/Alt chord
             }
             ev.text.map(Key::Char)
         }
@@ -684,14 +709,11 @@ mod tests {
 
     #[test]
     fn longest_keyword_wins_on_overlap() {
-        let kws = vec![entry("sig", "short"), entry("assign", "long")];
-        // buffer "assign" ends with both "sign"? no; ends with "assign" and not "sig".
-        // Use a real overlap: "ig" suffix shared. Keywords "ig" and "sig".
-        let kws2 = vec![entry("ig", "short"), entry("sig", "long")];
-        let m = run(&chars("a sig"), &kws2, TriggerMode::Instant);
+        // "a sig" ends with both keywords; the longer one has to win, or
+        // `signature` would never fire for anyone who also has `sig`.
+        let kws = [entry("ig", "short"), entry("sig", "long")];
+        let m = run(&chars("a sig"), &kws, TriggerMode::Instant);
         assert_eq!(m, Some(Match { snippet_id: "long".into(), backspaces: 3 }));
-        // silence unused-var style: assert the first set still parses
-        assert_eq!(kws.len(), 2);
     }
 
     #[test]
@@ -760,5 +782,86 @@ mod tests {
         ]);
         let kws = load_keywords(&storage);
         assert_eq!(run(&chars("greet"), &kws, TriggerMode::Instant), None);
+    }
+
+    /// The X11 classifier's chord rule. An Alt mnemonic types nothing into
+    /// the focused field, but the keysym still decodes to a letter — treating
+    /// it as typing let `Alt+S` then `ig` fire the `sig` snippet into an app
+    /// that had received no `s` at all.
+    #[cfg(target_os = "linux")]
+    mod classify_linux {
+        use super::super::*;
+        use crate::infrastructure::platform::linux_keytap::LinuxKeyEvent;
+
+        const XK_S: u32 = 's' as u32;
+
+        fn key(control: bool, alt: bool) -> Option<Key> {
+            classify_linux(&LinuxKeyEvent { keysym: XK_S, text: Some('s'), control, alt })
+        }
+
+        #[test]
+        fn a_plain_letter_is_typing() {
+            assert_eq!(key(false, false), Some(Key::Char('s')));
+        }
+
+        #[test]
+        fn a_ctrl_chord_resets() {
+            assert_eq!(key(true, false), Some(Key::Reset));
+        }
+
+        #[test]
+        fn an_alt_chord_resets() {
+            assert_eq!(key(false, true), Some(Key::Reset));
+        }
+
+        #[test]
+        fn an_alt_mnemonic_cannot_seed_a_keyword() {
+            let kws = vec![KeywordEntry { keyword: "sig".into(), snippet_id: "s1".into(), requires_argument: false }];
+
+            // Alt+S opened a menu; the field itself only ever received "ig".
+            let keys = [key(false, true).unwrap(), Key::Char('i'), Key::Char('g')];
+            let mut buffer = String::new();
+            let mut last = None;
+            for k in keys {
+                last = process_key(&mut buffer, k, &kws, TriggerMode::Instant);
+            }
+            assert_eq!(last, None);
+        }
+    }
+
+    /// The Windows classifier's chord rule, which has AltGr to account for:
+    /// Windows reports it as Ctrl+Alt and it really does type.
+    #[cfg(target_os = "windows")]
+    mod classify_windows {
+        use super::super::*;
+        use crate::infrastructure::platform::windows_keytap::WinKeyEvent;
+
+        const VK_S: u16 = 0x53;
+
+        fn key(control: bool, alt: bool, text: Option<char>) -> Option<Key> {
+            classify_windows(&WinKeyEvent { vk: VK_S, text, control, alt })
+        }
+
+        #[test]
+        fn a_plain_letter_is_typing() {
+            assert_eq!(key(false, false, Some('s')), Some(Key::Char('s')));
+        }
+
+        #[test]
+        fn a_ctrl_or_alt_chord_resets() {
+            assert_eq!(key(true, false, Some('s')), Some(Key::Reset));
+            assert_eq!(key(false, true, Some('s')), Some(Key::Reset));
+        }
+
+        #[test]
+        fn alt_gr_still_types_its_character() {
+            assert_eq!(key(true, true, Some('\u{105}')), Some(Key::Char('\u{105}')));
+        }
+
+        #[test]
+        fn a_ctrl_alt_shortcut_resets() {
+            // No character survived `ToUnicodeEx`'s control-character filter.
+            assert_eq!(key(true, true, None), Some(Key::Reset));
+        }
     }
 }
