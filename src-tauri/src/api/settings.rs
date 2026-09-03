@@ -36,7 +36,19 @@ pub fn update_settings(app: AppHandle, state: State<AppState>, settings: Setting
     let previous_file_search_scopes = previous.file_search_scopes;
     let show_tray_icon_changed = previous.show_tray_icon != settings.show_tray_icon;
     let show_tray_icon = settings.show_tray_icon;
+    let snippet_auto_expand = settings.snippet_auto_expand;
+    let snippet_auto_expand_mode = settings.snippet_auto_expand_mode.clone();
+    let auto_expand_changed =
+        previous.snippet_auto_expand != snippet_auto_expand || previous.snippet_auto_expand_mode != snippet_auto_expand_mode;
     state.settings.update(settings)?;
+
+    // Snippet auto-expansion: drive the live service so the toggle and mode
+    // take effect with no restart. Enabling spawns the listener lazily (and,
+    // on macOS, triggers the Input-Monitoring prompt) — same shape as the
+    // clipboard-watcher/root-provider special-cases below.
+    if auto_expand_changed {
+        state.auto_expander.apply_settings(&app, snippet_auto_expand, &snippet_auto_expand_mode);
+    }
 
     if show_tray_icon_changed {
         if let Some(tray) = app.tray_by_id(crate::infrastructure::tray::TRAY_ID) {

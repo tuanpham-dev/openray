@@ -1,4 +1,5 @@
 pub mod app_provider;
+pub mod auto_expand;
 pub mod auto_update;
 pub mod clipboard;
 pub mod command_settings;

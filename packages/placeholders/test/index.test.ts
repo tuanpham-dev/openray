@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, argumentSpecs, expand, pseudoUuid, takesArgument, type ArgumentSpec, type Context } from '../src/index'
+import { addMonths, argumentSpecs, expand, pseudoUuid, splitCursor, takesArgument, type ArgumentSpec, type Context } from '../src/index'
 
 const plain = (value: string) => value
 
@@ -193,5 +193,32 @@ describe('pseudoUuid', () => {
     expect(first).not.toBe(second)
     expect(first).toHaveLength(36)
     expect(first[14]).toBe('4')
+  })
+})
+
+describe('splitCursor', () => {
+  it('removes the marker and reports its position for a mid-text cursor', () => {
+    const { text, cursorOffset } = splitCursor('Hello {cursor}world')
+    expect(text).toBe('Hello world')
+    expect(cursorOffset).toBe(6)
+  })
+
+  it('puts the caret at the end when there is no marker', () => {
+    const { text, cursorOffset } = splitCursor('Best, me')
+    expect(text).toBe('Best, me')
+    expect(cursorOffset).toBe(8)
+  })
+
+  it('strips every marker but positions at the first', () => {
+    const { text, cursorOffset } = splitCursor('a{cursor}b{cursor}c')
+    expect(text).toBe('abc')
+    expect(cursorOffset).toBe(1)
+  })
+
+  it('counts the offset in code points, not UTF-16 units', () => {
+    // "😀" is one code point but two UTF-16 units.
+    const { text, cursorOffset } = splitCursor('😀{cursor}x')
+    expect(text).toBe('😀x')
+    expect(cursorOffset).toBe(1)
   })
 })

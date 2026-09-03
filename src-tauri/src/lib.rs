@@ -287,6 +287,7 @@ fn build_app_state(app: &tauri::App) -> Result<AppState, Box<dyn std::error::Err
     usage: UsageRepository::new(db_connection.clone()),
     clipboard,
     clipboard_watcher,
+    auto_expander: crate::application::auto_expand::AutoExpander::new(),
     settings,
     extensions,
     root_commands,
@@ -410,6 +411,15 @@ fn spawn_background_workers(app: &tauri::AppHandle) {
   // reproducing native `application::calculator::currency`'s
   // once-at-startup fetch/cache contract with no dedicated call site.
   spawn_root_provider_startup(app);
+
+  // Start snippet auto-expansion if the user has it enabled — spawns the
+  // keystroke listener lazily (and, on macOS, triggers the Input-Monitoring
+  // prompt) only when actually on. See `application::auto_expand`.
+  {
+    let state = app.state::<AppState>();
+    let settings = state.settings.get();
+    state.auto_expander.apply_settings(app, settings.snippet_auto_expand, &settings.snippet_auto_expand_mode);
+  }
 
   // Repeats that same startup push whenever macOS reports a display was
   // connected/disconnected/reconfigured — otherwise a root-provider
