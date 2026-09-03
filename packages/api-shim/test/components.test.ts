@@ -9,14 +9,11 @@ import { ActionPanel, Action } from '../src/components/ActionPanel'
 import { Form } from '../src/components/Form'
 import { MenuBarExtra } from '../src/components/MenuBarExtra'
 import { useNavigation } from '../src/hooks'
+import { flush } from './flush'
 
 function collect(): { commits: UiTreeCommit[]; onCommit: (c: UiTreeCommit) => void } {
   const commits: UiTreeCommit[] = []
   return { commits, onCommit: (c) => commits.push(c) }
-}
-
-function flush(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve))
 }
 
 function nodesByType(commit: UiTreeCommit, type: string): UiNode[] {

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { _resetNodeIdsForTests, mount } from '../src/reconciler'
 import { List } from '../src/components/List'
 import { usePromise } from '../src/utils-hooks'
+import { flush } from './flush'
 
 /**
  * The bug these cover: `mutate` applied an optimistic update and never
@@ -10,10 +11,6 @@ import { usePromise } from '../src/utils-hooks'
  * showing an item that was never created — with no error anywhere, which
  * is the exact failure an optimistic update is supposed to make safe.
  */
-
-function flush(): Promise<void> {
-  return new Promise((resolve) => setImmediate(() => setImmediate(resolve)))
-}
 
 beforeEach(() => {
   _resetNodeIdsForTests()

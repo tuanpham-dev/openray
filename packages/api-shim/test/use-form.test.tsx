@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetNodeIdsForTests, mount } from '../src/reconciler'
 import { Form } from '../src/components/Form'
 import { useForm, FormValidation } from '../src/utils-hooks'
+import { flush } from './flush'
 
 /**
  * `useForm` was a stub, so `const { handleSubmit, itemProps } = useForm(…)`
@@ -10,16 +11,6 @@ import { useForm, FormValidation } from '../src/utils-hooks'
  * all — a silent no-op with no error anywhere. 29 of 180 sampled
  * extensions use it.
  */
-
-/**
- * Drains the reconciler's scheduled work. Twice, deliberately: a state
- * update from a previous test's root is still pending when the next test
- * mounts, and a single turn leaves the new root's initial render queued
- * behind it — which shows up as an undefined hook result.
- */
-function flush(): Promise<void> {
-  return new Promise((resolve) => setImmediate(() => setImmediate(resolve)))
-}
 
 beforeEach(() => {
   _resetNodeIdsForTests()

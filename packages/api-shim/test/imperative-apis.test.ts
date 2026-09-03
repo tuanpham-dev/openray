@@ -13,6 +13,7 @@ import { open, closeMainWindow, showHUD, confirmAlert, getApplications } from '.
 import { Action, ActionPanel } from '../src/components/ActionPanel'
 import { refreshRootCommands } from '../src/api/root-commands'
 import { AI, OAuth, UnsupportedError } from '../src/api/unsupported'
+import { flush } from './flush'
 
 function mockBridge(): { bridge: HostBridge; calls: { method: string; params: unknown }[] } {
   const calls: { method: string; params: unknown }[] = []
@@ -237,10 +238,6 @@ describe('AI / OAuth (typed UnsupportedError, no bridge needed to fail)', () => 
     expect(() => new OAuth.PKCEClient()).toThrow(UnsupportedError)
   })
 })
-
-function flush(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve))
-}
 
 /** Mounts a single element, waits for its first commit, and returns that
  * committed `Action` node's `onAction` callback marker — mirrors
