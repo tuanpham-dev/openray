@@ -75,6 +75,14 @@ rm -rf src-tauri/icons/android src-tauri/icons/ios src-tauri/icons/64x64.png
 (the last line drops output for the mobile targets and a size this project
 doesn't bundle — see `tauri.conf.json`'s `bundle.icon`).
 
+The macOS menu-bar icon is separate: `src-tauri/icons/tray.svg`, the bare
+bolt in solid black, used as a *template* image so the system recolours it
+for a light or dark bar. After editing it:
+
+```sh
+magick -background none src-tauri/icons/tray.svg -resize 72x72 PNG32:src-tauri/icons/tray@2x.png
+```
+
 `pnpm build` runs a full `tauri build`; CI (`.github/workflows/build.yml`)
 runs it across all three OSes on a tagged push and uploads installers.
 
