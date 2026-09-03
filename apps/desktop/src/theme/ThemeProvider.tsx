@@ -1,7 +1,7 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react'
-import { listen } from '@tauri-apps/api/event'
 import { getSystemTheme } from '../ipc/settings'
 import { useAppSettings } from '../state/appSettings'
+import { subscribeEvent } from '../ipc/events'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 type ResolvedTheme = 'light' | 'dark'
@@ -65,13 +65,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setSystemTheme(resolved)
     })
 
-    const unlistenSystemTheme = listen<ResolvedTheme>('system-theme-changed', (event) => {
-      setSystemTheme(event.payload)
-    })
+    const unsubscribe = subscribeEvent<ResolvedTheme>('system-theme-changed', setSystemTheme)
 
     return () => {
       cancelled = true
-      void unlistenSystemTheme.then((unlisten) => unlisten())
+      unsubscribe()
     }
   }, [])
 

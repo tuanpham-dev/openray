@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { listen } from '@tauri-apps/api/event'
 import { ThemeProvider } from '../../theme/ThemeProvider'
 import { SettingsSidebar, type SettingsSelection } from './SettingsSidebar'
 import { GeneralPane } from './GeneralPane'
@@ -32,6 +31,7 @@ import {
 } from '../../ipc/commandSettings'
 import '../../theme/tokens.css'
 import './settings.css'
+import { subscribeEvent } from '../../ipc/events'
 
 /**
  * The pane named by the window's own URL.
@@ -89,12 +89,9 @@ export function SettingsWindow() {
   // screen (see `application::auto_update`), so the list has to re-read or
   // it keeps showing the version that was just replaced.
   useEffect(() => {
-    const unlisten = listen<UpdateReport>('extension-updates', (event) => {
-      if (event.payload.applied.some((outcome) => !outcome.error)) void refresh()
+    return subscribeEvent<UpdateReport>('extension-updates', (report) => {
+      if (report.applied.some((outcome) => !outcome.error)) void refresh()
     })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
   }, [])
 
   // A dev rebuild can change the manifest (new commands, renamed title,
@@ -104,13 +101,10 @@ export function SettingsWindow() {
   // the last one failed, which is otherwise invisible outside the palette's
   // transient toast.
   useEffect(() => {
-    const unlisten = listen<DevBuildEvent>('extension-dev-build', (event) => {
-      setDevBuild(event.payload)
-      if (event.payload.manifestChanged) void refresh()
+    return subscribeEvent<DevBuildEvent>('extension-dev-build', (build) => {
+      setDevBuild(build)
+      if (build.manifestChanged) void refresh()
     })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
   }, [])
 
   const toggleExtension = (id: string, enabled: boolean) => {

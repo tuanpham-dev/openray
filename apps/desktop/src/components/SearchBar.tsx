@@ -1,8 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useAutoWidth } from './useAutoWidth'
-import { listen } from '@tauri-apps/api/event'
 import { suppressHoverSelection } from './hoverSelection'
 import { BackButton } from './BackButton'
+import { subscribeEvent } from '../ipc/events'
 
 interface SearchBarProps {
   value: string
@@ -84,7 +84,7 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, load
     }
 
     const timers: ReturnType<typeof setTimeout>[] = []
-    const unlisten = listen('palette-shown', () => {
+    const unsubscribe = subscribeEvent('palette-shown', () => {
       // Focus settles asynchronously after show; assert it a few times.
       focusInput()
       requestAnimationFrame(focusInput)
@@ -95,7 +95,7 @@ export function SearchBar({ value, onChange, placeholder, onBack, trailing, load
       suppressHoverSelection()
     })
     return () => {
-      void unlisten.then((fn) => fn())
+      unsubscribe()
       timers.forEach(clearTimeout)
     }
   }, [])
