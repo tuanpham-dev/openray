@@ -69,11 +69,32 @@ export function useScrollIntoViewWhenSelected<T extends HTMLElement>(selected: b
     if (!selected || !element) return
 
     const scroller = scrollParent(element)
-    if (scroller && visibleAtScrollTop(scroller, element)) {
-      scroller.scrollTop = 0
-      return
+    const apply = () => {
+      if (scroller && visibleAtScrollTop(scroller, element)) {
+        scroller.scrollTop = 0
+        return
+      }
+      element.scrollIntoView({ block: 'nearest' })
     }
-    element.scrollIntoView({ block: 'nearest' })
+
+    apply()
+
+    // Every rule above is a measurement, and the palette takes its first
+    // ones while the window is still hidden — it builds its root list before
+    // it is ever shown — where the list reports no height at all. Nothing
+    // then "fits with the list wound home", so each selection that lands
+    // while hidden takes the `nearest` branch and parks the list at that
+    // row's own top edge, heading above the fold. Showing the window gives
+    // the list its real height but re-runs no effect, so that stale scroll
+    // is exactly what the first open renders.
+    //
+    // Re-measuring when the list's own box changes size covers it: the
+    // hidden-to-shown transition is the resize. It is not a second policy —
+    // the same rule, applied once the geometry is worth trusting.
+    if (!scroller || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(apply)
+    observer.observe(scroller)
+    return () => observer.disconnect()
   }, [selected])
 
   return ref
