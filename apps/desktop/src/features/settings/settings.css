@@ -121,7 +121,8 @@ body,
   background: var(--openray-hover-bg, var(--openray-selected-bg));
 }
 
-.openray-settings-sidebar-entry--active {
+.openray-settings-sidebar-entry--active,
+.openray-settings-sidebar-entry--active:hover {
   background: var(--openray-accent);
   color: #fff;
 }
