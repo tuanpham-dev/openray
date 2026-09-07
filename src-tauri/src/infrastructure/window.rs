@@ -359,22 +359,56 @@ pub fn open_settings_window(app: &AppHandle, target: SettingsTarget<'_>) -> taur
         return Ok(());
     }
 
-    let window = WebviewWindowBuilder::new(app, SETTINGS_WINDOW_LABEL, WebviewUrl::App(target.to_url().into()))
+    // Built on a worker thread, never on the caller's. Every way into
+    // here from the palette — the `open_settings` command, the "OpenRay
+    // Settings" root command via `run_command` — is a *synchronous* Tauri
+    // command, which runs inline on the thread delivering the IPC: on
+    // Windows that is the UI thread, inside the palette webview's own
+    // WebView2 callback. And `send_user_message` short-circuits to inline
+    // execution when already on the main thread, so `build()` there
+    // creates the second WebView2 controller — nested message pumps,
+    // `Navigate` and all — re-entrantly inside another WebView2's event
+    // handler. WebView2 tolerates that badly: the new webview comes up
+    // able to run script but never able to navigate. Seen live on
+    // Windows as a permanently blank Settings window: the renderer
+    // process exists and is idle, `document.URL` stays `about:blank`, and
+    // even `Page.navigate` over the devtools protocol never commits, for
+    // any URL at all. The extension-bridge route into this same function
+    // never hit it, because that handler is async and so already off the
+    // main thread. From a non-main thread the creation is posted as an
+    // event-loop message and runs at the top of the loop instead, which
+    // is exactly how the main window itself is created.
+    //
+    // Errors move from the return value to the log: nothing that calls
+    // this acts on a creation failure beyond stringifying it, and the
+    // reuse branch above, which is what runs on every call but the first,
+    // still reports its own errors synchronously.
+    let app = app.clone();
+    let url = target.to_url();
+    std::thread::spawn(move || {
+        if let Err(error) = build_settings_window(&app, &url) {
+            log::error!("settings window: {error}");
+        }
+    });
+    Ok(())
+}
+
+fn build_settings_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
+    let window = WebviewWindowBuilder::new(app, SETTINGS_WINDOW_LABEL, WebviewUrl::App(url.into()))
         .title("OpenRay Settings")
         .inner_size(980.0, 620.0)
         .min_inner_size(800.0, 520.0)
         .resizable(true)
         .decorations(true)
         .build()?;
-    // The reuse branch above shows/focuses explicitly; a freshly built
-    // window needs the same — `build()` alone leaves it created but not
-    // raised, so the very first "Open Settings" call (the only time this
-    // branch runs) landed the window on screen with nothing pulling it to
-    // the front. Found live: the window existed at a valid on-screen
-    // position, just sitting behind whatever was already focused.
+    // The reuse branch shows/focuses explicitly; a freshly built window
+    // needs the same — `build()` alone leaves it created but not raised,
+    // so the very first "Open Settings" call (the only time this runs)
+    // landed the window on screen with nothing pulling it to the front.
+    // Found live: the window existed at a valid on-screen position, just
+    // sitting behind whatever was already focused.
     window.show()?;
     window.set_focus()?;
-
     Ok(())
 }
 
