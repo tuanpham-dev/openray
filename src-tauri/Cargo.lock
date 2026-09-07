@@ -3098,6 +3098,7 @@ dependencies = [
  "ureq",
  "urlencoding",
  "windows 0.62.2",
+ "winreg 0.10.1",
  "wl-clipboard-rs",
  "x11rb",
  "zbus",

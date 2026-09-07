@@ -80,7 +80,12 @@ in solid black (`src-tauri/icons/tray.svg`) and solid white
 (`tray-inverted.svg`). macOS is handed the black one as a *template* image
 and recolours it itself for a light or dark menu bar; Linux and Windows draw
 the bitmap as given, so `tray::apply_system_theme` picks between the two by
-desktop theme and re-picks when it changes. After editing either SVG:
+the panel's theme and re-picks when it changes. On Linux that is the desktop
+theme; on Windows it is the taskbar's own `SystemUsesLightTheme` setting,
+read from the registry, because the theme Tauri reports there is the
+*apps* one (`AppsUseLightTheme`) and the two commonly differ — light apps
+over a dark taskbar is a default split, and it put the black glyph on a dark
+tray. After editing either SVG:
 
 ```sh
 magick -background none src-tauri/icons/tray.svg -resize 72x72 PNG32:src-tauri/icons/tray@2x.png

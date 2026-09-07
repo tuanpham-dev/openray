@@ -36,12 +36,15 @@ pub fn build(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Every other tray draws the bitmap as handed over, so the glyph has to
     // be chosen for the panel rather than recoloured by it: black on a light
-    // panel, white on a dark one. The desktop theme is the best signal we
-    // have for which — the XFCE/GNOME panel follows it — and it can change
-    // while the app runs, so `apply_system_theme` re-picks on the same
-    // `ThemeChanged` event the palette repaints on.
+    // panel, white on a dark one — see `panel_theme` for which signal says
+    // so. It can change while the app runs, so `apply_system_theme`
+    // re-picks on the same `ThemeChanged` event the palette repaints on.
     #[cfg(not(target_os = "macos"))]
-    let builder = builder.icon(glyph_for_theme(&window::system_theme(app.handle())));
+    let builder = {
+        let theme = panel_theme(app.handle());
+        log::info!("tray: {theme} panel, picking the matching glyph");
+        builder.icon(glyph_for_theme(&theme))
+    };
 
     builder
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -59,8 +62,8 @@ pub fn build(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// The glyph that reads against a panel of the given desktop theme
-/// (`window::system_theme`'s `"dark"` / `"light"`).
+/// The glyph that reads against a panel of the given theme
+/// (`panel_theme`'s `"dark"` / `"light"`).
 #[cfg(not(target_os = "macos"))]
 fn glyph_for_theme(theme: &str) -> tauri::image::Image<'static> {
     if theme == "dark" {
@@ -70,16 +73,82 @@ fn glyph_for_theme(theme: &str) -> tauri::image::Image<'static> {
     }
 }
 
-/// Repaints the tray glyph for the current desktop theme. Called whenever
+/// The theme of the panel the tray sits in — what the glyph has to read
+/// against — as `"dark"` / `"light"`.
+///
+/// On Windows that is deliberately *not* what `window::system_theme`
+/// reports. Windows keeps two settings under Personalize: `AppsUseLightTheme`,
+/// which tao's theme API (and so the palette) follows, and
+/// `SystemUsesLightTheme`, which the taskbar and notification area follow —
+/// and the common configuration splits them, light apps over a dark
+/// taskbar. Picking by the apps value there chose the black glyph for a
+/// dark tray, where it vanished. Found live on exactly such a machine.
+///
+/// Falls back to the apps theme where the taskbar value isn't available,
+/// which is also the right answer for the Linux panels that genuinely
+/// follow the desktop theme.
+#[cfg(not(target_os = "macos"))]
+fn panel_theme(app: &AppHandle) -> String {
+    taskbar_theme().map(str::to_string).unwrap_or_else(|| window::system_theme(app))
+}
+
+#[cfg(target_os = "windows")]
+fn taskbar_theme() -> Option<&'static str> {
+    use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+    let personalize = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        .ok()?;
+    let light: u32 = personalize.get_value("SystemUsesLightTheme").ok()?;
+    Some(theme_for_light_flag(light))
+}
+
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+fn taskbar_theme() -> Option<&'static str> {
+    None
+}
+
+/// `SystemUsesLightTheme` is a DWORD flag: 0 is a dark taskbar, anything
+/// else light.
+#[cfg(not(target_os = "macos"))]
+fn theme_for_light_flag(light: u32) -> &'static str {
+    if light == 0 {
+        "dark"
+    } else {
+        "light"
+    }
+}
+
+/// Repaints the tray glyph for the current panel theme. Called whenever
 /// the theme changes, since the icon was picked to suit the panel it was
 /// sitting on and that panel has just been repainted.
+///
+/// `ThemeChanged` is emitted for the *apps* theme; the taskbar value is
+/// re-read at that moment rather than watched on its own. The two change
+/// together under Windows' plain Light/Dark modes, so only a "Custom"
+/// split changed on its own waits for the next apps-theme change.
 ///
 /// macOS needs none of this: its template image is recoloured by the system,
 /// so the glyph it was given at build time stays correct.
 #[cfg(not(target_os = "macos"))]
 pub fn apply_system_theme(app: &AppHandle) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_icon(Some(glyph_for_theme(&window::system_theme(app))));
+        let _ = tray.set_icon(Some(glyph_for_theme(&panel_theme(app))));
+    }
+}
+
+#[cfg(all(test, not(target_os = "macos")))]
+mod tests {
+    use super::theme_for_light_flag;
+
+    #[test]
+    fn a_dark_taskbar_flag_picks_the_dark_panel_glyph() {
+        assert_eq!(theme_for_light_flag(0), "dark");
+    }
+
+    #[test]
+    fn any_light_taskbar_flag_picks_the_light_panel_glyph() {
+        assert_eq!(theme_for_light_flag(1), "light");
+        assert_eq!(theme_for_light_flag(2), "light");
     }
 }
 
