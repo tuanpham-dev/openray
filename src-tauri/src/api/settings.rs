@@ -17,13 +17,6 @@ pub fn get_settings(state: State<AppState>) -> Settings {
 
 #[tauri::command]
 pub fn update_settings(app: AppHandle, state: State<AppState>, settings: Settings) -> Result<(), String> {
-    let autolaunch = app.autolaunch();
-    if settings.launch_at_login {
-        autolaunch.enable().map_err(|e| e.to_string())?;
-    } else {
-        autolaunch.disable().map_err(|e| e.to_string())?;
-    }
-
     // Clamping itself now happens inside `SettingsStore::update` so every
     // writer is covered, not just this command — see its doc comment.
     // T26: `notes_always_on_top` used to be live-applied to the native
@@ -41,6 +34,23 @@ pub fn update_settings(app: AppHandle, state: State<AppState>, settings: Setting
     let snippet_auto_expand_mode = settings.snippet_auto_expand_mode.clone();
     let auto_expand_changed =
         previous.snippet_auto_expand != snippet_auto_expand || previous.snippet_auto_expand_mode != snippet_auto_expand_mode;
+    // Only touched when this is the field that changed, and never lets a
+    // failure here block the rest of the save below it: this used to run
+    // unconditionally, on *every* settings save, with `?` aborting the
+    // whole command — including `state.settings.update` further down — on
+    // any error. Found live: `autolaunch.disable()` fails with "the system
+    // cannot find the file specified" on a dev build launched directly
+    // (no installed shortcut for it to have registered in the first
+    // place), which meant no Settings change of *any* kind persisted,
+    // ever, on such a build — the toggle for a field nobody had touched
+    // silently broke every other one.
+    if previous.launch_at_login != settings.launch_at_login {
+        let autolaunch = app.autolaunch();
+        let result = if settings.launch_at_login { autolaunch.enable() } else { autolaunch.disable() };
+        if let Err(error) = result {
+            log::warn!("launch-at-login {}: {error}", if settings.launch_at_login { "enable" } else { "disable" });
+        }
+    }
     state.settings.update(settings)?;
 
     // Snippet auto-expansion: drive the live service so the toggle and mode
