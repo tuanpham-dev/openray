@@ -9,7 +9,7 @@
 
 use std::ffi::c_void;
 
-use windows::Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
@@ -18,7 +18,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GWL_EXSTYLE, GetWindowLongW, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
     IsWindowVisible, PostMessageW, WM_CLOSE, WS_EX_TOOLWINDOW,
 };
-use windows::core::PWSTR;
+use windows::core::{BOOL, PWSTR};
 
 use super::NativeWindow;
 use crate::infrastructure::platform::windows_focus;

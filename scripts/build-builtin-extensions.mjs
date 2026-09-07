@@ -14,7 +14,7 @@
 
 import { readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -26,7 +26,7 @@ if (!existsSync(builderPath)) {
   process.exit(1)
 }
 
-const { buildCommand, buildExportEntry, readManifest } = await import(builderPath)
+const { buildCommand, buildExportEntry, readManifest } = await import(pathToFileURL(builderPath))
 
 if (!existsSync(extensionsRoot)) {
   console.log('no extensions/ directory — nothing to build')

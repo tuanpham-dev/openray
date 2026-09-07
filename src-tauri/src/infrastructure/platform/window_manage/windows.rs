@@ -7,7 +7,8 @@
 
 use std::ffi::c_void;
 
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+use windows::Win32::Foundation::{HWND, LPARAM, RECT};
+use windows::core::BOOL;
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
@@ -131,7 +132,9 @@ pub fn set_frame(id: &str, rect: Rect) -> bool {
 
 fn monitor_rect(handle: HMONITOR) -> Option<Rect> {
     let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-    unsafe { GetMonitorInfoW(handle, &mut info) }.ok()?;
+    if !unsafe { GetMonitorInfoW(handle, &mut info) }.as_bool() {
+        return None;
+    }
     let r = info.rcMonitor;
     Some(Rect { x: r.left as f64, y: r.top as f64, w: (r.right - r.left) as f64, h: (r.bottom - r.top) as f64 })
 }
@@ -140,7 +143,9 @@ pub fn work_area(id: &str) -> Option<Rect> {
     let hwnd = hwnd_from_id(id)?;
     let handle = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
     let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-    unsafe { GetMonitorInfoW(handle, &mut info) }.ok()?;
+    if !unsafe { GetMonitorInfoW(handle, &mut info) }.as_bool() {
+        return None;
+    }
     let r = info.rcWork;
     Some(Rect { x: r.left as f64, y: r.top as f64, w: (r.right - r.left) as f64, h: (r.bottom - r.top) as f64 })
 }

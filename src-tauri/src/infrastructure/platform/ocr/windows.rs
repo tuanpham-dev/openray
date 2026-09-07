@@ -35,7 +35,7 @@ const ENGINE_NAME: &str = "Windows OCR";
 /// MTA worker thread, not whatever thread first calls `available()`.
 fn engine() -> Option<&'static OcrEngine> {
     static ENGINE: OnceLock<Option<OcrEngine>> = OnceLock::new();
-    ENGINE.get_or_init(|| run_on_mta_thread(|| OcrEngine::TryCreateFromUserProfileLanguages().ok().flatten())).as_ref()
+    ENGINE.get_or_init(|| run_on_mta_thread(|| OcrEngine::TryCreateFromUserProfileLanguages().ok())).as_ref()
 }
 
 pub fn available() -> bool {
@@ -52,11 +52,11 @@ pub fn extract_text(path: &Path) -> Option<String> {
         let engine = engine()?;
         let path_str = path.to_str()?;
 
-        let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path_str)).ok()?.get().ok()?;
-        let stream = file.OpenAsync(FileAccessMode::Read).ok()?.get().ok()?;
-        let decoder = BitmapDecoder::CreateAsync(&stream).ok()?.get().ok()?;
-        let bitmap = decoder.GetSoftwareBitmapAsync().ok()?.get().ok()?;
-        let result = engine.RecognizeAsync(&bitmap).ok()?.get().ok()?;
+        let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path_str)).ok()?.join().ok()?;
+        let stream = file.OpenAsync(FileAccessMode::Read).ok()?.join().ok()?;
+        let decoder = BitmapDecoder::CreateAsync(&stream).ok()?.join().ok()?;
+        let bitmap = decoder.GetSoftwareBitmapAsync().ok()?.join().ok()?;
+        let result = engine.RecognizeAsync(&bitmap).ok()?.join().ok()?;
 
         let text = result.Text().ok()?.to_string_lossy();
         let trimmed = text.trim();
