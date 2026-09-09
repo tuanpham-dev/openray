@@ -9,6 +9,11 @@ dist-ssr/
 # same convention as dist/ above.
 .openray/
 
+# What `tauri build` ships as the extension-host resource — host.cjs plus
+# the node_modules it needs at runtime, assembled by
+# scripts/stage-extension-host.mjs from what pnpm already installed.
+packages/extension-host/staged/
+
 # Rust / Tauri
 target/
 src-tauri/target/

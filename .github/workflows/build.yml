@@ -67,9 +67,14 @@ jobs:
       # stdout-isolation suite drives the built `dist/host.cjs` as a real
       # child process, so with the build ordered after it, it spawned a
       # file that wasn't there and failed 20s later on a missing ui.commit.
+      # Staging is not only for the shipped bundle: `tauri.conf.json` lists
+      # the staged directory as a resource, and Tauri's build script checks
+      # every resource path exists, so *any* cargo build of this crate needs
+      # it there — same reason the node sidecar is fetched before cargo runs.
       - name: Build extension host + builtin extensions
         run: |
           pnpm --filter @openray/extension-host build
+          node scripts/stage-extension-host.mjs
           node scripts/build-builtin-extensions.mjs
 
       # Found live while adding a new TS test suite (apps/desktop's
@@ -143,9 +148,13 @@ jobs:
 
       # See the `test` job: `custom-protocol` embeds the frontend, so the
       # context macro needs `apps/desktop/dist` on disk even though this
-      # job only ever type-checks.
-      - name: Build desktop frontend
-        run: pnpm --filter @openray/desktop build
+      # job only ever type-checks — and Tauri's build script wants every
+      # path in `resources` to exist, staged extension host included.
+      - name: Build desktop frontend + stage extension host
+        run: |
+          pnpm --filter @openray/desktop build
+          pnpm --filter @openray/extension-host build
+          node scripts/stage-extension-host.mjs
 
       - name: Check
         working-directory: src-tauri

@@ -264,6 +264,12 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-reconciler:
+        specifier: ^0.33.0
+        version: 0.33.0(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
