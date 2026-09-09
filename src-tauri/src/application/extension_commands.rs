@@ -78,9 +78,14 @@ pub fn resolve_mode(state: &AppState, extension_id: &str, command_name: &str) ->
     }
 }
 
+// The CLI's control socket is the only caller of what follows, and that
+// socket is `#[cfg(unix)]` (Windows wants a named pipe — see
+// `infrastructure::control_socket`). Gated to match, so the dead code it
+// would otherwise be off Unix doesn't fail Clippy's `-D warnings` there.
 /// A command's `required` arguments the caller didn't supply — the gate a
 /// headless CLI run needs and the GUI doesn't, since the palette's
 /// argument bar physically cannot submit without filling them in first.
+#[cfg(unix)]
 fn missing_required_arguments(command: &Command, arguments: &std::collections::HashMap<String, String>) -> Vec<String> {
     command.arguments.iter().filter(|argument| argument.required && !arguments.contains_key(&argument.name)).map(|argument| argument.name.clone()).collect()
 }
@@ -94,6 +99,7 @@ fn missing_required_arguments(command: &Command, arguments: &std::collections::H
 /// that already couples "show the palette" with "launch a command neither
 /// of which the frontend initiated" — the global-hotkey path
 /// (`hotkey_dispatch.rs`'s `show_palette` + `hotkey-command` event).
+#[cfg(unix)]
 pub const CLI_RUN_EXTENSION_COMMAND_EVENT: &str = "cli-run-extension-command";
 
 /// Runs a command for the CLI's control-socket `command.run`. A no-view id
@@ -109,6 +115,7 @@ pub const CLI_RUN_EXTENSION_COMMAND_EVENT: &str = "cli-run-extension-command";
 /// app/builtin id, or `ext:{extension_id}:{command_name}` — so this
 /// accepts exactly what `openray list` prints, no separate CLI id syntax
 /// to keep in sync.
+#[cfg(unix)]
 pub async fn run_headless(app: &AppHandle, state: &AppState, id: &str, arguments: &std::collections::HashMap<String, String>) -> Result<(), String> {
     let command = state.registry.all_commands().into_iter().find(|command| command.id == id).ok_or_else(|| format!("no provider found for command '{id}'"))?;
     // Root search and hotkey bindings (`api/search.rs`'s `disabled` set,
@@ -163,6 +170,9 @@ pub async fn run_headless(app: &AppHandle, state: &AppState, id: &str, arguments
 /// One entry in `openray list`'s output — everything the CLI needs to show
 /// an id and, for extension commands, note whether running it stays
 /// headless or brings the app forward to show its view.
+///
+/// Unix-only for the same reason as `run_headless` above.
+#[cfg(unix)]
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListedCommand {
@@ -175,6 +185,7 @@ pub struct ListedCommand {
     pub arguments: Vec<crate::domain::command::CommandArgument>,
 }
 
+#[cfg(unix)]
 pub fn listable_commands(state: &AppState) -> Vec<ListedCommand> {
     let extension_titles: std::collections::HashMap<String, String> =
         state.extensions.installed_commands().into_iter().map(|c| (c.extension_id, c.extension_title)).collect();
