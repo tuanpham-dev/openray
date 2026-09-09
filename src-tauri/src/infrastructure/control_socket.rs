@@ -17,6 +17,13 @@
 //! **Unix only for now.** Windows needs a named pipe rather than a socket
 //! file; nothing else in the plan depends on it, and the audience for a
 //! development CLI skews heavily Unix. The app runs fine without it.
+//!
+//! Off Unix only the `spawn` stub at the bottom compiles, which leaves the
+//! request type, the path helpers and the imports that serve them unused —
+//! and `-D warnings` in CI turns each of those into a failed Clippy run.
+//! Allowed for the module rather than cfg-gated item by item, so the socket
+//! implementation still reads as one piece.
+#![cfg_attr(not(unix), allow(dead_code, unused_imports))]
 
 use std::path::PathBuf;
 

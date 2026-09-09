@@ -52,6 +52,26 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # T32: without this, `hello_world_round_trips_through_the_real_sidecar`
+      # and its siblings (infrastructure::extension_host::process::tests)
+      # self-skip rather than fail when packages/extension-host/dist/host.cjs
+      # doesn't exist — CI was silently never exercising the real sidecar
+      # round trip. Also needed for the builtin-extension registry itself:
+      # `register_builtin_extensions` reads each extension's `.openray/build/`
+      # output directly off disk (see lib.rs's doc comment), so any test
+      # that exercises extension registration/launch needs these built too,
+      # same as a real `tauri dev`/`tauri build` now gets automatically via
+      # `beforeDevCommand`/`beforeBuildCommand` in tauri.conf.json.
+      #
+      # Runs *before* the JS tests, not after: extension-host's
+      # stdout-isolation suite drives the built `dist/host.cjs` as a real
+      # child process, so with the build ordered after it, it spawned a
+      # file that wasn't there and failed 20s later on a missing ui.commit.
+      - name: Build extension host + builtin extensions
+        run: |
+          pnpm --filter @openray/extension-host build
+          node scripts/build-builtin-extensions.mjs
+
       # Found live while adding a new TS test suite (apps/desktop's
       # fuzzyMatch): nothing here ever ran packages/api-shim's (36) or
       # packages/extension-host's (27) own vitest suites — only Rust tests
@@ -64,20 +84,13 @@ jobs:
       - name: Fetch node sidecar (host triple)
         run: pnpm fetch:node-sidecar
 
-      # T32: without this, `hello_world_round_trips_through_the_real_sidecar`
-      # and its siblings (infrastructure::extension_host::process::tests)
-      # self-skip rather than fail when packages/extension-host/dist/host.cjs
-      # doesn't exist — CI was silently never exercising the real sidecar
-      # round trip. Also needed for the builtin-extension registry itself:
-      # `register_builtin_extensions` reads each extension's `.openray/build/`
-      # output directly off disk (see lib.rs's doc comment), so any test
-      # that exercises extension registration/launch needs these built too,
-      # same as a real `tauri dev`/`tauri build` now gets automatically via
-      # `beforeDevCommand`/`beforeBuildCommand` in tauri.conf.json.
-      - name: Build extension host + builtin extensions
-        run: |
-          pnpm --filter @openray/extension-host build
-          node scripts/build-builtin-extensions.mjs
+      # `custom-protocol` makes `tauri::generate_context!()` embed the
+      # frontend, so the macro panics outright when `apps/desktop/dist`
+      # is absent — and it always is on a fresh checkout, since dist/ is
+      # gitignored and nothing here runs the `beforeBuildCommand` that a
+      # real `tauri build` would.
+      - name: Build desktop frontend
+        run: pnpm --filter @openray/desktop build
 
       - name: Rust tests
         working-directory: src-tauri
@@ -127,6 +140,12 @@ jobs:
 
       - name: Fetch node sidecar (${{ matrix.target }})
         run: node scripts/fetch-node-sidecar.mjs ${{ matrix.target }}
+
+      # See the `test` job: `custom-protocol` embeds the frontend, so the
+      # context macro needs `apps/desktop/dist` on disk even though this
+      # job only ever type-checks.
+      - name: Build desktop frontend
+        run: pnpm --filter @openray/desktop build
 
       - name: Check
         working-directory: src-tauri

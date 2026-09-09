@@ -109,7 +109,13 @@ fn taskbar_theme() -> Option<&'static str> {
 
 /// `SystemUsesLightTheme` is a DWORD flag: 0 is a dark taskbar, anything
 /// else light.
+///
+/// Only the Windows registry read calls it, but it stays compiled on the
+/// other non-macOS targets so its tests still run on the Linux machines
+/// this repo is developed on — hence the `dead_code` allowance there,
+/// which `-D warnings` in CI would otherwise fail the build over.
 #[cfg(not(target_os = "macos"))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 fn theme_for_light_flag(light: u32) -> &'static str {
     if light == 0 {
         "dark"
