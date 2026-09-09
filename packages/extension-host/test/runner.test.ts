@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { build } from 'esbuild'
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { encodeFrame, FrameDecoder, type RpcMessage, type RpcResponse } from '@openray/protocol'
 import { RpcDispatcher } from '../src/rpc'
 import { registerRunnerMethods } from '../src/runner'
@@ -105,6 +105,15 @@ function platform() {
   }
 }
 
+/** Every command `runCommand` has mounted this test, so `afterEach` can
+ * tear them down. `runner.ts`'s mount registry is module-global and
+ * outlives an individual test's dispatcher: when the first lifecycle test
+ * below failed mid-way on CI it left `interval-cmd` mounted, and the next
+ * test's re-launch of that same key emitted the `interval:unmount` it was
+ * asserting could not happen — one timing flake reported as two, the
+ * second reading like a real lifecycle bug. */
+const mountedThisTest: { extensionId: string; commandName: string }[] = []
+
 async function runCommand(
   dispatcher: RpcDispatcher,
   written: Uint8Array[],
@@ -112,6 +121,7 @@ async function runCommand(
   commandName: string,
   commandPath: string,
 ): Promise<void> {
+  mountedThisTest.push({ extensionId, commandName })
   await dispatcher.feed(
     encodeFrame({
       jsonrpc: '2.0',
@@ -218,6 +228,41 @@ function flushEffects(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 10))
 }
 
+/**
+ * Waits until a fixture has recorded `name` at least `atLeast` times.
+ *
+ * `flushEffects`' fixed 10ms is a guess at how long that scheduler takes,
+ * and on a busy machine it loses: the two-core CI runner flushed the mount
+ * effect after the sleep was already over, so the events array was still
+ * empty and the assertion read as "the command never mounted" rather than
+ * "the host was slow". Reproduced locally by running this suite with every
+ * core saturated. Polling costs nothing when the effect is already there
+ * and waits as long as the machine actually needs when it isn't.
+ *
+ * Only for assertions that something *did* happen. Waiting on an event to
+ * stay absent still means a real delay — see the tick-count checks below.
+ */
+async function waitForEvent(name: string, atLeast = 1, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (events().filter((e) => e === name).length < atLeast && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+}
+
+// Unmounting is idempotent by contract (`unmountCommand`: "no mount found
+// … already unmounted, or never mounted"), so this is safe for the tests
+// that already tore their own mounts down, and is the only thing standing
+// between a mid-test failure and a ghost mount in the next test.
+afterEach(async () => {
+  const leftMounted = mountedThisTest.splice(0)
+  if (leftMounted.length === 0) return
+  const { dispatcher, written } = makeDispatcher()
+  registerRunnerMethods(dispatcher)
+  for (const { extensionId, commandName } of leftMounted) {
+    await unmountCommand(dispatcher, written, extensionId, commandName)
+  }
+})
+
 describe('runner mount lifecycle', () => {
   let intervalPath: string
   let simplePath: string
@@ -239,15 +284,15 @@ describe('runner mount lifecycle', () => {
     registerRunnerMethods(dispatcher)
 
     await runCommand(dispatcher, written, 'ext-a', 'interval-cmd', intervalPath)
-    await flushEffects()
+    await waitForEvent('interval:mount')
     expect(events()).toContain('interval:mount')
 
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    await waitForEvent('interval:tick')
     const ticksWhileMounted = events().filter((e) => e === 'interval:tick').length
     expect(ticksWhileMounted).toBeGreaterThan(0)
 
     await unmountCommand(dispatcher, written, 'ext-a', 'interval-cmd')
-    await flushEffects()
+    await waitForEvent('interval:unmount')
     expect(events()).toContain('interval:unmount')
 
     const countAfterUnmount = events().filter((e) => e === 'interval:tick').length
@@ -260,15 +305,15 @@ describe('runner mount lifecycle', () => {
     registerRunnerMethods(dispatcher)
 
     await runCommand(dispatcher, written, 'ext-a', 'interval-cmd', intervalPath)
-    await flushEffects()
+    await waitForEvent('interval:mount')
     expect(events()).toContain('interval:mount')
 
     await runCommand(dispatcher, written, 'ext-b', 'simple-cmd', simplePath)
-    await flushEffects()
+    await waitForEvent('simple:mount')
     expect(events()).toContain('simple:mount')
     expect(events()).not.toContain('interval:unmount')
 
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    await waitForEvent('interval:tick')
     expect(events().filter((e) => e === 'interval:tick').length).toBeGreaterThan(0)
 
     await unmountCommand(dispatcher, written, 'ext-a', 'interval-cmd')
@@ -280,11 +325,12 @@ describe('runner mount lifecycle', () => {
     registerRunnerMethods(dispatcher)
 
     await runCommand(dispatcher, written, 'ext-a', 'simple-cmd', simplePath)
-    await flushEffects()
+    await waitForEvent('simple:mount')
     expect(events().filter((e) => e === 'simple:mount').length).toBe(1)
 
     await runCommand(dispatcher, written, 'ext-a', 'simple-cmd', simplePath)
-    await flushEffects()
+    await waitForEvent('simple:mount', 2)
+    await waitForEvent('simple:unmount')
     expect(events().filter((e) => e === 'simple:mount').length).toBe(2)
     expect(events().filter((e) => e === 'simple:unmount').length).toBe(1)
 
