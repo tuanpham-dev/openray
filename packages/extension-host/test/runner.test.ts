@@ -222,31 +222,50 @@ function events(): string[] {
 // react-reconciler flushes passive effects (useEffect) asynchronously via
 // its own scheduler (setTimeout-based in this host config, see
 // reconciler.ts's `scheduleTimeout: setTimeout`), never synchronously
-// within mount()/unmount() — every assertion on a fixture's mount/unmount
-// side effects needs to wait a tick first.
+// within mount()/unmount().
+//
+// Teardown only — nothing is asserted after one of these, it just gives a
+// test's last unmount somewhere to land before the file moves on. Anything
+// an assertion depends on waits for that thing specifically; see
+// `waitUntil` below for why.
 function flushEffects(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 10))
 }
 
 /**
- * Waits until a fixture has recorded `name` at least `atLeast` times.
+ * Waits until `predicate` holds, or gives up and lets the assertion that
+ * follows report what was actually there.
  *
- * `flushEffects`' fixed 10ms is a guess at how long that scheduler takes,
+ * `flushEffects`' fixed 10ms is a guess at how long the scheduler takes,
  * and on a busy machine it loses: the two-core CI runner flushed the mount
  * effect after the sleep was already over, so the events array was still
  * empty and the assertion read as "the command never mounted" rather than
- * "the host was slow". Reproduced locally by running this suite with every
- * core saturated. Polling costs nothing when the effect is already there
- * and waits as long as the machine actually needs when it isn't.
+ * "the host was slow". Measured on this file directly — with fixed waits
+ * throughout, five of six local runs failed somewhere, each time in a
+ * different test. Polling costs nothing when the work is already done and
+ * waits as long as the machine actually needs when it isn't.
  *
- * Only for assertions that something *did* happen. Waiting on an event to
+ * Only for asserting that something *did* happen. Waiting on something to
  * stay absent still means a real delay — see the tick-count checks below.
  */
-async function waitForEvent(name: string, atLeast = 1, timeoutMs = 5000): Promise<void> {
+async function waitUntil(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const deadline = Date.now() + timeoutMs
-  while (events().filter((e) => e === name).length < atLeast && Date.now() < deadline) {
+  while (!predicate() && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
+}
+
+/** Waits until a fixture has recorded `name` at least `atLeast` times. */
+function waitForEvent(name: string, atLeast = 1): Promise<void> {
+  return waitUntil(() => events().filter((e) => e === name).length >= atLeast)
+}
+
+/** Waits for the most recent `ui.commit` notification to satisfy `predicate`. */
+function waitForCommit(written: Uint8Array[], predicate: (params: { windowLabel?: string }) => boolean = () => true): Promise<void> {
+  return waitUntil(() => {
+    const params = lastNotification(written, 'ui.commit')?.params as { windowLabel?: string } | undefined
+    return params !== undefined && predicate(params)
+  })
 }
 
 // Unmounting is idempotent by contract (`unmountCommand`: "no mount found
@@ -529,7 +548,7 @@ describe('root-provider row views (T20)', () => {
     registerRunnerMethods(dispatcher)
 
     await runRootCommandView(dispatcher, written, 'ext-a', 'list', rootProviderViewPath, 'row-1', 'hello')
-    await flushEffects()
+    await waitForEvent('view:mount:row-1:hello')
 
     expect(events()).toContain('view:mount:row-1:hello')
     await unmountCommand(dispatcher, written, 'ext-a', 'row-1')
@@ -541,14 +560,14 @@ describe('root-provider row views (T20)', () => {
     registerRunnerMethods(dispatcher)
 
     await runRootCommandView(dispatcher, written, 'ext-a', 'list', rootProviderViewPath, 'row-1')
-    await flushEffects()
+    await waitForEvent('view:mount:row-1:')
     expect(events()).toContain('view:mount:row-1:')
 
     // Matches what the frontend actually sends: `commandName` here is the
     // row id, never the host root-provider command's own name — see
     // `extension_commands::launch_root_command`'s doc comment.
     await unmountCommand(dispatcher, written, 'ext-a', 'row-1')
-    await flushEffects()
+    await waitForEvent('view:unmount:row-1')
 
     expect(events()).toContain('view:unmount:row-1')
   })
@@ -558,9 +577,9 @@ describe('root-provider row views (T20)', () => {
     registerRunnerMethods(dispatcher)
 
     await runRootCommandView(dispatcher, written, 'ext-a', 'list', rootProviderViewPath, 'row-1')
-    await flushEffects()
+    await waitForEvent('view:mount:row-1:')
     await runRootCommandView(dispatcher, written, 'ext-a', 'list', rootProviderViewPath, 'row-2')
-    await flushEffects()
+    await waitForEvent('view:mount:row-2:')
 
     expect(events()).toContain('view:mount:row-1:')
     expect(events()).toContain('view:mount:row-2:')
@@ -578,9 +597,9 @@ describe('root-provider row views (T20)', () => {
     registerRunnerMethods(dispatcher)
 
     await runRootCommandView(dispatcher, written, 'ext-a', 'list', rootProviderViewPath, 'row-1', 'first')
-    await flushEffects()
+    await waitForEvent('view:mount:row-1:first')
     await runRootCommandView(dispatcher, written, 'ext-a', 'list', rootProviderViewPath, 'row-1', 'second')
-    await flushEffects()
+    await waitForEvent('view:mount:row-1:second')
 
     expect(events()).toEqual(['view:mount:row-1:first', 'view:unmount:row-1', 'view:mount:row-1:second'])
   })
@@ -724,7 +743,7 @@ describe('command context survives a deferred useEffect (T26 regression)', () =>
     // passes both with and without that fallback here, verified directly.
     await runCommand(dispatcher, written, 'ctx-effect-extension', 'effect-storage-cmd', effectStoragePath)
     await runCommand(dispatcher, written, 'ctx-other-extension', 'simple-cmd', simplePath)
-    await flushEffects()
+    await waitUntil(() => capturedExtensionId !== undefined)
 
     expect(capturedExtensionId).toBe('ctx-effect-extension')
 
@@ -759,7 +778,8 @@ describe('extension-owned windows (T24)', () => {
     registerRunnerMethods(dispatcher)
 
     await runCommand(dispatcher, written, 'ext-window', 'window-cmd', windowCommandPath)
-    await flushEffects()
+    await waitForCommit(written)
+    await waitUntil(() => capturedOpenOptions !== undefined)
 
     // `WindowCommand` itself (the launched command, mounted into "main")
     // commits right away — `openExtensionWindow`'s own second mount is
@@ -771,7 +791,7 @@ describe('extension-owned windows (T24)', () => {
     await dispatcher.feed(
       encodeFrame({ jsonrpc: '2.0', method: 'extension.windowReady', params: { windowLabel: 'ext-window-0' } } as unknown as never),
     )
-    await flushEffects()
+    await waitForCommit(written, (params) => params.windowLabel === 'ext-window-0')
 
     const commitNotification = lastNotification(written, 'ui.commit')
     expect(commitNotification?.params).toMatchObject({ windowLabel: 'ext-window-0' })
@@ -793,11 +813,11 @@ describe('extension-owned windows (T24)', () => {
     registerRunnerMethods(dispatcher)
 
     await runCommand(dispatcher, written, 'ext-window', 'window-cmd', windowCommandPath)
-    await flushEffects()
+    await waitForCommit(written)
     await dispatcher.feed(
       encodeFrame({ jsonrpc: '2.0', method: 'extension.windowReady', params: { windowLabel: 'ext-window-1' } } as unknown as never),
     )
-    await flushEffects()
+    await waitForCommit(written, (params) => params.windowLabel === 'ext-window-1')
     expect(lastNotification(written, 'ui.commit')).toBeDefined()
 
     // The native window was destroyed (user closed it) — must not throw,
@@ -827,7 +847,7 @@ describe('MarkdownEditor node (T25)', () => {
     registerRunnerMethods(dispatcher)
 
     await runCommand(dispatcher, written, 'ext-markdown', 'markdown-editor-cmd', markdownEditorPath)
-    await flushEffects()
+    await waitForCommit(written)
 
     const commitNotification = lastNotification(written, 'ui.commit')
     const wrapped = commitNotification?.params as {
