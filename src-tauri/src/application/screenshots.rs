@@ -94,14 +94,37 @@ fn resolve_created_at(created: Option<i64>, modified_at: i64) -> i64 {
     created.unwrap_or(modified_at)
 }
 
+/// One scanned file, carrying the raw `SystemTime`s [`newest_first`] needs
+/// alongside the entry that actually gets returned.
+struct Scanned {
+    created_time: SystemTime,
+    modified_time: SystemTime,
+    entry: MediaEntry,
+}
+
+/// Newest first, on the raw `SystemTime`s rather than the truncated-to-
+/// seconds `created_at`/`modified_at` fields: a burst of screenshots (or
+/// this function's own test fixtures) can land several files in the same
+/// second, and ordering on the already-truncated value leaves those tied.
+///
+/// Every comparison after the first exists because a tie here is decided
+/// by `read_dir` order, which is whatever the filesystem feels like
+/// handing back. Not hypothetical: filesystems differ on whether a
+/// birthtime carries sub-second precision at all, and on the ones that
+/// round it away every file written in the same second ties. The two
+/// ordering tests below then passed or failed purely on scan order —
+/// green on a dev machine's tmpfs, red on CI, with the entries in exactly
+/// reverse order. Modification time and finally the name make the
+/// ordering total, so the answer no longer depends on who is asking.
+fn newest_first(a: &Scanned, b: &Scanned) -> std::cmp::Ordering {
+    b.created_time
+        .cmp(&a.created_time)
+        .then_with(|| b.modified_time.cmp(&a.modified_time))
+        .then_with(|| a.entry.name.cmp(&b.entry.name))
+}
+
 fn scan_scopes(scopes: &[String], video_extensions: &[String]) -> Vec<MediaEntry> {
-    // Sorted on the raw `SystemTime`, not the truncated-to-seconds
-    // `created_at` field: a burst of screenshots (or this function's own
-    // test fixtures) can land multiple files in the same second, and
-    // sorting on the already-truncated value would leave those tied,
-    // falling back to arbitrary directory scan order instead of real
-    // creation order.
-    let mut raw: Vec<(SystemTime, MediaEntry)> = Vec::new();
+    let mut raw: Vec<Scanned> = Vec::new();
     for scope in scopes {
         let Ok(dir_entries) = std::fs::read_dir(expand_home(scope)) else { continue };
         for dir_entry in dir_entries.flatten() {
@@ -118,14 +141,15 @@ fn scan_scopes(scopes: &[String], video_extensions: &[String]) -> Vec<MediaEntry
             let created_time = metadata.created().unwrap_or(modified_time);
             let modified_at = unix_secs(Ok(modified_time)).unwrap_or(0);
             let created_at = resolve_created_at(unix_secs(Ok(created_time)), modified_at);
-            raw.push((
+            raw.push(Scanned {
                 created_time,
-                MediaEntry { path: path_str, name, created_at, modified_at, kind: kind.into(), ocr_text: None, thumbnail_path: None, pinned: false },
-            ));
+                modified_time,
+                entry: MediaEntry { path: path_str, name, created_at, modified_at, kind: kind.into(), ocr_text: None, thumbnail_path: None, pinned: false },
+            });
         }
     }
-    raw.sort_by_key(|(created_time, _)| std::cmp::Reverse(*created_time));
-    raw.into_iter().map(|(_, entry)| entry).collect()
+    raw.sort_by(newest_first);
+    raw.into_iter().map(|scanned| scanned.entry).collect()
 }
 
 type ScanCache = Arc<RwLock<Option<(Instant, Vec<MediaEntry>)>>>;
@@ -932,27 +956,79 @@ mod tests {
         assert_eq!(entries[1].kind, "video");
     }
 
+    fn scanned(name: &str, created: SystemTime, modified: SystemTime) -> Scanned {
+        Scanned {
+            created_time: created,
+            modified_time: modified,
+            entry: MediaEntry {
+                path: format!("/tmp/{name}"),
+                name: name.to_string(),
+                created_at: 0,
+                modified_at: 0,
+                kind: "image".into(),
+                ocr_text: None,
+                thumbnail_path: None,
+                pinned: false,
+            },
+        }
+    }
+
+    fn ordered(mut entries: Vec<Scanned>) -> Vec<String> {
+        entries.sort_by(newest_first);
+        entries.into_iter().map(|scanned| scanned.entry.name).collect()
+    }
+
     #[test]
-    fn scan_scopes_breaks_same_truncated_second_ties_by_sub_second_precision() {
+    fn newest_first_breaks_same_truncated_second_ties_by_sub_second_precision() {
         // Found via live QA: four fixture files all landed in the same
         // wall-clock second, and the pre-fix sort (on the already-
         // truncated-to-seconds `created_at`) left them tied, falling back
         // to arbitrary directory scan order instead of real creation
-        // order. Two files written back-to-back with no artificial delay
-        // reproduce that same-second collision on a filesystem with
-        // sub-second birthtime/mtime resolution (the common case).
-        let dir = std::env::temp_dir().join(format!("openray-screenshots-tie-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        // order.
+        //
+        // Asserted on constructed times rather than on real files, which
+        // is what this used to do: whether two files written back-to-back
+        // even *get* distinguishable birthtimes is the filesystem's call,
+        // so the fixture that was meant to pin the ordering down was
+        // itself at the mercy of the thing it could not control.
+        let second = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let earlier = second + Duration::from_millis(120);
+        let later = second + Duration::from_millis(880);
 
-        let first_path = dir.join("first.png");
-        let second_path = dir.join("second.png");
-        std::fs::write(&first_path, b"first").unwrap();
-        std::fs::write(&second_path, b"second").unwrap();
+        assert_eq!(
+            ordered(vec![scanned("first.png", earlier, earlier), scanned("second.png", later, later)]),
+            vec!["second.png", "first.png"]
+        );
+    }
 
-        let entries = scan_scopes(&[dir.display().to_string()], &[]);
-        std::fs::remove_dir_all(&dir).unwrap();
+    #[test]
+    fn newest_first_falls_back_to_modification_time_when_birthtimes_tie() {
+        // A filesystem that rounds birthtime to the second (or hands the
+        // same one to every file written in a burst) leaves `created_time`
+        // tied; modification time is the next-best evidence of order, and
+        // is what the two files here disagree on.
+        let tied = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
 
-        assert_eq!(entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), vec!["second.png", "first.png"]);
+        assert_eq!(
+            ordered(vec![
+                scanned("older.png", tied, tied),
+                scanned("newer.png", tied, tied + Duration::from_secs(60)),
+            ]),
+            vec!["newer.png", "older.png"]
+        );
+    }
+
+    #[test]
+    fn newest_first_falls_back_to_the_name_when_every_timestamp_ties() {
+        // Nothing left to order by — but the answer still has to be the
+        // same one every time, on every filesystem, rather than whatever
+        // `read_dir` happened to yield.
+        let tied = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+
+        assert_eq!(
+            ordered(vec![scanned("b.png", tied, tied), scanned("a.png", tied, tied), scanned("c.png", tied, tied)]),
+            vec!["a.png", "b.png", "c.png"]
+        );
     }
 
     #[test]
