@@ -32,12 +32,27 @@ describe('mutate', () => {
     const hook = await renderHook(() => usePromise(async () => 'server', []))
     await flush()
 
-    void hook.current.mutate(new Promise((resolve) => setTimeout(() => resolve('written'), 20)), {
-      optimisticUpdate: () => 'optimistic',
+    // The write is held open by the test rather than by a timer. What
+    // this covers is the in-flight window — optimistic value on screen,
+    // write not yet landed — and a timer only *approximates* that window:
+    // it stayed open for as long as 20ms of wall clock outlasted six
+    // event-loop turns, which on a loaded CI runner it did not. The
+    // write completed first, `usePromise` revalidated to 'server', and
+    // the assertion read as a broken optimistic update.
+    let completeWrite: (value: string) => void = () => {}
+    const write = new Promise<string>((resolve) => {
+      completeWrite = resolve
     })
+
+    void hook.current.mutate(write, { optimisticUpdate: () => 'optimistic' })
     await flush()
 
     expect(hook.current.data).toBe('optimistic')
+
+    // Settled before leaving, so the mutate this test started doesn't
+    // land mid-way through whichever test runs next.
+    completeWrite('written')
+    await flush()
   })
 
   it('keeps the written value when the work succeeds', async () => {
