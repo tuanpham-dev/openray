@@ -1132,6 +1132,19 @@ function DetailBody({ node, nodes }: { node: UiNode; nodes: Record<string, UiNod
   )
 }
 
+/**
+ * How far one arrow-key press moves the page: three lines of the text being
+ * read, measured off the markdown itself so it tracks the Text Size setting
+ * rather than a hardcoded pixel count that means something different at
+ * each one. Three because one line is imperceptible on a key repeat and a
+ * whole screen is what Page Down is for.
+ */
+function scrollStep(scroller: HTMLElement): number {
+  const text = scroller.querySelector('.openray-detail-markdown') ?? scroller
+  const lineHeight = Number.parseFloat(getComputedStyle(text).lineHeight)
+  return Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight * 3 : 60
+}
+
 function ExtensionDetail({
   node,
   nodes,
@@ -1152,6 +1165,8 @@ function ExtensionDetail({
   const actionsSlot = findActionsSlot(node, nodes)
   const actions = actionsFromSlot(actionsSlot, nodes)
   const [actionPanelOpen, setActionPanelOpen] = useState(false)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const { altJkNavigation } = useAppSettings()
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1166,6 +1181,46 @@ function ExtensionDetail({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [actions])
+
+  /**
+   * Scrolls the page. A `Detail` has no rows to move between, so the arrow
+   * keys had nothing to do and long content — the shell extension's command
+   * output, an extension's README — could only be reached with the mouse.
+   *
+   * Alt+J/K comes along for the same reason it moves through a list, and
+   * honours the same setting: to someone who has turned it on, it *is* the
+   * arrow keys. Off, the arrows still work — this is a second way to do it,
+   * never the only one.
+   *
+   * Skipped while the action panel is open, where the arrows belong to its
+   * own list. Both handlers listen on the window, so without this the page
+   * would scroll underneath the panel as the selection moved.
+   */
+  useEffect(() => {
+    if (actionPanelOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const scroller = scrollerRef.current
+      if (!scroller) return
+      const direction =
+        event.key === 'ArrowDown'
+          ? 1
+          : event.key === 'ArrowUp'
+            ? -1
+            : altJkNavigation
+              ? altNavigationDirection(event)
+              : null
+      if (!direction) return
+      event.preventDefault()
+      // Assigned rather than `scrollBy`, so a held key scrolls steadily
+      // instead of queueing one smooth animation per repeat. The browser
+      // clamps it to the scrollable range.
+      scroller.scrollTop += direction * scrollStep(scroller)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [actionPanelOpen, altJkNavigation])
 
   return (
     <div className="palette">
@@ -1183,7 +1238,7 @@ function ExtensionDetail({
           correct inside a List, where the pane has a fixed height, but here
           the outer container already scrolls, so the inner one collapses to
           a sliver and clips tall content (a screenshot showed ~75px of 260). */}
-      <div className="openray-settings-content openray-detail-page" style={{ overflowY: 'auto', flex: 1 }}>
+      <div ref={scrollerRef} className="openray-settings-content openray-detail-page" style={{ overflowY: 'auto', flex: 1 }}>
         <DetailBody node={node} nodes={nodes} />
       </div>
       {actionPanelOpen && <ActionPanel actions={actions} onClose={() => setActionPanelOpen(false)} />}
