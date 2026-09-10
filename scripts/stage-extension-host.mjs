@@ -18,6 +18,12 @@
  *   - **@openray/api-shim's TypeScript sources**, which `buildCommand`
  *     aliases `@raycast/api` and its siblings straight at — esbuild reads
  *     those `.cts` files on every build the app does.
+ *   - **npm**, which installs an extension's own dependencies at install
+ *     time. `scripts/fetch-node-sidecar.mjs` takes it out of the same Node
+ *     distribution the sidecar binary comes from; it is staged rather than
+ *     spawned off PATH because a desktop app launched from a menu inherits
+ *     a minimal PATH, with no nvm/volta/asdf shim on it, and reported
+ *     "spawn npm ENOENT" on machines that have npm installed and working.
  *
  * In this repo pnpm's symlinks answer all three. An installed app has no
  * such tree, so the packages are copied here into a plain `node_modules`
@@ -120,6 +126,16 @@ stagePackage('react-reconciler', requireFromApiShim)
 const esbuildSource = stagePackage('esbuild', requireFromHost)
 const binaryPackage = esbuildBinaryPackage()
 stagePackage(binaryPackage, createRequire(join(esbuildSource, 'lib', 'main.js')))
+
+// npm, as fetched beside the node binary that will run it. Staged inside
+// the host's own directory rather than as a resource of its own, so
+// `builder.ts` can find it relative to `__dirname` — the one thing the
+// sidecar always knows about where it lives.
+const npmSource = join(root, 'src-tauri', 'binaries', 'npm')
+if (!existsSync(npmSource)) {
+  throw new Error(`${npmSource} is missing — run \`pnpm fetch:node-sidecar\` first`)
+}
+cpSync(npmSource, join(staged, 'npm'), { recursive: true, dereference: true })
 
 // Only what api-shim itself declares shippable (`files: ["src"]`) plus the
 // manifest, which `react-runtime.ts` resolves by name to find the directory.

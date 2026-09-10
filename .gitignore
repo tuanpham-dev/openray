@@ -18,6 +18,9 @@ packages/extension-host/staged/
 target/
 src-tauri/target/
 src-tauri/binaries/node-*
+# npm, extracted from the same Node distribution by that same script and
+# shipped with the app so extension installs don't need one on PATH.
+src-tauri/binaries/npm/
 src-tauri/gen/
 
 # Logs

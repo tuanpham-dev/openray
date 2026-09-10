@@ -6,7 +6,7 @@
 // T18 only exercises the current host triple (this machine). T24 extends
 // this to fetch every triple in the CI build matrix.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { createWriteStream, mkdirSync, existsSync, chmodSync, rmSync } from 'node:fs'
+import { createWriteStream, mkdirSync, existsSync, chmodSync, cpSync, rmSync } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -38,9 +38,17 @@ async function fetchNodeBinary(targetTriple) {
   const binariesDir = join(repoRoot, 'src-tauri', 'binaries')
   const destName = `node-${targetTriple}${mapping.binary.endsWith('.exe') ? '.exe' : ''}`
   const destPath = join(binariesDir, destName)
+  // npm comes out of this same tarball, because it is part of the Node
+  // distribution — and an installed app has to bring its own. Extensions
+  // with dependencies are `npm install`ed at install time, and a desktop
+  // app launched from a menu inherits a minimal PATH with no node manager's
+  // shims on it: "spawn npm ENOENT", on a machine with npm perfectly well
+  // installed. Pure JS, so unlike the binary it is the same for every
+  // target and the last fetch to run wins harmlessly.
+  const npmDest = join(binariesDir, 'npm')
 
-  if (existsSync(destPath)) {
-    console.log(`[fetch-node-sidecar] ${destName} already present, skipping`)
+  if (existsSync(destPath) && existsSync(npmDest)) {
+    console.log(`[fetch-node-sidecar] ${destName} and npm already present, skipping`)
     return destPath
   }
 
@@ -82,6 +90,14 @@ async function fetchNodeBinary(targetTriple) {
 
   execFileSync('cp', [binarySrc, destPath])
   if (mapping.archive !== 'zip') chmodSync(destPath, 0o755)
+
+  // The Windows zip keeps npm at the top level; the posix tarballs put it
+  // under lib/, the same split as the node binary itself.
+  const npmSrc = join(extractedRoot, mapping.archive === 'zip' ? join('node_modules', 'npm') : join('lib', 'node_modules', 'npm'))
+  if (!existsSync(npmSrc)) throw new Error(`npm not found in the Node distribution at ${npmSrc}`)
+  rmSync(npmDest, { recursive: true, force: true })
+  cpSync(npmSrc, npmDest, { recursive: true, dereference: true })
+  console.log(`[fetch-node-sidecar] wrote ${npmDest}`)
 
   rmSync(workDir, { recursive: true, force: true })
   console.log(`[fetch-node-sidecar] wrote ${destPath}`)

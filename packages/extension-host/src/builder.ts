@@ -80,9 +80,40 @@ export async function buildExportEntry(extensionDir: string, manifest: Extension
   return `declares "export" but ${error.replace(`no source file found for command "${entry}"`, `has no src/${entry}.{ts,tsx,js,jsx}`)}`
 }
 
+/**
+ * npm's own CLI entry, preferring the copy shipped beside this bundle.
+ *
+ * Spawning a bare `npm` is what this used to do, and it works in dev and
+ * fails in an installed app: a desktop app launched from a menu or a
+ * .desktop entry inherits a minimal PATH, without the nvm/volta/asdf shim
+ * directory a developer's shell puts npm on. Installing an extension with
+ * dependencies died on "spawn npm ENOENT" — on a machine with npm
+ * installed and working, which is what made the error so misleading.
+ *
+ * `scripts/stage-extension-host.mjs` puts npm next to host.cjs, out of the
+ * same Node distribution the sidecar binary itself comes from, so the two
+ * always agree on version. `null` means no bundled copy — this is the
+ * monorepo layout, where `dist/host.cjs` has no staged directory around it
+ * and the PATH a dev's `tauri dev` inherits does have npm on it.
+ */
+function bundledNpmCli(): string | null {
+  const candidate = join(__dirname, 'npm', 'bin', 'npm-cli.js')
+  return existsSync(candidate) ? candidate : null
+}
+
 async function npmInstall(extensionDir: string): Promise<void> {
-  log(`npm install in ${extensionDir}`)
-  await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: extensionDir, maxBuffer: 1024 * 1024 * 32 })
+  const npmCli = bundledNpmCli()
+  const options = { cwd: extensionDir, maxBuffer: 1024 * 1024 * 32 }
+  if (npmCli) {
+    // Run through the same Node that is running this host — in an
+    // installed app that is the bundled sidecar binary, which is the only
+    // Node the app can count on existing at all.
+    log(`npm install in ${extensionDir} (bundled npm)`)
+    await execFileAsync(process.execPath, [npmCli, 'install', '--no-audit', '--no-fund'], options)
+    return
+  }
+  log(`npm install in ${extensionDir} (npm from PATH)`)
+  await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], options)
 }
 
 /** The specifiers whose named imports count as "API surface this extension

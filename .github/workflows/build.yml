@@ -67,10 +67,15 @@ jobs:
       # stdout-isolation suite drives the built `dist/host.cjs` as a real
       # child process, so with the build ordered after it, it spawned a
       # file that wasn't there and failed 20s later on a missing ui.commit.
+      # Ahead of staging, not just of cargo: npm is extracted from this same
+      # Node distribution, and the staged extension host ships it.
+      - name: Fetch node sidecar (host triple)
+        run: pnpm fetch:node-sidecar
+
       # Staging is not only for the shipped bundle: `tauri.conf.json` lists
       # the staged directory as a resource, and Tauri's build script checks
       # every resource path exists, so *any* cargo build of this crate needs
-      # it there — same reason the node sidecar is fetched before cargo runs.
+      # it there.
       - name: Build extension host + builtin extensions
         run: |
           pnpm --filter @openray/extension-host build
@@ -85,9 +90,6 @@ jobs:
       # convention `typecheck`/`lint` already use.
       - name: JS/TS unit tests
         run: pnpm test
-
-      - name: Fetch node sidecar (host triple)
-        run: pnpm fetch:node-sidecar
 
       # `custom-protocol` makes `tauri::generate_context!()` embed the
       # frontend, so the macro panics outright when `apps/desktop/dist`
