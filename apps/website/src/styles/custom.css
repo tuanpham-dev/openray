@@ -1,0 +1,77 @@
+/* Accent taken from the app icon's gradient (src-tauri/icons/icon.svg):
+   #8B45FF → #6236FF → #2F6BFF. Starlight derives its link, sidebar-active and
+   focus colours from these steps. */
+:root {
+  --sl-color-accent-low: #241a4d;
+  --sl-color-accent: #6236ff;
+  --sl-color-accent-high: #c9bcff;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #eceef2;
+  --sl-color-gray-2: #c0c2c7;
+  --sl-color-gray-3: #888b96;
+  --sl-color-gray-4: #545861;
+  --sl-color-gray-5: #353841;
+  --sl-color-gray-6: #24272f;
+  --sl-color-black: #17181c;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dcd4ff;
+  --sl-color-accent: #5326e8;
+  --sl-color-accent-high: #241a4d;
+  --sl-color-white: #17181c;
+  --sl-color-gray-1: #24272f;
+  --sl-color-gray-2: #353841;
+  --sl-color-gray-3: #545861;
+  --sl-color-gray-4: #888b96;
+  --sl-color-gray-5: #c0c2c7;
+  --sl-color-gray-6: #eceef2;
+  --sl-color-gray-7: #f5f6f8;
+  --sl-color-black: #ffffff;
+}
+
+/* Screenshots are wide SVGs of a translucent palette window — a subtle frame
+   keeps them from bleeding into the page background in light mode. */
+.sl-markdown-content img[src*='/screenshots/'] {
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 22%);
+}
+
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────────
+   Starlight sizes both side columns from --sl-sidebar-width, and the right
+   "On this page" pane additionally absorbs whatever width is left over, so
+   on a wide screen the two rails together took more room than the prose.
+   The nav needs less than the default, the TOC needs less still, and the
+   text benefits from the difference. */
+:root {
+  --sl-sidebar-width: 15.5rem;
+  --sl-content-width: 52rem;
+}
+
+@media (min-width: 72rem) {
+  /* Fixed rather than proportional, so the pane stops growing with the
+     viewport. `:where()` in Starlight's own selector keeps its specificity
+     at 0, so this plain class wins on order. */
+  .right-sidebar-container {
+    width: 13rem;
+  }
+}
+
+/* The TOC only ever holds short heading links; let them wrap tightly and
+   sit closer together than the default. */
+.right-sidebar-panel {
+  font-size: var(--sl-text-xs);
+}
+.right-sidebar-panel ul {
+  line-height: 1.35;
+}
+
+/* With the rails trimmed, give the prose the room they gave back. */
+.sl-markdown-content {
+  max-width: 100%;
+}

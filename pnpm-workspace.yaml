@@ -4,3 +4,4 @@ packages:
   - "extensions/*"
 allowBuilds:
   esbuild: true
+  sharp: true

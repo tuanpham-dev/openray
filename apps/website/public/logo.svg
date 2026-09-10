@@ -1,0 +1,40 @@
+<!-- Source of truth for every generated icon in this directory; the
+     README's Development section has the rasterize + `tauri icon`
+     commands that regenerate the PNG/ICO/ICNS set from it.
+
+     The glyph is the same bolt the webview already ships as its favicon
+     (apps/desktop/public/favicon.svg), set on a filled tile because a
+     bare glyph reads as a hole in a Dock/taskbar slot. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B45FF"/>
+      <stop offset="0.55" stop-color="#6236FF"/>
+      <stop offset="1" stop-color="#2F6BFF"/>
+    </linearGradient>
+
+    <!-- Light rakes across the top-left, the way a physical tile catches
+         it — keeps the square from reading as flat colour at large sizes
+         and costs nothing at 32px. -->
+    <linearGradient id="sheen" x1="180" y1="60" x2="620" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="boltShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#1A0A4A" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="230" ry="230" fill="url(#tile)"/>
+  <rect width="1024" height="1024" rx="230" ry="230" fill="url(#sheen)"/>
+
+  <!-- 48x46 glyph scaled to 598x573 and centred. -->
+  <g transform="translate(213 225.5) scale(12.4565)" filter="url(#boltShadow)">
+    <path fill="#ffffff" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
+  </g>
+
+  <!-- Hairline rim: separates the tile from a same-hue wallpaper without
+       reading as a border at small sizes. -->
+  <rect x="0.5" y="0.5" width="1023" height="1023" rx="229.5" ry="229.5" fill="none" stroke="#ffffff" stroke-opacity="0.16"/>
+</svg>

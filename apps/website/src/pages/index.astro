@@ -1,0 +1,446 @@
+---
+import { iconSvg } from '../../scripts/app-icons.mjs'
+
+// The product page. Deliberately not a Starlight page: it owns `/` with its own
+// layout, while Starlight owns everything under `/docs/`.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+const docs = (path = '') => `${base}/docs${path}`
+const asset = (path: string) => `${base}${path}`
+
+const RELEASES = 'https://github.com/tuanpham-dev/openray/releases/latest'
+const REPO = 'https://github.com/tuanpham-dev/openray'
+
+const features = [
+  {
+    title: 'Application search',
+    icon: 'app-window',
+    body: 'Launch anything installed. Results reorder themselves around what you actually use.',
+    href: docs('/features/applications'),
+  },
+  {
+    title: 'Clipboard History',
+    icon: 'clipboard',
+    body: 'Everything you have copied, searchable by type, with the image and the link still intact.',
+    href: docs('/features/clipboard-history'),
+  },
+  {
+    title: 'Snippets',
+    icon: 'scissors',
+    body: 'Reusable text with placeholders, expanded from the palette or as you type in any app.',
+    href: docs('/features/snippets'),
+  },
+  {
+    title: 'Window Management',
+    icon: 'window-center',
+    body: '35 tiling presets, custom layouts, and half sizes that cycle through ½, ⅔ and ⅓.',
+    href: docs('/features/window-management'),
+  },
+  {
+    title: 'AI',
+    icon: 'sparkles',
+    body: 'Chat, one-shot commands, agents and MCP tools — using your own API key, with no proxy.',
+    href: docs('/features/ai'),
+  },
+  {
+    title: 'Calculator',
+    icon: 'calculator',
+    body: 'Arithmetic, unit conversion and date maths, answered above the results as you type.',
+    href: docs('/features/calculator'),
+  },
+  {
+    title: 'Quicklinks',
+    icon: 'link',
+    body: 'Links with a hole in them. Type a value, press return, and the right page opens.',
+    href: docs('/features/quicklinks'),
+  },
+  {
+    title: 'Screenshots',
+    icon: 'camera',
+    body: 'Search screenshots by the text inside them, then paste, drag or copy the result.',
+    href: docs('/features/screenshots'),
+  },
+  {
+    title: 'Notes',
+    icon: 'note',
+    body: 'A floating markdown scratchpad you can capture into without leaving the palette.',
+    href: docs('/features/notes'),
+  },
+  {
+    title: 'Translate',
+    icon: 'translate',
+    body: '109 languages inline in root search. No API key and no account.',
+    href: docs('/features/translate'),
+  },
+  {
+    title: 'Script Commands',
+    icon: 'code',
+    body: 'Any shell, Python or Node script becomes a command with a comment header.',
+    href: docs('/features/script-commands'),
+  },
+  {
+    title: 'System Commands',
+    icon: 'power',
+    body: 'Lock, sleep, restart, volume and media controls, without touching a menu.',
+    href: docs('/features/system-commands'),
+  },
+]
+
+const platforms = [
+  { name: 'macOS', detail: 'Apple Silicon · .dmg' },
+  { name: 'Windows', detail: 'x64 · .msi and .exe' },
+  { name: 'Linux', detail: 'x64 and arm64 · .deb, .rpm, .AppImage' },
+]
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenRay — one hotkey, everything you do</title>
+<meta name="description" content="An open-source, cross-platform command palette and launcher where every feature is an extension." />
+<link rel="icon" href={asset('/favicon.svg')} type="image/svg+xml" />
+<meta property="og:title" content="OpenRay" />
+<meta property="og:description" content="An open-source command palette for macOS, Windows and Linux." />
+<meta property="og:type" content="website" />
+
+<style>
+  :root {
+    --ink: #f4f4f6;
+    --ink-dim: #a6a7ae;
+    --ink-faint: #76777f;
+    --ground: #0e0e11;
+    --ground-raised: #16161a;
+    --edge: #26262c;
+    --brand: #8b45ff;
+    --brand-2: #6236ff;
+    --brand-3: #2f6bff;
+    --radius: 14px;
+    --measure: 1120px;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ink: #16161a;
+      --ink-dim: #55565e;
+      --ink-faint: #82838b;
+      --ground: #fbfbfd;
+      --ground-raised: #ffffff;
+      --edge: #e4e4ea;
+    }
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * { box-sizing: border-box; }
+
+  .wrap {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  a { color: inherit; }
+
+  /* ── Nav ─────────────────────────────────────────────── */
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 650;
+    font-size: 17px;
+    text-decoration: none;
+    margin-right: auto;
+  }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  .nav a.link {
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .nav a.link:hover { color: var(--ink); }
+
+  /* ── Hero ────────────────────────────────────────────── */
+  .hero { padding: 56px 0 8px; text-align: center; }
+  .hero h1 {
+    font-size: clamp(2.25rem, 6vw, 3.75rem);
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+    margin: 0 0 20px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(100deg, var(--brand), var(--brand-2) 55%, var(--brand-3));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* The clip box ends at the line box, so descenders need room below the
+       baseline or they are sheared off. */
+    display: inline-block;
+    padding-bottom: 0.12em;
+  }
+  .hero p {
+    font-size: clamp(1.0625rem, 2.2vw, 1.25rem);
+    color: var(--ink-dim);
+    max-width: 42ch;
+    margin: 0 auto 32px;
+  }
+
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary {
+    background: linear-gradient(100deg, var(--brand-2), var(--brand-3));
+    color: #fff;
+    box-shadow: 0 8px 24px rgb(98 54 255 / 32%);
+  }
+  .btn-ghost {
+    border-color: var(--edge);
+    background: var(--ground-raised);
+    color: var(--ink);
+  }
+
+  .shot { margin: 48px auto 0; max-width: 1000px; }
+  .shot img { width: 100%; height: auto; display: block; border-radius: 18px; }
+
+  /* ── Sections ────────────────────────────────────────── */
+  section { padding: 88px 0; }
+  .section-head { max-width: 60ch; margin-bottom: 40px; }
+  .section-head h2 {
+    font-size: clamp(1.6rem, 3.4vw, 2.25rem);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    font-weight: 680;
+  }
+  .section-head p { color: var(--ink-dim); margin: 0; font-size: 1.0625rem; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    display: block;
+    padding: 22px;
+    background: var(--ground-raised);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    text-decoration: none;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .card:hover { border-color: var(--brand-2); transform: translateY(-2px); }
+  .cardicon {
+    display: inline-flex;
+    margin-bottom: 12px;
+    color: var(--brand-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    .cardicon { color: #a98bff; }
+  }
+  .card h3 { margin: 0 0 8px; font-size: 1rem; font-weight: 640; }
+  .card p { margin: 0; color: var(--ink-dim); font-size: 0.9375rem; line-height: 1.55; }
+
+  /* ── Split ───────────────────────────────────────────── */
+  .split {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 48px;
+    align-items: center;
+  }
+  .split img { width: 100%; height: auto; border-radius: 14px; }
+  .split ul { margin: 20px 0 0; padding-left: 20px; color: var(--ink-dim); }
+  .split li { margin-bottom: 10px; }
+
+  /* ── Platforms ───────────────────────────────────────── */
+  .platforms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .platform {
+    padding: 20px 22px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    background: var(--ground-raised);
+  }
+  .platform strong { display: block; font-size: 1rem; }
+  .platform span { color: var(--ink-faint); font-size: 0.875rem; }
+
+  /* ── Download band ───────────────────────────────────── */
+  .band {
+    border-radius: 22px;
+    padding: 56px 32px;
+    text-align: center;
+    background: linear-gradient(115deg, var(--brand), var(--brand-2) 52%, var(--brand-3));
+    color: #fff;
+  }
+  .band h2 { font-size: clamp(1.6rem, 3.4vw, 2.25rem); margin: 0 0 12px; letter-spacing: -0.02em; }
+  .band p { margin: 0 auto 28px; max-width: 46ch; opacity: 0.9; }
+  .band .btn-primary { background: #fff; color: #2c1a6b; box-shadow: none; }
+  .band .btn-ghost { background: rgb(255 255 255 / 12%); border-color: rgb(255 255 255 / 35%); color: #fff; }
+
+  /* ── Footer ──────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--edge);
+    padding: 32px 0 56px;
+    color: var(--ink-faint);
+    font-size: 0.875rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: center;
+  }
+  footer a { color: var(--ink-dim); text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer .spacer { margin-left: auto; }
+
+  @media (max-width: 640px) {
+    section { padding: 64px 0; }
+    .hero { padding-top: 32px; }
+  }
+  html { color-scheme: dark light; }
+  body { margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="nav">
+    <a class="brand" href={base || '/'}>
+      <img src={asset('/logo.svg')} alt="" width="28" height="28" />
+      OpenRay
+    </a>
+    <a class="link" href={docs()}>Docs</a>
+    <a class="link" href={docs('/developers/writing-extensions')}>Extensions</a>
+    <a class="link" href={REPO}>GitHub</a>
+  </nav>
+
+  <header class="hero">
+    <h1>One hotkey.<br /><span class="grad">Everything you do.</span></h1>
+    <p>
+      An open-source command palette for macOS, Windows and Linux — where almost everything,
+      including the features that ship with it, is an extension.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href={RELEASES}>Download</a>
+      <a class="btn btn-ghost" href={docs('/getting-started/install')}>Read the docs</a>
+    </div>
+    <div class="shot">
+      <img src={asset('/screenshots/hero.svg')} alt="The OpenRay palette showing applications and commands in one list" />
+    </div>
+  </header>
+
+  <section id="features">
+    <div class="section-head">
+      <h2>Everything in one search box</h2>
+      <p>
+        No modes to switch between and no menus to learn. Type what you want, and the thing you
+        reach for most is already at the top.
+      </p>
+    </div>
+    <div class="grid">
+      {features.map((f) => (
+        <a class="card" href={f.href}>
+          <span class="cardicon" set:html={iconSvg(f.icon, { size: 20 })}></span>
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <div class="section-head">
+          <h2>Bring your Raycast extensions</h2>
+          <p>
+            OpenRay implements a <code>@raycast/api</code>-compatible runtime, so extensions written
+            for Raycast build and run here.
+          </p>
+        </div>
+        <ul>
+          <li>Install from any registry, a packed archive, or a folder you are working on.</li>
+          <li>A registry is a static directory of files. There is no backend to run.</li>
+          <li>Archives ship prebuilt, so installing one needs no compiler on your machine.</li>
+          <li>Scaffold your own in one command and watch it hot-reload as you save.</li>
+        </ul>
+      </div>
+      <img src={asset('/screenshots/store.svg')} alt="The Store browsing extensions from a registry" />
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <img src={asset('/screenshots/settings-general.svg')} alt="OpenRay settings, showing hotkey and appearance options" />
+      <div>
+        <div class="section-head">
+          <h2>Yours, on every desktop</h2>
+          <p>
+            Built on Tauri 2. Native windows, a real global hotkey, and one setup you can carry
+            between machines in a single encrypted file.
+          </p>
+        </div>
+        <div class="platforms">
+          {platforms.map((p) => (
+            <div class="platform">
+              <strong>{p.name}</strong>
+              <span>{p.detail}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="band">
+      <h2>Open source, and staying that way</h2>
+      <p>
+        MIT licensed, developed in the open, with no account and no telemetry. Your AI keys talk
+        to your provider directly.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href={RELEASES}>Download OpenRay</a>
+        <a class="btn btn-ghost" href={REPO}>View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT licensed</span>
+    <a href={docs()}>Documentation</a>
+    <a href={docs('/faq')}>FAQ</a>
+    <a href={docs('/developers/architecture')}>Architecture</a>
+    <span class="spacer"><a href={REPO}>github.com/tuanpham-dev/openray</a></span>
+  </footer>
+</div>
+</body>
+</html>

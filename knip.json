@@ -1,6 +1,12 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
+    "apps/website": {
+      "entry": [
+        "src/pages/**/*.astro",
+        "scripts/*.mjs"
+      ]
+    },
     "extensions/*": {
       "entry": [
         "src/*.{ts,tsx}"

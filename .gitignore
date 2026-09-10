@@ -36,3 +36,6 @@ pnpm-debug.log*
 # Env
 .env
 .env.local
+
+# Astro generated type cache (apps/website)
+.astro/
