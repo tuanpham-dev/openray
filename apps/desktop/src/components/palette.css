@@ -203,6 +203,21 @@
   padding: 20px 24px;
 }
 
+/* …but only when there are facts to put there. A `Detail` with no
+   `Detail.Metadata` — the shell extension's command output is one, a bare
+   fenced block of stdout — was still paying for the column: 328px of empty
+   page down the right, and the output wrapped inside the two thirds that
+   were left. Nothing renders in that gutter, so it isn't reserved.
+
+   `:has()` rather than a modifier class from `ExtensionDetail`: the
+   metadata is `DetailBody`'s to render or not, and this keeps the layout
+   deciding on what actually got rendered rather than on a second, parallel
+   answer to the same question. Already how the two rules below tell a
+   screenshot strip from ordinary prose. */
+.openray-settings-content.openray-detail-page:not(:has(.openray-detail-info)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* The page itself scrolls, so the markdown grows to its content instead of
    becoming a second, much shorter scroll area nested inside it. */
 .openray-detail-page .openray-detail-markdown {
@@ -225,8 +240,12 @@
    
    Gated on the paragraph actually holding an image: an extension with no
    screenshots opens on ordinary prose instead, and treating that as a strip
-   bled it under the metadata column and forbade it from wrapping. */
-.openray-detail-page .openray-detail-markdown > p:first-child:has(img) {
+   bled it under the metadata column and forbade it from wrapping.
+   
+   And gated on there *being* a metadata column: the offset is measured off
+   one, so on a single-column page the same bleed would hang the strip off
+   the right edge of the window instead of filling it. */
+.openray-detail-page:has(.openray-detail-info) .openray-detail-markdown > p:first-child:has(img) {
   margin-right: -328px;
   overflow-x: auto;
   overflow-y: hidden;
