@@ -1,6 +1,6 @@
 [package]
 name = "openray"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Raycast-style command palette and launcher"
 authors = ["Tuan Pham"]
 license = ""
