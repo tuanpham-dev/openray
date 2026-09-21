@@ -14,6 +14,7 @@ struct DesktopEntry {
     name: String,
     exec: String,
     icon: Option<String>,
+    description: Option<String>,
     path: PathBuf,
 }
 
@@ -51,6 +52,7 @@ impl AppScanner for LinuxAppScanner {
                 id: entry.id.clone(),
                 name: entry.name.clone(),
                 icon: entry.icon.clone(),
+                description: entry.description.clone(),
             })
             .collect()
     }
@@ -169,6 +171,7 @@ fn parse_desktop_file(path: &Path, id: String) -> Option<DesktopEntry> {
     let mut name = None;
     let mut exec = None;
     let mut icon = None;
+    let mut description = None;
     let mut is_application = true;
     let mut no_display = false;
     let mut hidden = false;
@@ -193,6 +196,9 @@ fn parse_desktop_file(path: &Path, id: String) -> Option<DesktopEntry> {
             "Name" => name = Some(value.trim().to_string()),
             "Exec" => exec = Some(value.trim().to_string()),
             "Icon" => icon = Some(value.trim().to_string()),
+            // The unlocalized key only — same simplification `Name` above
+            // already makes, rather than also matching `Comment[xx]`.
+            "Comment" => description = Some(value.trim().to_string()).filter(|s| !s.is_empty()),
             "Type" => is_application = value.trim() == "Application",
             "NoDisplay" => no_display = value.trim() == "true",
             "Hidden" => hidden = value.trim() == "true",
@@ -209,6 +215,7 @@ fn parse_desktop_file(path: &Path, id: String) -> Option<DesktopEntry> {
         name: name?,
         exec: exec?,
         icon: icon.and_then(resolve_icon_path),
+        description,
         path: path.to_path_buf(),
     })
 }
@@ -452,5 +459,53 @@ mod tests {
         for name in &order {
             assert!(seen.insert(name.clone()), "duplicate theme name in search order: {name}");
         }
+    }
+
+    fn write_desktop_file(dir: &Path, name: &str, contents: &str) -> PathBuf {
+        fs::create_dir_all(dir).unwrap();
+        let path = dir.join(name);
+        fs::write(&path, contents).unwrap();
+        path
+    }
+
+    #[test]
+    fn comment_becomes_the_app_s_description() {
+        let dir = std::env::temp_dir().join(format!("openray-desktop-comment-test-{}", std::process::id()));
+        let path = write_desktop_file(
+            &dir,
+            "firefox.desktop",
+            "[Desktop Entry]\nType=Application\nName=Firefox\nComment=Browse the World Wide Web\nExec=firefox\n",
+        );
+
+        let entry = parse_desktop_file(&path, "firefox.desktop".into()).unwrap();
+        assert_eq!(entry.description.as_deref(), Some("Browse the World Wide Web"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_desktop_file_with_no_comment_has_no_description() {
+        let dir = std::env::temp_dir().join(format!("openray-desktop-no-comment-test-{}", std::process::id()));
+        let path = write_desktop_file(&dir, "app.desktop", "[Desktop Entry]\nType=Application\nName=App\nExec=app\n");
+
+        let entry = parse_desktop_file(&path, "app.desktop".into()).unwrap();
+        assert_eq!(entry.description, None);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_empty_comment_is_treated_as_no_description() {
+        let dir = std::env::temp_dir().join(format!("openray-desktop-empty-comment-test-{}", std::process::id()));
+        let path = write_desktop_file(
+            &dir,
+            "app.desktop",
+            "[Desktop Entry]\nType=Application\nName=App\nComment=\nExec=app\n",
+        );
+
+        let entry = parse_desktop_file(&path, "app.desktop".into()).unwrap();
+        assert_eq!(entry.description, None);
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

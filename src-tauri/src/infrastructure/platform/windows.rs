@@ -24,6 +24,11 @@ const RESCAN_INTERVAL: Duration = Duration::from_secs(5 * 60);
 struct Shortcut {
     lnk_path: String,
     name: String,
+    /// The shortcut's own description field ("Comment" in its Properties
+    /// dialog) — read once at scan time, the same memoize-the-expensive-part
+    /// shape `extract_icon`'s on-disk cache already uses, rather than
+    /// reopening the `.lnk` on every `scan()` call a keystroke triggers.
+    description: Option<String>,
 }
 
 pub struct WindowsAppScanner {
@@ -60,6 +65,7 @@ impl AppScanner for WindowsAppScanner {
                 id: shortcut.lnk_path.clone(),
                 name: shortcut.name.clone(),
                 icon: extract_icon(&shortcut.lnk_path),
+                description: shortcut.description.clone(),
             })
             .collect()
     }
@@ -154,8 +160,28 @@ fn collect_shortcuts_recursive(dir: &PathBuf, out: &mut Vec<Shortcut>, seen_path
             continue;
         };
 
-        out.push(Shortcut { lnk_path: path_str, name });
+        let description = shortcut_description(&path_str);
+
+        out.push(Shortcut { lnk_path: path_str, name, description });
     }
+}
+
+/// The shortcut's own description ("Comment" in its Properties dialog),
+/// stored as the `.lnk` format's `NAME_STRING`. `catch_unwind`-guarded for
+/// the same reason `icon_for_shortcut` is: `lnk`'s parser `expect`s fields
+/// some shortcuts don't carry, and a panic here would take the whole scan —
+/// every app row — down with it.
+fn shortcut_description(lnk_path: &str) -> Option<String> {
+    std::panic::catch_unwind(|| {
+        ShellLink::open(lnk_path, WINDOWS_1252)
+            .ok()?
+            .string_data()
+            .name_string()
+            .clone()
+            .filter(|s| !s.is_empty())
+    })
+    .ok()
+    .flatten()
 }
 
 /// `SHGetFileInfoW` with `SHGFI_ICON` is documented to require COM

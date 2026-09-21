@@ -50,6 +50,11 @@ impl AppScanner for MacosAppScanner {
                 id: bundle.path.clone(),
                 name: bundle.name.clone(),
                 icon: bundle.icon.clone(),
+                // No bundle metadata maps to a short description the way a
+                // `.desktop` file's Comment or a `.lnk`'s description does —
+                // Info.plist's closest fields (copyright string, bundle
+                // version) aren't that.
+                description: None,
             })
             .collect()
     }

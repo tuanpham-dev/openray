@@ -38,6 +38,11 @@ pub struct InstalledApp {
     pub id: String,
     pub name: String,
     pub icon: Option<String>,
+    /// The app's own short description, where the platform exposes one —
+    /// a `.desktop` file's `Comment`, a `.lnk`'s description field. `None`
+    /// on a platform (or for an individual app) with nothing to show,
+    /// which keeps the generic "Application" label instead.
+    pub description: Option<String>,
 }
 
 pub trait AppScanner: Send + Sync {

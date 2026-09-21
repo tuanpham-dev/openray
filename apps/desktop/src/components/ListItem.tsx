@@ -38,15 +38,22 @@ function ItemIcon({ item }: { item: PaletteItem }) {
 
 export function ListItem({ item, selected, onSelect, onActivate }: ListItemProps) {
   const typeLabel = TYPE_LABELS[item.kind]
-  // Apps carry the literal subtitle "Application", which the trailing type
-  // label already says — don't print it twice.
+  // Apps carry the literal subtitle "Application" when the scanner found no
+  // real description — the trailing type label already says that, so don't
+  // print it twice.
   const subtitle = item.subtitle && item.subtitle !== typeLabel ? item.subtitle : undefined
+  // An app's actual description is a sentence, not a label ("Browse the
+  // World Wide Web", not "Application") — squeezed onto the title's line it
+  // either crowds the title out or gets cut to nothing. Giving it a second
+  // line, the way an extension's own `layout="detailed"` rows already do,
+  // is the same fix for the same shape of content.
+  const detailed = item.kind === 'app' && Boolean(subtitle)
   const ref = useScrollIntoViewWhenSelected<HTMLDivElement>(selected)
 
   return (
     <div
       ref={ref}
-      className={`openray-list-item${selected ? ' openray-list-item--selected' : ''}`}
+      className={`openray-list-item${selected ? ' openray-list-item--selected' : ''}${detailed ? ' openray-list-item--detailed' : ''}`}
       onMouseEnter={() => {
         if (isHoverSelectionEnabled()) onSelect()
       }}
@@ -56,8 +63,15 @@ export function ListItem({ item, selected, onSelect, onActivate }: ListItemProps
       <span className="openray-list-item-main">
         <span className="openray-list-item-title">{item.title}</span>
         {subtitle && <span className="openray-list-item-subtitle">{subtitle}</span>}
-        {item.alias && <span className="openray-list-item-alias">{item.alias}</span>}
+        {/* Stays beside the title in the single-line layout below, where it
+            reads as part of that run. `.openray-list-item-main` switches to
+            a vertical stack once `detailed`, and the pill has no natural
+            place inside that stack — so here it moves out to the row itself,
+            where it keeps sitting beside the icon+text block instead of
+            being swallowed into it. */}
+        {!detailed && item.alias && <span className="openray-list-item-alias">{item.alias}</span>}
       </span>
+      {detailed && item.alias && <span className="openray-list-item-alias">{item.alias}</span>}
       {item.accessory && <span className="openray-list-item-accessory">{item.accessory}</span>}
       <span className="openray-list-item-type">{typeLabel}</span>
     </div>
