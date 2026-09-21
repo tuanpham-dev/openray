@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getVersion } from '@tauri-apps/api/app'
 import { HotkeyRecorder } from './HotkeyRecorder'
 import { Toggle } from './Toggle'
 import { SegmentedControl } from './SegmentedControl'
@@ -37,6 +38,13 @@ interface GeneralPaneProps {
 
 export function GeneralPane({ settings, onChange }: GeneralPaneProps) {
   const [hotkeyUnavailable, setHotkeyUnavailable] = useState(false)
+  // Read once — the running build's own version never changes for the
+  // lifetime of the process, unlike everything else on this pane.
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    void getVersion().then(setVersion)
+  }, [])
 
   useAppEvent('hotkey-unavailable', () => setHotkeyUnavailable(true))
 
@@ -198,6 +206,11 @@ export function GeneralPane({ settings, onChange }: GeneralPaneProps) {
           />
           <span className="openray-settings-control-hint">Alt+J/K move through lists; Alt+H/L move across grids</span>
         </span>
+
+        <hr className="openray-settings-separator" />
+
+        <label className="openray-settings-form-label">Version</label>
+        <span className="openray-settings-control-hint">{version ?? '—'}</span>
       </div>
 
       <div className="openray-settings-bottom-spacer" />
