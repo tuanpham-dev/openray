@@ -64,6 +64,16 @@ Installers for every platform are on the
 - **Windows** — x64, `.msi` or `.exe`
 - **Linux** — x64 and arm64, `.deb`, `.rpm` or `.AppImage`
 
+### Linux: one-line install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tuanpham-dev/openray/main/install.sh | sh
+```
+
+Detects your distro and architecture, and installs the matching `.deb` or `.rpm` through
+your system's own package manager (`sudo` needed — you'll be prompted for your password).
+Run it again later to update the same way. Add `--dry-run` to see what it would do first.
+
 ### macOS: one extra step
 
 The Mac builds are **not signed or notarised** — that needs a paid Apple Developer account. So
